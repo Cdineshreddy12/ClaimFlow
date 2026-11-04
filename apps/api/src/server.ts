@@ -14,6 +14,7 @@ import {
   registerOnboardingRoutes,
 } from "./modules/onboarding/onboarding.routes.js";
 import { registerOrganizationsRoutes } from "./modules/organizations/organizations.routes.js";
+import { registerReferenceRoutes } from "./modules/reference/reference.routes.js";
 
 const env = loadEnv();
 
@@ -55,6 +56,7 @@ await app.register(registerQueryInboxRoutes, { prefix: "/queries" });
 await app.register(registerOnboardingRoutes, { prefix: "/onboarding" });
 await app.register(registerInvitesRoutes, { prefix: "/invites" });
 await app.register(registerOrganizationsRoutes, { prefix: "/organizations" });
+await app.register(registerReferenceRoutes);
 
 // Remaining feature modules (audit) register their routes here as they
 // land — see docs/ARCHITECTURE.md for the module map.

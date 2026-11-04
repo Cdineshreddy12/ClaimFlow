@@ -964,6 +964,20 @@ details.email-raw[open] > summary {
   color: var(--ink-faint);
 }
 
+/* ---------- Checklist admin ---------- */
+.notice {
+  border-left: 3px solid var(--accent);
+  background: var(--accent-soft);
+  border-radius: 0 7px 7px 0;
+  padding: 12px 14px;
+  font-size: 12.5px;
+  color: var(--ink-soft);
+  margin-top: 16px;
+}
+.notice b {
+  color: var(--ink);
+}
+
 /* ---------- Auth / onboarding ---------- */
 .auth-shell {
   min-height: 100vh;

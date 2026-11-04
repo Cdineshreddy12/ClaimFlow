@@ -104,7 +104,12 @@ everything by hand.
   schema links a query's requested item to a specific document. No
   login screen yet, so a dev-only minted token stands in for auth (see
   `.env.example`'s `VITE_DEV_TOKEN`) — swap for real Supabase auth once
-  the Custom Access Token hook is enabled. Checklist Admin is next.
+  the Custom Access Token hook is enabled.
+- ✅ Checklist Admin screen — pick an insurer × procedure, add/remove
+  document requirements and flip each between required and optional.
+  Shows how many in-flight claims the pair has, and states plainly that
+  edits apply going forward only (verified: adding a live rule leaves an
+  open claim's frozen snapshot untouched).
 
 All of the above is covered by both unit tests and integration tests
 against the real Supabase database and the real S3 bucket — not mocked.
@@ -245,7 +250,7 @@ Two things worth stating plainly rather than leaving implicit:
       query-inbox modules (API)
 - [x] Dashboard, Claim File, and Query Inbox screens (web) — wired to
       the live API, not just styled
-- [ ] Checklist Admin screen (web) — last of the four mockup screens
+- [x] Checklist Admin screen (web) — all four mockup screens now built
 - [ ] AI document classification, OCR, and query summarization (pending
       provider credentials)
 - [ ] Doctor approval via phone link

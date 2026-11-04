@@ -91,6 +91,26 @@ export function AppShell({ title, subtitle, children }: AppShellProps) {
             </svg>
             Query Inbox
           </NavLink>
+          <NavLink
+            to="/checklist"
+            className={({ isActive }) => `nav-item${isActive ? " active" : ""}`}
+          >
+            <svg viewBox="0 0 16 16" fill="none">
+              <path
+                d="M8 1.5 3 3.8v3.9c0 3.4 2.2 5.6 5 6.8 2.8-1.2 5-3.4 5-6.8V3.8L8 1.5Z"
+                stroke="currentColor"
+                strokeWidth="1.4"
+              />
+              <path
+                d="M6 8.2l1.5 1.5L10.2 6.8"
+                stroke="currentColor"
+                strokeWidth="1.4"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+            Checklist Admin
+          </NavLink>
         </nav>
         <div className="sidebar-foot">
           <div style={{ fontSize: 12.5, color: "var(--ink-faint)" }}>

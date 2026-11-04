@@ -2,6 +2,7 @@ import { createBrowserRouter } from "react-router-dom";
 import { ClaimFilePage } from "../features/claims/ClaimFilePage";
 import { DashboardPage } from "../features/dashboard/DashboardPage";
 import { QueryInboxPage } from "../features/queries/QueryInboxPage";
+import { ChecklistAdminPage } from "../features/checklist/ChecklistAdminPage";
 import { LoginPage } from "../features/auth/LoginPage";
 import { SignupPage } from "../features/auth/SignupPage";
 import { AcceptInvitePage } from "../features/onboarding/AcceptInvitePage";
@@ -31,6 +32,7 @@ export const router: ReturnType<typeof createBrowserRouter> =
                 { path: "/", element: <DashboardPage /> },
                 { path: "/claims/:id", element: <ClaimFilePage /> },
                 { path: "/queries", element: <QueryInboxPage /> },
+                { path: "/checklist", element: <ChecklistAdminPage /> },
               ],
             },
           ],
