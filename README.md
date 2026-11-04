@@ -88,18 +88,23 @@ everything by hand.
   same boundary as documents — so the summary/requested items are
   entered by hand for now; the original email is the source of truth
   either way per docs/adr/0005.
-- ✅ Web app: Claim File and Dashboard screens wired end-to-end against
-  the live API. Claim File has the status timeline, live document-gap
-  view, and a real upload flow (the browser PUTs straight to S3, same
-  pre-signed-URL path as the API). Dashboard has real kpis, a
-  claims-by-status breakdown, and the claims table — two of the
-  mockup's kpis (avg discharge wait, deductions by reason) have no
-  backing data yet, so they're swapped for real equivalents (avg time
-  in stage, open/overdue queries) rather than faked. No login screen
-  yet, so a dev-only minted token stands in for auth (see
+- ✅ Web app: Claim File, Dashboard, and Query Inbox screens wired
+  end-to-end against the live API. Claim File has the status timeline,
+  live document-gap view, and a real upload flow (the browser PUTs
+  straight to S3, same pre-signed-URL path as the API). Dashboard has
+  real kpis, a claims-by-status breakdown, and the claims table — two
+  of the mockup's kpis (avg discharge wait, deductions by reason) have
+  no backing data yet, so they're swapped for real equivalents (avg
+  time in stage, open/overdue queries) rather than faked. Query Inbox
+  lists open TPA queries with a live reply-window countdown and marks
+  a reply sent for real (docs/adr/0005 — nothing is ever auto-sent, and
+  no reply body is stored, only the timestamp); whether a requested
+  document "looks attached" is a best-effort match against the claim's
+  confirmed checklist slots, not a stored fact, since nothing in the
+  schema links a query's requested item to a specific document. No
+  login screen yet, so a dev-only minted token stands in for auth (see
   `.env.example`'s `VITE_DEV_TOKEN`) — swap for real Supabase auth once
-  the Custom Access Token hook is enabled. Query Inbox and Checklist
-  Admin screens are next.
+  the Custom Access Token hook is enabled. Checklist Admin is next.
 
 All of the above is covered by both unit tests and integration tests
 against the real Supabase database and the real S3 bucket — not mocked.

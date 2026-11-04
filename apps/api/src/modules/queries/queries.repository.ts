@@ -1,6 +1,6 @@
 import { and, desc, eq, isNotNull, isNull, type SQL } from "drizzle-orm";
 import { db } from "../../db/client.js";
-import { claims, queries } from "../../db/schema.js";
+import { claims, insurers, procedures, queries } from "../../db/schema.js";
 import { getClaimById } from "../claims/claims.repository.js";
 import type { CreateQueryBody, UpdateQueryBody } from "./queries.schema.js";
 
@@ -108,9 +108,13 @@ export async function listInbox(
       createdAt: queries.createdAt,
       claimPatientName: claims.patientName,
       claimStatus: claims.status,
+      insurerName: insurers.name,
+      procedureName: procedures.name,
     })
     .from(queries)
     .innerJoin(claims, eq(queries.claimId, claims.id))
+    .innerJoin(insurers, eq(claims.insurerId, insurers.id))
+    .innerJoin(procedures, eq(claims.procedureId, procedures.id))
     .where(and(...(conditions as SQL[])))
     .orderBy(queries.deadline);
 }

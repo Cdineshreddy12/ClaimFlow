@@ -34,3 +34,8 @@ not yet decided.
 - "Send" actions (reply to a TPA, submit a packet) are never wired to fire
   automatically from an AI result — they require an explicit, separate user
   action every time, even after a field has been confirmed.
+- The query inbox's "Mark as replied" button follows the same rule from
+  the other direction: it only records that a reply went out through
+  whatever channel (email, the TPA's own portal) — the schema has no
+  field for the reply's body, only a `replySentAt` timestamp, so there's
+  nothing for this app to send even if it wanted to.

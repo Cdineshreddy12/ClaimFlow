@@ -37,6 +37,8 @@ function query(overrides: Partial<InboxQuery>): InboxQuery {
     createdAt: new Date(NOW).toISOString(),
     claimPatientName: "Test Patient",
     claimStatus: "QUERY_RAISED",
+    insurerName: "Test Insurer",
+    procedureName: "Test Procedure",
     ...overrides,
   };
 }

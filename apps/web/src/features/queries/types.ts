@@ -11,4 +11,6 @@ export interface InboxQuery {
   createdAt: string;
   claimPatientName: string;
   claimStatus: ClaimStatus;
+  insurerName: string;
+  procedureName: string;
 }

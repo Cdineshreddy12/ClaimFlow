@@ -9,8 +9,8 @@ interface AppShellProps {
 
 /**
  * Shared chrome ported from docs/design/claims-desk-mockup.html. The nav
- * only lists routes that actually exist yet — Dashboard, Query Inbox, and
- * Checklist Admin land here once their screens are built, not before.
+ * only lists routes that actually exist yet — Checklist Admin lands here
+ * once that screen is built, not before.
  */
 export function AppShell({ title, subtitle, children }: AppShellProps) {
   return (
@@ -59,6 +59,24 @@ export function AppShell({ title, subtitle, children }: AppShellProps) {
               />
             </svg>
             Dashboard
+          </NavLink>
+          <NavLink
+            to="/queries"
+            className={({ isActive }) => `nav-item${isActive ? " active" : ""}`}
+          >
+            <svg viewBox="0 0 16 16" fill="none">
+              <path
+                d="M2 4.5A1.5 1.5 0 0 1 3.5 3h9A1.5 1.5 0 0 1 14 4.5v7A1.5 1.5 0 0 1 12.5 13h-9A1.5 1.5 0 0 1 2 11.5v-7Z"
+                stroke="currentColor"
+                strokeWidth="1.4"
+              />
+              <path
+                d="M2.5 4.5 8 9l5.5-4.5"
+                stroke="currentColor"
+                strokeWidth="1.4"
+              />
+            </svg>
+            Query Inbox
           </NavLink>
         </nav>
         <div className="sidebar-foot">
