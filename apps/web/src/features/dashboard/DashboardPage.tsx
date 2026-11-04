@@ -41,7 +41,10 @@ export function DashboardPage() {
       {!isLoading && !isError ? (
         <>
           <KpiRow metrics={metrics} />
-          <div className="two-col" style={{ gridTemplateColumns: "1fr 1.5fr" }}>
+          {/* Ratio lives in CSS, not an inline style — an inline
+              grid-template-columns outranks every media query, which is
+              exactly how this silently stayed 2-up on a phone. */}
+          <div className="two-col two-col--dashboard">
             <ClaimsByStatusCard byStatus={metrics.byStatus} />
             <ClaimsTableCard claims={claims ?? []} now={now} />
           </div>

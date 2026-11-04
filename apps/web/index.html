@@ -1,5 +1,11 @@
 <!doctype html>
-<html lang="en">
+<!--
+  data-theme="light" pins the app to the light palette regardless of the
+  viewer's OS setting. The dark tokens in src/styles/index.css stay
+  defined and correct, but nothing reaches them until a theme toggle
+  exists to stamp data-theme="dark" here instead.
+-->
+<html lang="en" data-theme="light">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />

@@ -660,45 +660,6 @@ h3 {
   padding: 10px 4px;
 }
 
-@media (max-width: 920px) {
-  .field-row,
-  .kpi-row {
-    grid-template-columns: repeat(2, 1fr);
-  }
-  .two-col {
-    grid-template-columns: 1fr;
-  }
-}
-@media (max-width: 720px) {
-  .shell {
-    flex-direction: column;
-  }
-  .sidebar {
-    width: 100%;
-    flex-direction: row;
-    align-items: center;
-    padding: 12px 16px;
-  }
-  .nav {
-    flex-direction: row;
-  }
-  .sidebar-foot {
-    display: none;
-  }
-}
-@media (max-width: 480px) {
-  .field-row,
-  .kpi-row {
-    grid-template-columns: 1fr;
-  }
-  .content {
-    padding: 20px 16px 48px;
-  }
-  .topbar {
-    padding: 14px 16px;
-  }
-}
-
 /* ---------- Dashboard ---------- */
 .kpi-row {
   display: grid;
@@ -793,10 +754,19 @@ h3 {
   align-items: start;
 }
 
+/* A claims table has an irreducible minimum width — let it scroll inside
+   its own card rather than pushing the whole page sideways. */
+.table-scroll {
+  width: 100%;
+  overflow-x: auto;
+}
 table {
   width: 100%;
   border-collapse: collapse;
   font-size: 13.5px;
+}
+.table-scroll table {
+  min-width: 440px;
 }
 thead th {
   text-align: left;
@@ -994,8 +964,297 @@ details.email-raw[open] > summary {
   color: var(--ink-faint);
 }
 
+/* ---------- Auth / onboarding ---------- */
+.auth-shell {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+.auth-card {
+  width: 100%;
+  max-width: 400px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.auth-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: center;
+  margin-bottom: 22px;
+}
+.auth-heading {
+  font-size: 19px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  text-align: center;
+  margin-bottom: 4px;
+}
+.auth-subheading {
+  font-size: 13px;
+  color: var(--ink-faint);
+  text-align: center;
+  margin-bottom: 24px;
+}
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+.form-field label {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+.form-field input {
+  border: 1px solid var(--border-strong);
+  border-radius: 7px;
+  padding: 10px 12px;
+  font-size: 14px;
+  background: var(--surface-raised);
+  color: var(--ink);
+}
+.btn--full {
+  width: 100%;
+  justify-content: center;
+}
+.auth-switch {
+  margin-top: 18px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+.auth-switch a {
+  color: var(--accent-ink);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+/* ---------- Form fields ---------- */
+.field-optional {
+  font-weight: 400;
+  color: var(--ink-faint);
+}
+.field-hint {
+  font-size: 12px;
+  color: var(--ink-faint);
+}
+.field-error {
+  font-size: 12px;
+  color: var(--critical);
+  font-weight: 500;
+}
+.form-field select,
+.form-field textarea {
+  border: 1px solid var(--border-strong);
+  border-radius: 7px;
+  padding: 10px 12px;
+  font-size: 14px;
+  background: var(--surface-raised);
+  color: var(--ink);
+}
+.form-field input[aria-invalid="true"],
+.form-field select[aria-invalid="true"] {
+  border-color: var(--critical);
+}
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 16px;
+}
+.form-grid .span-2 {
+  grid-column: 1 / -1;
+}
+/* ---------- Onboarding wizard ---------- */
+.wizard-shell {
+  min-height: 100vh;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 40px 24px 64px;
+}
+.wizard-card {
+  width: 100%;
+  max-width: 680px;
+}
+.wizard-steps {
+  display: flex;
+  gap: 8px;
+  margin: 24px 0 28px;
+}
+.wizard-step {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.wizard-step-bar {
+  height: 3px;
+  border-radius: 2px;
+  background: var(--border-strong);
+}
+.wizard-step.done .wizard-step-bar {
+  background: var(--approved);
+}
+.wizard-step.current .wizard-step-bar {
+  background: var(--accent);
+}
+.wizard-step-name {
+  font-size: 11.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ink-faint);
+}
+.wizard-step.current .wizard-step-name {
+  color: var(--accent-ink);
+}
+.wizard-step.done .wizard-step-name {
+  color: var(--approved);
+}
+.wizard-section-title {
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  margin-bottom: 4px;
+}
+.wizard-section-sub {
+  font-size: 13px;
+  color: var(--ink-faint);
+  margin-bottom: 22px;
+}
+.wizard-foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-top: 8px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border);
+}
+
+/* ==========================================================================
+   Responsive overrides
+   --------------------------------------------------------------------------
+   Deliberately LAST in the file. These are single-class selectors with the
+   same specificity as the base rules they override, so source order is the
+   only thing deciding the winner — when this block sat above the Dashboard
+   and Query Inbox sections, the base grid-template-columns silently won and
+   the dashboard overflowed on a phone. Keep new breakpoint rules here.
+   ========================================================================== */
+
+.two-col--dashboard {
+  grid-template-columns: 1fr 1.5fr;
+}
+
+/* Grid items default to min-width:auto, so a wide child (the claims
+   table) pushes its track past 1fr and drags the sibling card with it.
+   min-width:0 lets the track shrink and the table scroll inside itself
+   instead — without this the dashboard overflowed on a phone even with
+   the columns correctly collapsed to one. */
+.two-col > *,
+.query-shell > * {
+  min-width: 0;
+}
+
 @media (max-width: 920px) {
+  .field-row,
+  .kpi-row {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .two-col,
+  .two-col--dashboard,
   .query-shell {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .shell {
+    flex-direction: column;
+  }
+  .sidebar {
+    width: 100%;
+    flex-direction: row;
+    align-items: center;
+    gap: 16px;
+    padding: 12px 16px;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+  }
+  .brand-sub {
+    display: none;
+  }
+  .nav {
+    flex-direction: row;
+    margin-top: 0;
+    flex-wrap: wrap;
+  }
+  .sidebar-foot {
+    display: none;
+  }
+  .claim-head,
+  .detail-head {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .countdown {
+    text-align: left;
+  }
+}
+
+@media (max-width: 640px) {
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+  /* 5 stepper nodes don't fit a phone — stack them so each label is legible. */
+  .stepper {
+    flex-direction: column;
+    gap: 10px;
+    align-items: flex-start;
+  }
+  .step {
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+    text-align: left;
+  }
+  .step:not(:first-child)::before {
+    display: none;
+  }
+  .wizard-steps {
+    gap: 6px;
+  }
+  .wizard-step-name {
+    font-size: 10.5px;
+  }
+}
+
+@media (max-width: 480px) {
+  .field-row,
+  .kpi-row {
+    grid-template-columns: 1fr;
+  }
+  .content {
+    padding: 20px 16px 48px;
+  }
+  .topbar {
+    padding: 14px 16px;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .topbar-user {
+    text-align: left;
+  }
+  .card-pad {
+    padding: 16px 14px;
+  }
+  .reply-foot {
+    flex-direction: column;
+    align-items: stretch;
   }
 }
