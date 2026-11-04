@@ -1,9 +1,9 @@
 import { createBrowserRouter } from "react-router-dom";
 import { ClaimFilePage } from "../features/claims/ClaimFilePage";
-import { ClaimsListPage } from "../features/claims/ClaimsListPage";
+import { DashboardPage } from "../features/dashboard/DashboardPage";
 
 export const router: ReturnType<typeof createBrowserRouter> =
   createBrowserRouter([
-    { path: "/", element: <ClaimsListPage /> },
+    { path: "/", element: <DashboardPage /> },
     { path: "/claims/:id", element: <ClaimFilePage /> },
   ]);

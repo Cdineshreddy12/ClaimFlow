@@ -1,5 +1,6 @@
 import { useParams } from "react-router-dom";
 import { AppShell } from "../../app/AppShell";
+import { formatAmount } from "../../lib/format";
 import { ChecklistGapsCard } from "./ChecklistGapsCard";
 import { Stepper } from "./Stepper";
 import { UploadedDocumentsCard } from "./UploadedDocumentsCard";
@@ -12,11 +13,6 @@ function formatDate(iso: string | null) {
     dateStyle: "medium",
     timeStyle: "short",
   });
-}
-
-function formatAmount(value: string | null) {
-  if (!value) return "—";
-  return `₹${Number(value).toLocaleString("en-IN")}`;
 }
 
 export function ClaimFilePage() {
