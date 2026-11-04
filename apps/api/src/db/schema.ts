@@ -1,0 +1,250 @@
+import { sql } from "drizzle-orm";
+import {
+  boolean,
+  index,
+  jsonb,
+  numeric,
+  pgEnum,
+  pgTable,
+  text,
+  timestamp,
+  unique,
+  uuid,
+} from "drizzle-orm/pg-core";
+
+/**
+ * Schema mirrors docs/ARCHITECTURE.md and the ADRs under docs/adr/,
+ * especially 0001 (checklist engine), 0002 (tenant isolation),
+ * 0004 (claim state machine), and 0006 (billing/onboarding).
+ *
+ * This connects to Postgres as the `postgres` superuser (see .env.example
+ * and docs/adr/0002) — RLS defined alongside this schema in
+ * src/db/migrations/0001_row_level_security.sql does NOT apply to queries
+ * made through this schema/client. It protects any other, RLS-subject
+ * connection (e.g. the Supabase anon/authenticated roles, if the frontend
+ * ever talks to Supabase directly). Tenant isolation for everything that
+ * goes through Drizzle is enforced in the Fastify route layer.
+ */
+
+export const userRole = pgEnum("user_role", [
+  "platform_admin",
+  "org_admin",
+  "desk_head",
+  "desk_executive",
+  "doctor",
+]);
+
+export const claimStatus = pgEnum("claim_status", [
+  "DRAFT",
+  "PRE_AUTH_SENT",
+  "QUERY_RAISED",
+  "ENHANCEMENT_REQUESTED",
+  "APPROVED",
+  "FINAL_BILL_SUBMITTED",
+  "SETTLED",
+  "REJECTED",
+]);
+
+export const organizations = pgTable("organizations", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  name: text("name").notNull(),
+  slug: text("slug").notNull().unique(),
+  subscriptionStatus: text("subscription_status").notNull().default("trialing"),
+  plan: text("plan").notNull().default("starter"),
+  razorpayCustomerId: text("razorpay_customer_id"),
+  razorpaySubscriptionId: text("razorpay_subscription_id"),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export const orgMembers = pgTable(
+  "org_members",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    userId: uuid("user_id").notNull(), // references auth.users(id) — managed by Supabase, not this schema
+    role: userRole("role").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    unique().on(table.userId),
+    index("org_members_organization_id_idx").on(table.organizationId),
+  ],
+);
+
+export const insurers = pgTable("insurers", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  name: text("name").notNull(),
+  type: text("type").notNull(), // 'insurer' | 'tpa'
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export const procedures = pgTable("procedures", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  name: text("name").notNull(),
+  code: text("code"),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export const checklistRules = pgTable(
+  "checklist_rules",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    insurerId: uuid("insurer_id")
+      .notNull()
+      .references(() => insurers.id),
+    procedureId: uuid("procedure_id")
+      .notNull()
+      .references(() => procedures.id),
+    documentType: text("document_type").notNull(),
+    required: boolean("required").notNull().default(true),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    unique().on(
+      table.organizationId,
+      table.insurerId,
+      table.procedureId,
+      table.documentType,
+    ),
+    index("checklist_rules_org_lookup_idx").on(
+      table.organizationId,
+      table.insurerId,
+      table.procedureId,
+    ),
+  ],
+);
+
+export const claims = pgTable(
+  "claims",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    patientName: text("patient_name").notNull(),
+    insurerId: uuid("insurer_id")
+      .notNull()
+      .references(() => insurers.id),
+    procedureId: uuid("procedure_id")
+      .notNull()
+      .references(() => procedures.id),
+    status: claimStatus("status").notNull().default("DRAFT"),
+    assignedTo: uuid("assigned_to").references(() => orgMembers.id),
+    // Snapshot of the checklist_rules that applied when this claim was
+    // opened — see docs/adr/0001. Editing the live rules later must never
+    // change what an in-flight claim requires.
+    checklistSnapshot: jsonb("checklist_snapshot")
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    billedAmount: numeric("billed_amount", { precision: 12, scale: 2 }),
+    admittedAt: timestamp("admitted_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("claims_organization_id_idx").on(table.organizationId),
+    index("claims_assigned_to_idx").on(table.assignedTo),
+  ],
+);
+
+export const claimStatusEvents = pgTable(
+  "claim_status_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    claimId: uuid("claim_id")
+      .notNull()
+      .references(() => claims.id, { onDelete: "cascade" }),
+    status: claimStatus("status").notNull(),
+    actorId: uuid("actor_id").references(() => orgMembers.id),
+    // Persisted server-side at write time — never computed from the
+    // frontend clock. Backs the IRDAI/TPA SLA countdowns.
+    slaDeadline: timestamp("sla_deadline", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [index("claim_status_events_claim_id_idx").on(table.claimId)],
+);
+
+export const documents = pgTable(
+  "documents",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    claimId: uuid("claim_id")
+      .notNull()
+      .references(() => claims.id, { onDelete: "cascade" }),
+    fileUrl: text("file_url").notNull(),
+    aiClassifiedType: text("ai_classified_type"),
+    checklistSlot: text("checklist_slot"),
+    confidence: numeric("confidence", { precision: 4, scale: 3 }),
+    confirmedBy: uuid("confirmed_by").references(() => orgMembers.id),
+    confirmedAt: timestamp("confirmed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [index("documents_claim_id_idx").on(table.claimId)],
+);
+
+export const queries = pgTable(
+  "queries",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    claimId: uuid("claim_id")
+      .notNull()
+      .references(() => claims.id, { onDelete: "cascade" }),
+    tpaRawEmail: text("tpa_raw_email"),
+    aiSummary: text("ai_summary"),
+    requestedItems: jsonb("requested_items")
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    deadline: timestamp("deadline", { withTimezone: true }),
+    replySentAt: timestamp("reply_sent_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [index("queries_claim_id_idx").on(table.claimId)],
+);
+
+export const auditLog = pgTable(
+  "audit_log",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    actorId: uuid("actor_id").references(() => orgMembers.id),
+    action: text("action").notNull(),
+    entityType: text("entity_type").notNull(),
+    entityId: uuid("entity_id"),
+    before: jsonb("before"),
+    after: jsonb("after"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [index("audit_log_organization_id_idx").on(table.organizationId)],
+);
