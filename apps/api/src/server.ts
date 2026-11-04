@@ -16,6 +16,7 @@ import {
 import { registerOrganizationsRoutes } from "./modules/organizations/organizations.routes.js";
 import { registerReferenceRoutes } from "./modules/reference/reference.routes.js";
 import { registerAuditRoutes } from "./modules/audit/audit.routes.js";
+import { registerPacketRoutes } from "./modules/packet/packet.routes.js";
 
 const env = loadEnv();
 
@@ -59,6 +60,9 @@ await app.register(registerInvitesRoutes, { prefix: "/invites" });
 await app.register(registerOrganizationsRoutes, { prefix: "/organizations" });
 await app.register(registerReferenceRoutes);
 await app.register(registerAuditRoutes, { prefix: "/audit-log" });
+await app.register(registerPacketRoutes, {
+  prefix: "/claims/:claimId/packet",
+});
 
 app
   .listen({ port: env.PORT, host: "0.0.0.0" })

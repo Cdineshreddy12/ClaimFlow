@@ -33,7 +33,8 @@ export type AuditAction =
   | "organization.created"
   | "organization.profile_updated"
   | "invite.created"
-  | "invite.accepted";
+  | "invite.accepted"
+  | "packet.generated";
 
 interface AuditContext {
   userId: string;

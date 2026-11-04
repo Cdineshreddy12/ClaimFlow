@@ -70,6 +70,38 @@ export async function getDownloadUrl(
   return getSignedUrl(s3, command, { expiresIn: expiresInSeconds });
 }
 
+/**
+ * Pulls the actual bytes into the API process. Everything else here
+ * hands out pre-signed URLs so file data never passes through the
+ * server — this is the one exception, because building a merged PDF
+ * packet means reading each source document, and a pre-signed URL
+ * can't be read by pdf-lib without a round trip back out to S3 anyway.
+ */
+export async function getObjectBytes(key: string): Promise<Uint8Array> {
+  const { client: s3, bucket: bucketName } = getClient();
+  const result = await s3.send(
+    new GetObjectCommand({ Bucket: bucketName, Key: key }),
+  );
+  if (!result.Body) throw new Error(`empty object body for key: ${key}`);
+  return result.Body.transformToByteArray();
+}
+
+export async function putObject(
+  key: string,
+  body: Uint8Array,
+  contentType: string,
+): Promise<void> {
+  const { client: s3, bucket: bucketName } = getClient();
+  await s3.send(
+    new PutObjectCommand({
+      Bucket: bucketName,
+      Key: key,
+      Body: body,
+      ContentType: contentType,
+    }),
+  );
+}
+
 export async function deleteObject(key: string): Promise<void> {
   const { client: s3, bucket: bucketName } = getClient();
   await s3.send(new DeleteObjectCommand({ Bucket: bucketName, Key: key }));
