@@ -4,6 +4,7 @@ import {
   getDownloadUrl,
   getUploadUrl,
 } from "../../integrations/storage/s3.js";
+import * as auditService from "../audit/audit.service.js";
 import { getOrgMemberId } from "../org-members/org-members.repository.js";
 import * as documentsRepository from "./documents.repository.js";
 import type { RequestUploadUrlBody } from "./documents.schema.js";
@@ -52,6 +53,14 @@ export async function registerDocument(
     { fileUrl: key },
   );
   if (!created) throw new ClaimNotFoundError(claimId);
+
+  await auditService.record(auth, {
+    action: "document.registered",
+    entityType: "document",
+    entityId: created.id,
+    after: { claimId },
+  });
+
   return created;
 }
 
@@ -89,6 +98,15 @@ export async function confirmDocument(
     memberId,
   );
   if (!updated) throw new DocumentNotFoundError(documentId);
+
+  await auditService.record(auth, {
+    action: "document.confirmed",
+    entityType: "document",
+    entityId: documentId,
+    after: { claimId, checklistSlot },
+    actorId: memberId,
+  });
+
   return updated;
 }
 
@@ -105,4 +123,11 @@ export async function discardDocument(
   if (!document) throw new DocumentNotFoundError(documentId);
   await documentsRepository.remove(auth.organizationId, claimId, documentId);
   await deleteObject(document.fileUrl);
+
+  await auditService.record(auth, {
+    action: "document.discarded",
+    entityType: "document",
+    entityId: documentId,
+    before: { claimId, checklistSlot: document.checklistSlot },
+  });
 }

@@ -3,6 +3,7 @@ import * as checklistRepository from "./checklist.repository.js";
 
 vi.mock("./checklist.repository.js");
 
+const USER_ID = "22222222-2222-2222-2222-222222222222";
 const ORG_ID = "11111111-1111-1111-1111-111111111111";
 const INSURER_ID = "22222222-2222-2222-2222-222222222222";
 const PROCEDURE_ID = "33333333-3333-3333-3333-333333333333";
@@ -26,7 +27,7 @@ describe("checklist.service", () => {
 
       await expect(
         createRule(
-          { organizationId: ORG_ID },
+          { organizationId: ORG_ID, userId: USER_ID },
           {
             insurerId: INSURER_ID,
             procedureId: PROCEDURE_ID,
@@ -46,7 +47,7 @@ describe("checklist.service", () => {
 
       await expect(
         createRule(
-          { organizationId: ORG_ID },
+          { organizationId: ORG_ID, userId: USER_ID },
           {
             insurerId: INSURER_ID,
             procedureId: PROCEDURE_ID,
@@ -66,7 +67,7 @@ describe("checklist.service", () => {
         await import("./checklist.service.js");
 
       await expect(
-        updateRule({ organizationId: ORG_ID }, "missing-id", {
+        updateRule({ organizationId: ORG_ID, userId: USER_ID }, "missing-id", {
           required: false,
         }),
       ).rejects.toThrow(RuleNotFoundError);
@@ -79,7 +80,7 @@ describe("checklist.service", () => {
         await import("./checklist.service.js");
 
       await expect(
-        deleteRule({ organizationId: ORG_ID }, "missing-id"),
+        deleteRule({ organizationId: ORG_ID, userId: USER_ID }, "missing-id"),
       ).rejects.toThrow(RuleNotFoundError);
     });
   });

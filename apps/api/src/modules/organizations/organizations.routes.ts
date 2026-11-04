@@ -30,7 +30,7 @@ export async function registerOrganizationsRoutes(app: FastifyInstance) {
       const body = UpdateProfileBody.parse(request.body);
       try {
         const organization = await organizationsService.updateProfile(
-          request.authUser!.organizationId,
+          request.authUser!,
           body,
         );
         return reply.send(organization);

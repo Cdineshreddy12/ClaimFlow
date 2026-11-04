@@ -15,6 +15,7 @@ import {
 } from "./modules/onboarding/onboarding.routes.js";
 import { registerOrganizationsRoutes } from "./modules/organizations/organizations.routes.js";
 import { registerReferenceRoutes } from "./modules/reference/reference.routes.js";
+import { registerAuditRoutes } from "./modules/audit/audit.routes.js";
 
 const env = loadEnv();
 
@@ -57,9 +58,7 @@ await app.register(registerOnboardingRoutes, { prefix: "/onboarding" });
 await app.register(registerInvitesRoutes, { prefix: "/invites" });
 await app.register(registerOrganizationsRoutes, { prefix: "/organizations" });
 await app.register(registerReferenceRoutes);
-
-// Remaining feature modules (audit) register their routes here as they
-// land — see docs/ARCHITECTURE.md for the module map.
+await app.register(registerAuditRoutes, { prefix: "/audit-log" });
 
 app
   .listen({ port: env.PORT, host: "0.0.0.0" })

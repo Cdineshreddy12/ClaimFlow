@@ -1,4 +1,5 @@
 import type { Role } from "@claimflow/contracts";
+import * as auditService from "../audit/audit.service.js";
 import { getOrgMemberId } from "../org-members/org-members.repository.js";
 import * as queriesRepository from "./queries.repository.js";
 import type {
@@ -36,6 +37,14 @@ export async function createQuery(
     body,
   );
   if (!created) throw new ClaimNotFoundError(claimId);
+
+  await auditService.record(auth, {
+    action: "query.created",
+    entityType: "query",
+    entityId: created.id,
+    after: { claimId },
+  });
+
   return created;
 }
 
@@ -52,6 +61,14 @@ export async function updateQuery(
 ) {
   const updated = await queriesRepository.update(auth.organizationId, id, body);
   if (!updated) throw new QueryNotFoundError(id);
+
+  await auditService.record(auth, {
+    action: "query.updated",
+    entityType: "query",
+    entityId: id,
+    after: { fields: Object.keys(body) },
+  });
+
   return updated;
 }
 
@@ -59,6 +76,14 @@ export async function updateQuery(
 export async function markReplied(auth: AuthContext, id: string) {
   const updated = await queriesRepository.markReplied(auth.organizationId, id);
   if (!updated) throw new QueryNotFoundError(id);
+
+  await auditService.record(auth, {
+    action: "query.replied",
+    entityType: "query",
+    entityId: id,
+    after: { replySentAt: updated.replySentAt },
+  });
+
   return updated;
 }
 

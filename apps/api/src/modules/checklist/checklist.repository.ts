@@ -76,7 +76,10 @@ export async function deleteRule(organizationId: string, id: string) {
         eq(checklistRules.organizationId, organizationId),
       ),
     )
-    .returning({ id: checklistRules.id });
+    // Full row, not just the id — the audit trail records what the rule
+    // *was* before it was removed, which is the only place that's still
+    // knowable after this returns.
+    .returning();
   return deleted;
 }
 

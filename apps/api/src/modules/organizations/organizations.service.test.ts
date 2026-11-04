@@ -4,6 +4,10 @@ import * as organizationsRepository from "./organizations.repository.js";
 vi.mock("./organizations.repository.js");
 
 const ORG_ID = "11111111-1111-1111-1111-111111111111";
+const AUTH = {
+  organizationId: ORG_ID,
+  userId: "22222222-2222-2222-2222-222222222222",
+};
 
 /** An org with every required field filled except the ones the test blanks out. */
 function completeOrg(overrides: Record<string, unknown> = {}) {
@@ -46,7 +50,7 @@ describe("organizations.service.updateProfile", () => {
     );
 
     const { updateProfile } = await import("./organizations.service.js");
-    await updateProfile(ORG_ID, {
+    await updateProfile(AUTH, {
       step: "contact",
       data: { deskContactEmail: "priya@test.example" } as never,
     });
@@ -62,7 +66,7 @@ describe("organizations.service.updateProfile", () => {
     );
 
     const { updateProfile } = await import("./organizations.service.js");
-    await updateProfile(ORG_ID, {
+    await updateProfile(AUTH, {
       step: "contact",
       data: { deskContactEmail: "priya@test.example" } as never,
     });
@@ -79,7 +83,7 @@ describe("organizations.service.updateProfile", () => {
     );
 
     const { updateProfile } = await import("./organizations.service.js");
-    await updateProfile(ORG_ID, {
+    await updateProfile(AUTH, {
       step: "identity",
       data: { bedCount: 200 } as never,
     });
@@ -95,7 +99,7 @@ describe("organizations.service.updateProfile", () => {
     );
 
     const { updateProfile } = await import("./organizations.service.js");
-    await updateProfile(ORG_ID, {
+    await updateProfile(AUTH, {
       step: "compliance",
       data: { gstin: "", nabhValidUntil: "" } as never,
     });
@@ -113,7 +117,7 @@ describe("organizations.service.updateProfile", () => {
       await import("./organizations.service.js");
 
     await expect(
-      updateProfile(ORG_ID, {
+      updateProfile(AUTH, {
         step: "identity",
         data: { bedCount: 10 } as never,
       }),

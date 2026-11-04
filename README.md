@@ -105,6 +105,11 @@ everything by hand.
   login screen yet, so a dev-only minted token stands in for auth (see
   `.env.example`'s `VITE_DEV_TOKEN`) — swap for real Supabase auth once
   the Custom Access Token hook is enabled.
+- ✅ Audit logging — every mutation that creates, changes or destroys
+  tenant data writes a who/what/when entry (DPDP constraint, see
+  docs/adr/0009). Deltas only, not row dumps; reads gated to
+  org_admin/desk_head; no write route, so the trail can't be forged by
+  a client. Not yet transactional with the mutation — caveat in the ADR.
 - ✅ Checklist Admin screen — pick an insurer × procedure, add/remove
   document requirements and flip each between required and optional.
   Shows how many in-flight claims the pair has, and states plainly that
@@ -264,7 +269,7 @@ Two things worth stating plainly rather than leaving implicit:
 ## Documentation
 
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — system overview, stack, module map
-- [`docs/adr/`](docs/adr) — decision records (checklist engine, tenant isolation, document pipeline, claim state machine, AI confirmation UX, billing, onboarding flow)
+- [`docs/adr/`](docs/adr) — decision records (checklist engine, tenant isolation, document pipeline, claim state machine, AI confirmation UX, billing, onboarding flow, audit logging)
 - [`docs/design/claims-desk-mockup.html`](docs/design/claims-desk-mockup.html) — reviewed UI reference
 
 ## License

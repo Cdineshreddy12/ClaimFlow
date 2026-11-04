@@ -1,3 +1,4 @@
+import * as auditService from "../audit/audit.service.js";
 import * as organizationsRepository from "./organizations.repository.js";
 import type { UpdateProfileBody } from "./organizations.schema.js";
 
@@ -46,9 +47,10 @@ export async function getOrganization(organizationId: string) {
  * last step completes it, but so does coming back later to fill a gap.
  */
 export async function updateProfile(
-  organizationId: string,
+  auth: { organizationId: string; userId: string },
   body: UpdateProfileBody,
 ) {
+  const { organizationId } = auth;
   const existing = await organizationsRepository.getById(organizationId);
   if (!existing) throw new OrganizationNotFoundError(organizationId);
 
@@ -69,5 +71,13 @@ export async function updateProfile(
     patch,
   );
   if (!updated) throw new OrganizationNotFoundError(organizationId);
+
+  await auditService.record(auth, {
+    action: "organization.profile_updated",
+    entityType: "organization",
+    entityId: organizationId,
+    after: { step: body.step, fields: Object.keys(body.data) },
+  });
+
   return updated;
 }

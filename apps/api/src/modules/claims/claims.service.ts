@@ -6,6 +6,7 @@ import {
 import { getRequirementsSnapshot } from "../checklist/checklist.service.js";
 import * as documentsRepository from "../documents/documents.repository.js";
 import { getOrgMemberId } from "../org-members/org-members.repository.js";
+import * as auditService from "../audit/audit.service.js";
 import * as claimsRepository from "./claims.repository.js";
 import type { CreateClaimBody, ListClaimsQuery } from "./claims.schema.js";
 
@@ -64,11 +65,20 @@ export async function createClaim(auth: AuthContext, body: CreateClaimBody) {
     body.insurerId,
     body.procedureId,
   );
-  return claimsRepository.createClaim(
+  const claim = await claimsRepository.createClaim(
     auth.organizationId,
     body,
     checklistSnapshot,
   );
+
+  await auditService.record(auth, {
+    action: "claim.created",
+    entityType: "claim",
+    entityId: claim.id,
+    after: { patientName: claim.patientName, status: claim.status },
+  });
+
+  return claim;
 }
 
 export async function transitionClaimStatus(
@@ -98,6 +108,16 @@ export async function transitionClaimStatus(
     slaDeadline,
   );
   if (!updated) throw new ClaimNotFoundError(claimId);
+
+  await auditService.record(auth, {
+    action: "claim.status_changed",
+    entityType: "claim",
+    entityId: claimId,
+    before: { status: claim.status },
+    after: { status: nextStatus },
+    actorId: memberId,
+  });
+
   return updated;
 }
 

@@ -1,3 +1,4 @@
+import * as auditService from "../audit/audit.service.js";
 import * as checklistRepository from "./checklist.repository.js";
 import type {
   CreateChecklistRuleBody,
@@ -9,6 +10,10 @@ export class DuplicateRuleError extends Error {}
 
 interface AuthContext {
   organizationId: string;
+  // Needed to resolve the acting org_member for the audit trail; the
+  // routes already pass the full authUser, this just stops widening it
+  // being silently optional.
+  userId: string;
 }
 
 export async function listRules(
@@ -32,7 +37,17 @@ export async function createRule(
   body: CreateChecklistRuleBody,
 ) {
   try {
-    return await checklistRepository.createRule(auth.organizationId, body);
+    const rule = await checklistRepository.createRule(
+      auth.organizationId,
+      body,
+    );
+    await auditService.record(auth, {
+      action: "checklist_rule.created",
+      entityType: "checklist_rule",
+      entityId: rule.id,
+      after: { documentType: rule.documentType, required: rule.required },
+    });
+    return rule;
   } catch (err) {
     if (isUniqueViolation(err)) {
       throw new DuplicateRuleError(
@@ -54,12 +69,27 @@ export async function updateRule(
     body,
   );
   if (!updated) throw new RuleNotFoundError(id);
+
+  await auditService.record(auth, {
+    action: "checklist_rule.updated",
+    entityType: "checklist_rule",
+    entityId: id,
+    after: { documentType: updated.documentType, required: updated.required },
+  });
+
   return updated;
 }
 
 export async function deleteRule(auth: AuthContext, id: string) {
   const deleted = await checklistRepository.deleteRule(auth.organizationId, id);
   if (!deleted) throw new RuleNotFoundError(id);
+
+  await auditService.record(auth, {
+    action: "checklist_rule.deleted",
+    entityType: "checklist_rule",
+    entityId: id,
+    before: { documentType: deleted.documentType, required: deleted.required },
+  });
 }
 
 /**
