@@ -1,0 +1,1065 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Claims Desk</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+  :root {
+    --paper: #EFF2EC;
+    --surface: #FAFAF8;
+    --surface-raised: #FFFFFF;
+    --ink: #1C1B17;
+    --ink-soft: #5E5D55;
+    --ink-faint: #908F86;
+    --border: rgba(28,27,23,0.13);
+    --border-strong: rgba(28,27,23,0.22);
+    --accent: #2B3A52;
+    --accent-ink: #1E2A3D;
+    --accent-soft: rgba(43,58,82,0.09);
+    --focus: #2B3A52;
+
+    --approved: #3C7A52;
+    --approved-bg: rgba(60,122,82,0.13);
+    --pending: #B0752F;
+    --pending-bg: rgba(176,117,47,0.14);
+    --critical: #A6392A;
+    --critical-bg: rgba(166,57,42,0.13);
+    --neutral: #6B6A61;
+    --neutral-bg: rgba(107,106,97,0.12);
+
+    color-scheme: light;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper: #15171A;
+      --surface: #1C1F22;
+      --surface-raised: #22262A;
+      --ink: #ECEAE2;
+      --ink-soft: #A6A49A;
+      --ink-faint: #96958A;
+      --border: rgba(236,234,226,0.13);
+      --border-strong: rgba(236,234,226,0.24);
+      --accent: #92A6C9;
+      --accent-ink: #C7D3E6;
+      --accent-soft: rgba(146,166,201,0.14);
+      --focus: #92A6C9;
+
+      --approved: #6FBE8C;
+      --approved-bg: rgba(111,190,140,0.15);
+      --pending: #D9A763;
+      --pending-bg: rgba(217,167,99,0.15);
+      --critical: #E38E7D;
+      --critical-bg: rgba(219,120,103,0.15);
+      --neutral: #A6A49A;
+      --neutral-bg: rgba(166,164,154,0.15);
+      color-scheme: dark;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --paper: #15171A;
+    --surface: #1C1F22;
+    --surface-raised: #22262A;
+    --ink: #ECEAE2;
+    --ink-soft: #A6A49A;
+    --ink-faint: #96958A;
+    --border: rgba(236,234,226,0.13);
+    --border-strong: rgba(236,234,226,0.24);
+    --accent: #92A6C9;
+    --accent-ink: #C7D3E6;
+    --accent-soft: rgba(146,166,201,0.14);
+    --focus: #92A6C9;
+
+    --approved: #6FBE8C;
+    --approved-bg: rgba(111,190,140,0.15);
+    --pending: #D9A763;
+    --pending-bg: rgba(217,167,99,0.15);
+    --critical: #E38E7D;
+    --critical-bg: rgba(219,120,103,0.15);
+    --neutral: #A6A49A;
+    --neutral-bg: rgba(166,164,154,0.15);
+    color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "IBM Plex Sans", -apple-system, "Segoe UI", sans-serif;
+    font-size: 15px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+  .mono { font-family: "IBM Plex Mono", ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+
+  a, button, select, input, textarea { font-family: inherit; }
+  button, select, input, textarea { font-size: inherit; }
+  :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 3px; }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .nav-item, .btn, .tab { transition: background-color .12s ease, border-color .12s ease, color .12s ease; }
+    .sidebar { transition: transform .18s ease; }
+    .sidebar-backdrop { transition: opacity .18s ease; }
+  }
+
+  h1, h2, h3 { text-wrap: balance; margin: 0; }
+
+  /* ---------- shell ---------- */
+  .shell { display: flex; min-height: 100vh; }
+
+  .sidebar {
+    width: 228px; flex-shrink: 0;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    display: flex; flex-direction: column;
+    padding: 22px 14px;
+    gap: 28px;
+  }
+  .brand-block { display: flex; flex-direction: column; gap: 3px; }
+  .brand {
+    display: flex; align-items: baseline; gap: 8px;
+    padding: 0 10px;
+  }
+  .brand-mark {
+    width: 20px; height: 20px; border: 1.5px solid var(--ink); border-radius: 3px;
+    position: relative; flex-shrink: 0;
+  }
+  .brand-mark::after {
+    content: ""; position: absolute; left: 3px; right: 3px; top: 6px; height: 1.5px; background: var(--ink);
+    box-shadow: 0 4px 0 var(--ink);
+  }
+  .brand-name { font-weight: 600; font-size: 15.5px; letter-spacing: -0.01em; }
+  .brand-sub { font-size: 12px; color: var(--ink-faint); padding: 0 0 0 38px; }
+
+  .nav { display: flex; flex-direction: column; gap: 2px; margin-top: 4px; }
+  .nav-item {
+    all: unset;
+    display: flex; align-items: center; gap: 10px;
+    padding: 9px 10px; border-radius: 6px;
+    color: var(--ink-soft); font-size: 14px; font-weight: 500;
+    cursor: pointer;
+  }
+  .nav-item svg { width: 16px; height: 16px; flex-shrink: 0; opacity: 0.8; }
+  .nav-item:hover { background: var(--accent-soft); color: var(--ink); }
+  .nav-item.active { background: var(--accent-soft); color: var(--accent-ink); }
+  .nav-item.active svg { opacity: 1; }
+
+  .sidebar-foot { margin-top: auto; display: flex; flex-direction: column; gap: 10px; padding: 0 10px; }
+  .role-switch { display: flex; flex-direction: column; gap: 5px; }
+  .role-switch label { font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-faint); font-weight: 600; }
+  .role-switch select {
+    background: var(--surface-raised); border: 1px solid var(--border-strong); border-radius: 6px;
+    padding: 7px 8px; color: var(--ink); font-weight: 500; font-size: 13px;
+  }
+
+  .main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .topbar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 32px; border-bottom: 1px solid var(--border);
+    background: var(--surface);
+  }
+  .topbar-left { display: flex; align-items: center; gap: 14px; min-width: 0; }
+  .nav-toggle {
+    all: unset; display: none; align-items: center; justify-content: center;
+    width: 36px; height: 36px; border-radius: 7px; cursor: pointer; color: var(--ink); flex-shrink: 0;
+  }
+  .nav-toggle svg { width: 18px; height: 18px; }
+  .nav-toggle:hover { background: var(--accent-soft); }
+  .sidebar-backdrop { display: none; }
+  .topbar-title { font-size: 17px; font-weight: 600; letter-spacing: -0.01em; }
+  .topbar-sub { font-size: 12.5px; color: var(--ink-faint); margin-top: 2px; }
+  .topbar-user { text-align: right; font-size: 12.5px; color: var(--ink-soft); }
+  .topbar-user strong { color: var(--ink); font-weight: 600; }
+
+  .content { padding: 28px 32px 60px; max-width: 1180px; width: 100%; margin: 0 auto; }
+  .screen[hidden] { display: none; }
+
+  /* ---------- generic pieces ---------- */
+  .label-eyebrow {
+    font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.07em; color: var(--ink-faint);
+  }
+  .card {
+    background: var(--surface-raised); border: 1px solid var(--border); border-radius: 8px;
+  }
+  .card-pad { padding: 20px 22px; }
+  .card-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 14px; }
+
+  .chip {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 3px 9px; border-radius: 4px;
+    font-size: 12px; font-weight: 600; letter-spacing: 0.01em; white-space: nowrap;
+  }
+  .chip::before { content: ""; width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+  .chip--approved { color: var(--approved); background: var(--approved-bg); }
+  .chip--approved::before { background: var(--approved); }
+  .chip--pending { color: var(--pending); background: var(--pending-bg); }
+  .chip--pending::before { background: var(--pending); }
+  .chip--critical { color: var(--critical); background: var(--critical-bg); }
+  .chip--critical::before { background: var(--critical); }
+  .chip--neutral { color: var(--neutral); background: var(--neutral-bg); }
+  .chip--neutral::before { background: var(--neutral); }
+
+  .btn {
+    all: unset; display: inline-flex; align-items: center; gap: 6px;
+    padding: 8px 14px; border-radius: 6px; font-size: 13.5px; font-weight: 600; cursor: pointer;
+    border: 1px solid transparent;
+  }
+  .btn--primary { background: var(--accent); color: var(--surface-raised); }
+  .btn--primary:hover { background: var(--accent-ink); }
+  .btn--ghost { background: transparent; color: var(--ink); border-color: var(--border-strong); }
+  .btn--ghost:hover { background: var(--accent-soft); }
+  .btn--sm { padding: 5px 10px; font-size: 12.5px; }
+  .btn--confirm { background: transparent; color: var(--pending); border-color: currentColor; }
+  .btn--confirm:hover { background: var(--pending-bg); }
+  .btn[disabled] { opacity: 0.45; cursor: not-allowed; }
+
+  /* ---------- toasts ---------- */
+  .toast-stack {
+    position: fixed; bottom: 20px; right: 20px; z-index: 80;
+    display: flex; flex-direction: column; gap: 8px; max-width: 320px;
+  }
+  .toast {
+    background: var(--surface-raised); border: 1px solid var(--border-strong); border-radius: 7px;
+    padding: 10px 14px; font-size: 13px; font-weight: 500; color: var(--ink);
+    box-shadow: 0 10px 28px rgba(0,0,0,0.2); display: flex; align-items: center; gap: 9px;
+  }
+  .toast::before { content: ""; width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .toast.success { border-color: var(--approved); }
+  .toast.success::before { background: var(--approved); }
+  .toast.error { border-color: var(--critical); }
+  .toast.error::before { background: var(--critical); }
+  @media (prefers-reduced-motion: no-preference) {
+    .toast { animation: toast-in .16s ease; }
+  }
+  @keyframes toast-in {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ---------- inline error banner ---------- */
+  .inline-error {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    border: 1px solid var(--critical); background: var(--critical-bg); border-radius: 7px;
+    padding: 10px 14px; margin-bottom: 12px; font-size: 13px; color: var(--critical); font-weight: 500;
+  }
+  .sent-confirm {
+    border: 1px solid var(--approved); background: var(--approved-bg); border-radius: 7px;
+    padding: 12px 14px; font-size: 13.5px; color: var(--ink); display: flex; align-items: center; gap: 9px;
+  }
+  .sent-confirm svg { width: 16px; height: 16px; color: var(--approved); flex-shrink: 0; }
+
+  /* ---------- failed upload row ---------- */
+  .upload-row.is-failed { border-color: var(--critical); border-style: solid; background: var(--critical-bg); }
+  .upload-row.is-failed .upload-conf { color: var(--critical); font-weight: 600; }
+
+  /* ---------- Dashboard ---------- */
+  .kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
+  .kpi {
+    background: var(--surface-raised); border: 1px solid var(--border); border-radius: 8px;
+    padding: 16px 18px; border-top: 3px solid var(--border-strong);
+  }
+  .kpi.is-critical { border-top-color: var(--critical); }
+  .kpi.is-approved { border-top-color: var(--approved); }
+  .kpi-label { font-size: 12px; color: var(--ink-faint); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+  .kpi-value { font-size: 28px; font-weight: 600; margin-top: 8px; letter-spacing: -0.02em; }
+  .kpi-trend { font-size: 12px; margin-top: 6px; color: var(--ink-soft); display: flex; align-items: center; gap: 4px; }
+  .kpi-trend.good { color: var(--approved); }
+  .kpi-trend.bad { color: var(--critical); }
+
+  .two-col { display: grid; grid-template-columns: 1fr 1.5fr; gap: 20px; align-items: start; }
+
+  .bar-list { display: flex; flex-direction: column; gap: 14px; }
+  .bar-row { display: flex; flex-direction: column; gap: 5px; }
+  .bar-row-top { display: flex; justify-content: space-between; font-size: 13px; }
+  .bar-row-top .amt { font-weight: 600; }
+  .bar-track { height: 6px; border-radius: 3px; background: var(--accent-soft); overflow: hidden; }
+  .bar-fill { height: 100%; background: var(--accent); border-radius: 3px; }
+  .bar-total { margin-top: 4px; padding-top: 12px; border-top: 1px solid var(--border); display: flex; justify-content: space-between; font-size: 13.5px; font-weight: 600; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  thead th {
+    text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em;
+    color: var(--ink-faint); font-weight: 600; padding: 0 10px 10px; border-bottom: 1px solid var(--border);
+  }
+  tbody td { padding: 11px 10px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr:hover { background: var(--accent-soft); }
+  .patient-cell { display: flex; flex-direction: column; }
+  .patient-cell .proc { font-size: 12px; color: var(--ink-faint); }
+  .stage-time.is-critical { color: var(--critical); font-weight: 600; }
+  .stage-time.is-pending { color: var(--pending); font-weight: 600; }
+
+  /* ---------- Claim file ---------- */
+  .claim-head { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 22px; }
+  .claim-id { font-size: 12.5px; color: var(--ink-faint); margin-bottom: 4px; }
+  .claim-title { font-size: 21px; font-weight: 600; letter-spacing: -0.01em; }
+  .claim-meta { display: flex; gap: 16px; margin-top: 8px; font-size: 13px; color: var(--ink-soft); }
+  .claim-meta b { color: var(--ink); font-weight: 600; }
+
+  .stepper { display: flex; margin: 6px 0 28px; }
+  .step { position: relative; flex: 1; display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; }
+  .step:not(:first-child)::before {
+    content: ""; position: absolute; top: 15px; right: 50%; width: 100%; height: 2px; background: var(--border-strong); z-index: 0;
+  }
+  .step.line-done:not(:first-child)::before { background: var(--approved); }
+  .step-node {
+    width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    border: 2px solid var(--border-strong); background: var(--surface-raised); z-index: 1; position: relative;
+  }
+  .step-node svg { width: 14px; height: 14px; }
+  .step.done .step-node { border-color: var(--approved); background: var(--approved-bg); color: var(--approved); }
+  .step.current .step-node { border-color: var(--pending); background: var(--pending-bg); color: var(--pending); }
+  .step.current.critical .step-node { border-color: var(--critical); background: var(--critical-bg); color: var(--critical); }
+  .step.upcoming .step-node { opacity: 0.55; color: var(--ink-faint); }
+  .step-name { font-size: 12.5px; font-weight: 600; }
+  .step.upcoming .step-name { color: var(--ink-faint); font-weight: 500; }
+  .step-time { font-size: 12px; color: var(--ink-faint); }
+  .step.current.critical .step-time { color: var(--critical); font-weight: 600; }
+  .step.current:not(.critical) .step-time { color: var(--pending); font-weight: 600; }
+
+  .field-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 22px; }
+  .field {
+    border: 1px solid var(--border); border-radius: 7px; padding: 12px 14px;
+    display: flex; flex-direction: column; gap: 6px; background: var(--surface-raised);
+  }
+  .field.needs-confirm { border-style: dashed; border-color: var(--pending); background: var(--pending-bg); }
+  .field-label { font-size: 11px; color: var(--ink-faint); text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600; }
+  .field-value { font-size: 15px; font-weight: 600; }
+  .field-source { font-size: 12px; color: var(--ink-faint); font-style: italic; }
+  .field-foot { display: flex; align-items: center; justify-content: space-between; margin-top: 2px; }
+  .field-ok { font-size: 12px; color: var(--approved); font-weight: 600; display: flex; align-items: center; gap: 4px; }
+
+  .checklist { display: flex; flex-direction: column; gap: 2px; }
+  .doc-item { display: flex; align-items: center; gap: 10px; padding: 10px 4px; border-bottom: 1px solid var(--border); }
+  .doc-item:last-child { border-bottom: none; }
+  .doc-status { width: 20px; height: 20px; border-radius: 50%; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+  .doc-status svg { width: 11px; height: 11px; }
+  .doc-status.present { background: var(--approved-bg); color: var(--approved); }
+  .doc-status.missing { background: var(--critical-bg); color: var(--critical); }
+  .doc-name { font-size: 13.5px; font-weight: 500; flex: 1; }
+  .doc-item.is-missing .doc-name { color: var(--critical); font-weight: 600; }
+  .doc-req { font-size: 12px; color: var(--ink-faint); }
+
+  .upload-list { display: flex; flex-direction: column; gap: 10px; }
+  .upload-row {
+    border: 1px solid var(--border); border-radius: 7px; padding: 11px 13px;
+    display: flex; flex-direction: column; gap: 6px; background: var(--surface-raised);
+  }
+  .upload-row.is-flagged { border-color: var(--pending); border-style: dashed; }
+  .upload-top { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+  .upload-file { font-size: 12.5px; font-weight: 600; display: flex; align-items: center; gap: 7px; }
+  .upload-file svg { width: 14px; height: 14px; color: var(--ink-faint); flex-shrink: 0; }
+  .upload-conf { font-size: 12px; color: var(--ink-faint); }
+  .upload-slot { font-size: 13px; }
+  .upload-slot b { font-weight: 600; }
+  .upload-snippet { font-size: 12px; color: var(--ink-faint); font-style: italic; border-left: 2px solid var(--border-strong); padding-left: 8px; }
+  .upload-hint { font-size: 12px; color: var(--pending); font-weight: 600; }
+
+  /* ---------- Query inbox ---------- */
+  .query-shell { display: grid; grid-template-columns: 300px 1fr; gap: 20px; align-items: start; }
+  .query-list { display: flex; flex-direction: column; gap: 8px; }
+  .query-card {
+    border: 1px solid var(--border); border-radius: 7px; padding: 12px 13px; cursor: pointer;
+    background: var(--surface-raised); display: flex; flex-direction: column; gap: 7px;
+  }
+  .query-card.selected { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+  .query-card-top { display: flex; justify-content: space-between; font-size: 12px; color: var(--ink-faint); }
+  .query-card-claim { font-size: 13.5px; font-weight: 600; }
+  .query-card-ins { font-size: 12px; color: var(--ink-soft); }
+
+  .detail-head { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; }
+  .countdown { text-align: right; }
+  .countdown-val { font-size: 20px; font-weight: 700; }
+  .countdown-val.is-critical { color: var(--critical); }
+  .countdown-val.is-ok { color: var(--approved); }
+  .countdown-label { font-size: 11px; color: var(--ink-faint); text-transform: uppercase; letter-spacing: 0.04em; }
+
+  .ai-block {
+    background: var(--accent-soft); border: 1px solid var(--border); border-radius: 7px; padding: 14px 16px; margin-bottom: 14px;
+  }
+  .ai-block-label { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--accent-ink); margin-bottom: 8px; }
+  .ai-block-label svg { width: 13px; height: 13px; }
+  .ai-block p { margin: 0; font-size: 14px; }
+
+  .req-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
+  .req-item { display: flex; align-items: center; justify-content: space-between; border: 1px solid var(--border); border-radius: 7px; padding: 10px 12px; }
+  .req-item-name { font-size: 13.5px; font-weight: 500; }
+
+  details.email-raw { border: 1px solid var(--border); border-radius: 7px; margin-bottom: 16px; }
+  details.email-raw > summary { padding: 10px 13px; font-size: 12px; font-weight: 600; color: var(--ink-faint); text-transform: uppercase; letter-spacing: 0.04em; cursor: pointer; }
+  details.email-raw[open] > summary { border-bottom: 1px solid var(--border); }
+  .email-body { padding: 13px 16px; font-size: 13.5px; color: var(--ink-soft); white-space: pre-wrap; line-height: 1.6; }
+
+  .reply-box textarea {
+    width: 100%; min-height: 90px; resize: vertical; border: 1px solid var(--border-strong); border-radius: 7px;
+    padding: 10px 12px; font-size: 13.5px; color: var(--ink); background: var(--surface-raised); font-family: inherit;
+  }
+  .reply-foot { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; }
+  .reply-note { font-size: 12px; color: var(--ink-faint); }
+
+  /* ---------- Checklist admin ---------- */
+  .admin-top { display: flex; gap: 10px; margin-bottom: 20px; align-items: center; }
+  .select-pill { display: flex; align-items: center; gap: 8px; border: 1px solid var(--border-strong); border-radius: 6px; padding: 8px 12px; font-size: 13.5px; font-weight: 600; background: var(--surface-raised); }
+  .select-pill span.tag { font-size: 11.5px; text-transform: uppercase; color: var(--ink-faint); font-weight: 700; letter-spacing: 0.05em; }
+  .select-pill svg { width: 13px; height: 13px; color: var(--ink-faint); }
+
+  .admin-layout { display: grid; grid-template-columns: 1.6fr 1fr; gap: 20px; align-items: start; }
+  .rule-row {
+    display: flex; align-items: center; gap: 12px; padding: 12px 4px; border-bottom: 1px solid var(--border);
+  }
+  .rule-row:last-child { border-bottom: none; }
+  .rule-grip { width: 14px; color: var(--ink-faint); flex-shrink: 0; }
+  .rule-name { flex: 1; font-size: 13.5px; font-weight: 500; }
+  .rule-toggle {
+    display: inline-flex; border: 1px solid var(--border-strong); border-radius: 5px; overflow: hidden; font-size: 12px; font-weight: 600;
+  }
+  .rule-toggle span { padding: 4px 9px; }
+  .rule-toggle .req-on { background: var(--accent); color: var(--surface-raised); }
+  .rule-toggle .opt-on { background: var(--surface-raised); color: var(--ink-soft); }
+  .rule-add { display: flex; gap: 8px; margin-top: 10px; padding-top: 12px; border-top: 1px dashed var(--border-strong); }
+  .rule-add input {
+    flex: 1; border: 1px solid var(--border-strong); border-radius: 6px; padding: 8px 10px; font-size: 13px; background: var(--surface-raised); color: var(--ink);
+  }
+
+  .notice {
+    border-left: 3px solid var(--accent); background: var(--accent-soft); border-radius: 0 7px 7px 0;
+    padding: 12px 14px; font-size: 12.5px; color: var(--ink-soft); margin-top: 16px;
+  }
+  .notice b { color: var(--ink); }
+
+  @media (max-width: 920px) {
+    .nav-toggle { display: flex; }
+    .sidebar {
+      position: fixed; top: 0; left: 0; bottom: 0; z-index: 41;
+      transform: translateX(-100%);
+      box-shadow: 2px 0 28px rgba(0,0,0,0.22);
+    }
+    .sidebar.open { transform: translateX(0); }
+    .sidebar-backdrop.open {
+      display: block; position: fixed; inset: 0; z-index: 40;
+      background: rgba(0,0,0,0.38);
+    }
+    .kpi-row, .field-row { grid-template-columns: repeat(2, 1fr); }
+    .two-col, .admin-layout, .query-shell { grid-template-columns: 1fr; }
+  }
+
+  @media (max-width: 480px) {
+    .kpi-row, .field-row { grid-template-columns: 1fr; }
+    .content { padding: 20px 16px 48px; }
+    .topbar { padding: 14px 16px; }
+  }
+
+  body[data-role="exec"] .role-head-only { display: none !important; }
+  body:not([data-role="exec"]) .role-exec-only { display: none !important; }
+  body[data-role="exec"] [data-nav="admin"] { display: none; }
+  body[data-role="exec"] tr[data-assignee="other"] { display: none; }
+</style>
+</head>
+<body>
+
+<div class="shell">
+  <aside class="sidebar" id="sidebar">
+    <div class="brand-block">
+      <div class="brand"><span class="brand-mark"></span><span class="brand-name">Claims Desk</span></div>
+      <div class="brand-sub">Nashik Multispecialty</div>
+    </div>
+    <nav class="nav">
+      <button class="nav-item active" data-screen="dashboard">
+        <svg viewBox="0 0 16 16" fill="none"><rect x="1.5" y="1.5" width="6" height="6" rx="1" stroke="currentColor" stroke-width="1.4"/><rect x="8.5" y="1.5" width="6" height="9" rx="1" stroke="currentColor" stroke-width="1.4"/><rect x="1.5" y="9.5" width="6" height="5" rx="1" stroke="currentColor" stroke-width="1.4"/></svg>
+        Dashboard
+      </button>
+      <button class="nav-item" data-screen="claim">
+        <svg viewBox="0 0 16 16" fill="none"><rect x="3" y="1.5" width="10" height="13" rx="1.2" stroke="currentColor" stroke-width="1.4"/><path d="M5.5 5.5h5M5.5 8h5M5.5 10.5h3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+        Claim File
+      </button>
+      <button class="nav-item" data-screen="queries">
+        <svg viewBox="0 0 16 16" fill="none"><path d="M2 4.5A1.5 1.5 0 0 1 3.5 3h9A1.5 1.5 0 0 1 14 4.5v7A1.5 1.5 0 0 1 12.5 13h-9A1.5 1.5 0 0 1 2 11.5v-7Z" stroke="currentColor" stroke-width="1.4"/><path d="M2.5 4.5 8 9l5.5-4.5" stroke="currentColor" stroke-width="1.4"/></svg>
+        Query Inbox
+      </button>
+      <button class="nav-item" data-nav="admin" data-screen="admin">
+        <svg viewBox="0 0 16 16" fill="none"><path d="M8 1.5 3 3.8v3.9c0 3.4 2.2 5.6 5 6.8 2.8-1.2 5-3.4 5-6.8V3.8L8 1.5Z" stroke="currentColor" stroke-width="1.4"/><path d="M6 8.2l1.5 1.5L10.2 6.8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Checklist Admin
+      </button>
+    </nav>
+    <div class="sidebar-foot">
+      <div class="role-switch">
+        <label for="roleSelect">View as</label>
+        <select id="roleSelect">
+          <option value="exec">Desk Executive</option>
+          <option value="head" selected>Desk Head</option>
+        </select>
+      </div>
+    </div>
+  </aside>
+
+  <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
+
+  <div class="main">
+    <header class="topbar">
+      <div class="topbar-left">
+        <button class="nav-toggle" id="navToggle" type="button" aria-expanded="false" aria-controls="sidebar" aria-label="Open navigation">
+          <svg viewBox="0 0 16 16" fill="none"><path d="M2 4h12M2 8h12M2 12h12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+        </button>
+        <div>
+          <div class="topbar-title" id="topbarTitle">Dashboard</div>
+          <div class="topbar-sub" id="topbarSub">Across the cashless desk, updated just now</div>
+        </div>
+      </div>
+      <div class="topbar-user"><strong id="topbarUser">Priya Nair</strong><br>Insurance Desk</div>
+    </header>
+
+    <main class="content">
+
+      <!-- ===================== DASHBOARD ===================== -->
+      <section id="screen-dashboard" class="screen">
+        <div class="kpi-row">
+          <div class="kpi" data-role-count>
+            <div class="kpi-label role-head-only">Pending Approvals</div>
+            <div class="kpi-label role-exec-only">My Open Claims</div>
+            <div class="kpi-value role-head-only">3</div>
+            <div class="kpi-value role-exec-only">1</div>
+            <div class="kpi-trend">Across pre-auth, query &amp; enhancement</div>
+          </div>
+          <div class="kpi">
+            <div class="kpi-label">Avg. Discharge Wait</div>
+            <div class="kpi-value mono">3.1 <span style="font-size:15px;font-weight:500;">hrs</span></div>
+            <div class="kpi-trend good">
+              <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M12 10 8 5 4 10" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              down from 4.5h &middot; target 2.5h
+            </div>
+          </div>
+          <div class="kpi">
+            <div class="kpi-label">Deductions, This Month</div>
+            <div class="kpi-value mono">&#8377;4.8L</div>
+            <div class="kpi-trend">Avoidable &middot; missing-document related</div>
+          </div>
+          <div class="kpi is-critical">
+            <div class="kpi-label">Open Queries</div>
+            <div class="kpi-value mono">2</div>
+            <div class="kpi-trend bad">1 overdue for reply</div>
+          </div>
+        </div>
+
+        <div class="two-col">
+          <div class="card card-pad">
+            <div class="card-head"><h2 class="label-eyebrow">Deductions by Reason</h2></div>
+            <div class="bar-list">
+              <div class="bar-row">
+                <div class="bar-row-top"><span>Missing document</span><span class="amt mono">&#8377;2,10,000</span></div>
+                <div class="bar-track"><div class="bar-fill" style="width:44%"></div></div>
+              </div>
+              <div class="bar-row">
+                <div class="bar-row-top"><span>Documentation delay</span><span class="amt mono">&#8377;1,40,000</span></div>
+                <div class="bar-track"><div class="bar-fill" style="width:29%"></div></div>
+              </div>
+              <div class="bar-row">
+                <div class="bar-row-top"><span>Incomplete clinical notes</span><span class="amt mono">&#8377;90,000</span></div>
+                <div class="bar-track"><div class="bar-fill" style="width:19%"></div></div>
+              </div>
+              <div class="bar-row">
+                <div class="bar-row-top"><span>Policy mismatch</span><span class="amt mono">&#8377;40,000</span></div>
+                <div class="bar-track"><div class="bar-fill" style="width:8%"></div></div>
+              </div>
+              <div class="bar-total"><span>Total, this month</span><span class="mono">&#8377;4,80,000</span></div>
+            </div>
+          </div>
+
+          <div class="card card-pad">
+            <div class="card-head">
+              <h2 class="label-eyebrow role-head-only">All Claims</h2>
+              <h2 class="label-eyebrow role-exec-only">My Claims</h2>
+            </div>
+            <table class="claims-table">
+              <thead>
+                <tr><th>Claim</th><th>Patient</th><th>Insurer / TPA</th><th>Status</th><th>Time in Stage</th></tr>
+              </thead>
+              <tbody>
+                <tr data-assignee="priya">
+                  <td class="mono">CLM-3381</td>
+                  <td class="patient-cell">Rajendra Pawar<span class="proc">Gall bladder removal</span></td>
+                  <td>Company B &middot; TPA</td>
+                  <td><span class="chip chip--critical">Query</span></td>
+                  <td class="mono stage-time is-critical">2d 6h &middot; overdue</td>
+                </tr>
+                <tr data-assignee="other">
+                  <td class="mono">CLM-3382</td>
+                  <td class="patient-cell">Sunita Deshmukh<span class="proc">Total knee replacement</span></td>
+                  <td>Company C &middot; Insurer</td>
+                  <td><span class="chip chip--neutral">Pre-auth sent</span></td>
+                  <td class="mono stage-time is-pending">50m &middot; nearing 1h SLA</td>
+                </tr>
+                <tr data-assignee="other">
+                  <td class="mono">CLM-3385</td>
+                  <td class="patient-cell">Imran Shaikh<span class="proc">Dengue, low platelets</span></td>
+                  <td>Company D &middot; TPA</td>
+                  <td><span class="chip chip--pending">Enhancement</span></td>
+                  <td class="mono stage-time">5h 40m</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===================== CLAIM FILE ===================== -->
+      <section id="screen-claim" class="screen" hidden>
+        <div class="claim-head">
+          <div>
+            <div class="claim-id mono">CLM-3381</div>
+            <div class="claim-title">Rajendra Pawar</div>
+            <div class="claim-meta">
+              <span>Gall bladder removal &middot; laparoscopic cholecystectomy</span>
+              <span><b>Company B</b> &middot; TPA</span>
+              <span>Admitted <span class="mono">30 Oct, 11:05</span></span>
+            </div>
+          </div>
+          <span class="chip chip--critical" style="padding:6px 12px;font-size:13px;">Query &middot; reply overdue</span>
+        </div>
+
+        <div class="stepper">
+          <div class="step done line-done">
+            <div class="step-node"><svg viewBox="0 0 16 16" fill="none"><path d="M3.5 8.5 6.5 11.5 12.5 4.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+            <div class="step-name">Pre-auth sent</div>
+            <div class="step-time mono">30 Oct, 11:20</div>
+          </div>
+          <div class="step current critical">
+            <div class="step-node"><svg viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="1.4" fill="currentColor"/><path d="M8 4v2.3M8 9.7V12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></div>
+            <div class="step-name">Query</div>
+            <div class="step-time">overdue by 6h</div>
+          </div>
+          <div class="step upcoming">
+            <div class="step-node"><svg viewBox="0 0 16 16" fill="none"><path d="M3.5 8.5 6.5 11.5 12.5 4.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+            <div class="step-name">Approved</div>
+            <div class="step-time">&mdash;</div>
+          </div>
+          <div class="step upcoming">
+            <div class="step-node"><svg viewBox="0 0 16 16" fill="none"><rect x="3" y="2" width="10" height="12" rx="1" stroke="currentColor" stroke-width="1.4"/></svg></div>
+            <div class="step-name">Final bill</div>
+            <div class="step-time">&mdash;</div>
+          </div>
+          <div class="step upcoming">
+            <div class="step-node"><svg viewBox="0 0 16 16" fill="none"><path d="M2 8h12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M5 5l-3 3 3 3M11 5l3 3-3 3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+            <div class="step-name">Settled</div>
+            <div class="step-time">&mdash;</div>
+          </div>
+        </div>
+
+        <div class="label-eyebrow" style="margin-bottom:10px;">Pre-auth fields &middot; AI-filled from doctor's note</div>
+        <div class="field-row">
+          <div class="field">
+            <div class="field-label">Diagnosis</div>
+            <div class="field-value">Acute cholecystitis</div>
+            <div class="field-source">"&hellip;diagnosed with acute cholecystitis secondary to cholelithiasis&hellip;"</div>
+            <div class="field-foot"><span class="field-ok"><svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M3.5 8.5 6.5 11.5 12.5 4.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>Confirmed</span></div>
+          </div>
+          <div class="field">
+            <div class="field-label">Procedure</div>
+            <div class="field-value">Lap. cholecystectomy</div>
+            <div class="field-source">"OT notes, line 2"</div>
+            <div class="field-foot"><span class="field-ok"><svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M3.5 8.5 6.5 11.5 12.5 4.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>Confirmed</span></div>
+          </div>
+          <div class="field needs-confirm" id="estCostField">
+            <div class="field-label">Estimated Cost</div>
+            <div class="field-value mono">&#8377;1,85,000</div>
+            <div class="field-source">"Pre-auth estimate sheet, p.1"</div>
+            <div class="field-foot"><button class="btn btn--confirm btn--sm" id="confirmCostBtn">Confirm</button></div>
+          </div>
+          <div class="field">
+            <div class="field-label">Admission Date</div>
+            <div class="field-value mono">30 Oct 2026</div>
+            <div class="field-source">"Admission register"</div>
+            <div class="field-foot"><span class="field-ok"><svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M3.5 8.5 6.5 11.5 12.5 4.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>Confirmed</span></div>
+          </div>
+        </div>
+
+        <div class="two-col" style="grid-template-columns: 1fr 1fr;">
+          <div class="card card-pad">
+            <div class="card-head"><h2 class="label-eyebrow">Document Checklist &middot; Gaps</h2><span class="chip chip--critical" id="gapCountChip">1 missing</span></div>
+            <div class="checklist">
+              <div class="doc-item">
+                <div class="doc-status present"><svg viewBox="0 0 16 16" fill="none"><path d="M3.5 8.5 6.5 11.5 12.5 4.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+                <div class="doc-name">Pre-authorization form</div>
+                <div class="doc-req">Required</div>
+              </div>
+              <div class="doc-item">
+                <div class="doc-status present"><svg viewBox="0 0 16 16" fill="none"><path d="M3.5 8.5 6.5 11.5 12.5 4.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+                <div class="doc-name">Treating doctor's note</div>
+                <div class="doc-req">Required</div>
+              </div>
+              <div class="doc-item is-missing" id="ultrasoundDocItem">
+                <div class="doc-status missing"><svg viewBox="0 0 16 16" fill="none"><path d="M4.5 4.5l7 7M11.5 4.5l-7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></div>
+                <div class="doc-name">Ultrasound report (abdomen)</div>
+                <div class="doc-req">Missing</div>
+              </div>
+              <div class="doc-item">
+                <div class="doc-status present"><svg viewBox="0 0 16 16" fill="none"><path d="M3.5 8.5 6.5 11.5 12.5 4.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+                <div class="doc-name">Photo ID proof</div>
+                <div class="doc-req">Required</div>
+              </div>
+              <div class="doc-item">
+                <div class="doc-status present"><svg viewBox="0 0 16 16" fill="none"><path d="M3.5 8.5 6.5 11.5 12.5 4.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+                <div class="doc-name">Policy / e-card copy</div>
+                <div class="doc-req">Required</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card card-pad">
+            <div class="card-head"><h2 class="label-eyebrow">Uploaded Documents</h2></div>
+            <div class="upload-list">
+              <div class="upload-row">
+                <div class="upload-top"><div class="upload-file"><svg viewBox="0 0 16 16" fill="none"><rect x="3" y="1.5" width="10" height="13" rx="1" stroke="currentColor" stroke-width="1.3"/></svg>doctor_note_scan_0423.jpg</div><span class="upload-conf">98% match</span></div>
+                <div class="upload-slot">Sorted to &middot; <b>Treating doctor's note</b></div>
+              </div>
+              <div class="upload-row">
+                <div class="upload-top"><div class="upload-file"><svg viewBox="0 0 16 16" fill="none"><rect x="3" y="1.5" width="10" height="13" rx="1" stroke="currentColor" stroke-width="1.3"/></svg>id_proof.jpg</div><span class="upload-conf">95% match</span></div>
+                <div class="upload-slot">Sorted to &middot; <b>Photo ID proof</b></div>
+              </div>
+              <div class="upload-row">
+                <div class="upload-top"><div class="upload-file"><svg viewBox="0 0 16 16" fill="none"><rect x="3" y="1.5" width="10" height="13" rx="1" stroke="currentColor" stroke-width="1.3"/></svg>policy_card.pdf</div><span class="upload-conf">91% match</span></div>
+                <div class="upload-slot">Sorted to &middot; <b>Policy / e-card copy</b></div>
+              </div>
+              <div class="upload-row is-flagged">
+                <div class="upload-top"><div class="upload-file"><svg viewBox="0 0 16 16" fill="none"><rect x="3" y="1.5" width="10" height="13" rx="1" stroke="currentColor" stroke-width="1.3"/></svg>scan_0091.jpg</div><span class="upload-conf">54% match</span></div>
+                <div class="upload-slot">AI suggests &middot; <b>Blood investigation report</b> (not on this checklist)</div>
+                <div class="upload-snippet">"&hellip;Lab Report &mdash; CBC, platelet count: 1.1 lakh/&mu;L&hellip;"</div>
+                <div class="upload-hint">Looks misfiled &middot; drag to the correct slot, or discard</div>
+              </div>
+              <div class="upload-row is-failed" id="failedUploadRow">
+                <div class="upload-top"><div class="upload-file"><svg viewBox="0 0 16 16" fill="none"><rect x="3" y="1.5" width="10" height="13" rx="1" stroke="currentColor" stroke-width="1.3"/></svg>ultrasound_report.jpg</div><span class="upload-conf">Upload failed</span></div>
+                <div class="upload-slot">Couldn't reach the server &middot; the file wasn't saved</div>
+                <div class="upload-top" style="margin-top:2px;">
+                  <button class="btn btn--ghost btn--sm" id="retryUploadBtn" type="button">Retry upload</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===================== QUERY INBOX ===================== -->
+      <section id="screen-queries" class="screen" hidden>
+        <div class="query-shell">
+          <div class="query-list">
+            <div class="query-card selected" data-query="q1">
+              <div class="query-card-top"><span>Company B &middot; TPA</span><span class="chip chip--critical" style="padding:1px 7px;">Overdue 6h</span></div>
+              <div class="query-card-claim mono">CLM-3381</div>
+              <div class="query-card-ins">Rajendra Pawar &middot; Gall bladder removal</div>
+            </div>
+            <div class="query-card" data-query="q2">
+              <div class="query-card-top"><span>Company D &middot; TPA</span><span class="chip chip--approved" style="padding:1px 7px;">Due in 18h</span></div>
+              <div class="query-card-claim mono">CLM-3385</div>
+              <div class="query-card-ins">Imran Shaikh &middot; Dengue, low platelets</div>
+            </div>
+          </div>
+
+          <div class="card card-pad">
+            <div class="detail-head">
+              <div>
+                <div class="claim-id mono">CLM-3381 &middot; Rajendra Pawar</div>
+                <div class="claim-meta" style="margin-top:4px;"><span>Gall bladder removal &middot; Company B TPA</span></div>
+              </div>
+              <div class="countdown">
+                <div class="countdown-val is-critical mono">&minus;6h 02m</div>
+                <div class="countdown-label">Reply window closed</div>
+              </div>
+            </div>
+
+            <div class="ai-block">
+              <div class="ai-block-label">
+                <svg viewBox="0 0 16 16" fill="none"><path d="M8 1.5 9.3 5l3.5 1.3-3.5 1.3L8 11.1 6.7 7.6 3.2 6.3l3.5-1.3L8 1.5Z" stroke="currentColor" stroke-width="1.1" stroke-linejoin="round"/></svg>
+                AI summary &middot; from email received 2 Nov, 09:40
+              </div>
+              <p>Company B TPA needs the ultrasound report (with radiologist's impression) for Rajendra Pawar's gallbladder claim before they can process pre-authorization. Reply within 48 hours of the email, or the request closes automatically.</p>
+            </div>
+
+            <div class="label-eyebrow" style="margin-bottom:8px;">What they're asking for</div>
+            <div class="req-list">
+              <div class="req-item" id="ultrasoundReqItem">
+                <div class="req-item-name">Ultrasound report (abdomen), with radiologist's impression</div>
+                <div style="display:flex;align-items:center;gap:8px;">
+                  <span class="chip chip--critical" id="attachReqChip">Not yet attached</span>
+                  <button class="btn btn--ghost btn--sm" id="attachDocBtn" type="button">Attach</button>
+                </div>
+              </div>
+            </div>
+
+            <details class="email-raw" open>
+              <summary>Original email</summary>
+              <div class="email-body">Dear Team,
+
+With reference to the pre-authorization request for patient Rajendra Pawar (Claim Ref: CLM-3381) for laparoscopic cholecystectomy, we note that the ultrasound report confirming gallstone diagnosis has not been enclosed with the submitted documents.
+
+Kindly share the ultrasound report along with the radiologist's impression at the earliest to enable processing of this request. This query must be resolved within 48 hours of this communication, failing which the request will be closed.
+
+Regards,
+Claims Team, Company B TPA</div>
+            </details>
+
+            <label class="label-eyebrow" for="replyTextarea" style="margin-bottom:8px;display:block;">Reply</label>
+            <div class="reply-box" id="replyBox">
+              <div class="inline-error" id="replyError" hidden>
+                <span>Couldn't send your reply &mdash; check your connection and try again.</span>
+              </div>
+              <textarea id="replyTextarea" placeholder="Attach the ultrasound report and add a note before sending&hellip;"></textarea>
+              <div class="reply-foot">
+                <span class="reply-note" id="replyNote">Attach the ultrasound report above before you can send this reply.</span>
+                <button class="btn btn--primary" id="sendReplyBtn" type="button" disabled title="Attach the requested document first">Send reply</button>
+              </div>
+            </div>
+            <div class="sent-confirm" id="replySentConfirm" hidden>
+              <svg viewBox="0 0 16 16" fill="none"><path d="M3.5 8.5 6.5 11.5 12.5 4.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <span>Reply sent to Company B TPA &middot; tracking for their response</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===================== CHECKLIST ADMIN ===================== -->
+      <section id="screen-admin" class="screen" hidden>
+        <div class="admin-top">
+          <div class="select-pill"><span class="tag">Insurer / TPA</span>Company B &middot; TPA <svg viewBox="0 0 16 16" fill="none"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+          <div class="select-pill"><span class="tag">Procedure</span>Gall bladder removal <svg viewBox="0 0 16 16" fill="none"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+        </div>
+
+        <div class="admin-layout">
+          <div class="card card-pad">
+            <div class="card-head"><h2 class="label-eyebrow">Required Documents</h2></div>
+            <div class="rule-list">
+              <div class="rule-row">
+                <svg class="rule-grip" viewBox="0 0 16 16" fill="none"><circle cx="5" cy="4" r="1" fill="currentColor"/><circle cx="5" cy="8" r="1" fill="currentColor"/><circle cx="5" cy="12" r="1" fill="currentColor"/><circle cx="9" cy="4" r="1" fill="currentColor"/><circle cx="9" cy="8" r="1" fill="currentColor"/><circle cx="9" cy="12" r="1" fill="currentColor"/></svg>
+                <div class="rule-name">Pre-authorization form</div>
+                <div class="rule-toggle"><span class="req-on">Required</span><span>Optional</span></div>
+              </div>
+              <div class="rule-row">
+                <svg class="rule-grip" viewBox="0 0 16 16" fill="none"><circle cx="5" cy="4" r="1" fill="currentColor"/><circle cx="5" cy="8" r="1" fill="currentColor"/><circle cx="5" cy="12" r="1" fill="currentColor"/><circle cx="9" cy="4" r="1" fill="currentColor"/><circle cx="9" cy="8" r="1" fill="currentColor"/><circle cx="9" cy="12" r="1" fill="currentColor"/></svg>
+                <div class="rule-name">Treating doctor's note</div>
+                <div class="rule-toggle"><span class="req-on">Required</span><span>Optional</span></div>
+              </div>
+              <div class="rule-row">
+                <svg class="rule-grip" viewBox="0 0 16 16" fill="none"><circle cx="5" cy="4" r="1" fill="currentColor"/><circle cx="5" cy="8" r="1" fill="currentColor"/><circle cx="5" cy="12" r="1" fill="currentColor"/><circle cx="9" cy="4" r="1" fill="currentColor"/><circle cx="9" cy="8" r="1" fill="currentColor"/><circle cx="9" cy="12" r="1" fill="currentColor"/></svg>
+                <div class="rule-name">Ultrasound report (abdomen)</div>
+                <div class="rule-toggle"><span class="req-on">Required</span><span>Optional</span></div>
+              </div>
+              <div class="rule-row">
+                <svg class="rule-grip" viewBox="0 0 16 16" fill="none"><circle cx="5" cy="4" r="1" fill="currentColor"/><circle cx="5" cy="8" r="1" fill="currentColor"/><circle cx="5" cy="12" r="1" fill="currentColor"/><circle cx="9" cy="4" r="1" fill="currentColor"/><circle cx="9" cy="8" r="1" fill="currentColor"/><circle cx="9" cy="12" r="1" fill="currentColor"/></svg>
+                <div class="rule-name">Photo ID proof</div>
+                <div class="rule-toggle"><span class="req-on">Required</span><span>Optional</span></div>
+              </div>
+              <div class="rule-row">
+                <svg class="rule-grip" viewBox="0 0 16 16" fill="none"><circle cx="5" cy="4" r="1" fill="currentColor"/><circle cx="5" cy="8" r="1" fill="currentColor"/><circle cx="5" cy="12" r="1" fill="currentColor"/><circle cx="9" cy="4" r="1" fill="currentColor"/><circle cx="9" cy="8" r="1" fill="currentColor"/><circle cx="9" cy="12" r="1" fill="currentColor"/></svg>
+                <div class="rule-name">Policy / e-card copy</div>
+                <div class="rule-toggle"><span class="req-on">Required</span><span>Optional</span></div>
+              </div>
+              <div class="rule-row">
+                <svg class="rule-grip" viewBox="0 0 16 16" fill="none"><circle cx="5" cy="4" r="1" fill="currentColor"/><circle cx="5" cy="8" r="1" fill="currentColor"/><circle cx="5" cy="12" r="1" fill="currentColor"/><circle cx="9" cy="4" r="1" fill="currentColor"/><circle cx="9" cy="8" r="1" fill="currentColor"/><circle cx="9" cy="12" r="1" fill="currentColor"/></svg>
+                <div class="rule-name">Previous treatment records</div>
+                <div class="rule-toggle"><span>Required</span><span class="opt-on">Optional</span></div>
+              </div>
+            </div>
+            <div class="rule-add">
+              <input type="text" placeholder="Add a document requirement&hellip;">
+              <button class="btn btn--ghost btn--sm">Add</button>
+            </div>
+          </div>
+
+          <div class="card card-pad">
+            <div class="label-eyebrow" style="margin-bottom:10px;">In Use</div>
+            <div style="font-size:28px;font-weight:600;" class="mono">14</div>
+            <div style="font-size:12.5px;color:var(--ink-soft);margin-top:2px;">active claims on this checklist</div>
+            <div class="notice"><b>Changes apply going forward only.</b> Claims already in progress keep the checklist version they were opened with, so editing this list won't change what's required on CLM-3381.</div>
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+</div>
+
+<div class="toast-stack" id="toastStack" aria-live="polite" aria-atomic="true"></div>
+
+<script>
+  (function () {
+    var navItems = document.querySelectorAll('.nav-item');
+    var screens = document.querySelectorAll('.screen');
+    var titles = {
+      dashboard: ['Dashboard', "Across the cashless desk, updated just now"],
+      claim: ['Claim File', 'CLM-3381 \u00B7 Rajendra Pawar'],
+      queries: ['Query Inbox', '2 open · 1 overdue for reply'],
+      admin: ['Checklist Admin', 'Insurer × procedure document rules']
+    };
+
+    var sidebarEl = document.getElementById('sidebar');
+    var backdropEl = document.getElementById('sidebarBackdrop');
+    var navToggle = document.getElementById('navToggle');
+    var mainEl = document.querySelector('.main');
+    var mobileQuery = window.matchMedia('(max-width: 920px)');
+
+    function openSidebar() {
+      sidebarEl.classList.add('open');
+      backdropEl.classList.add('open');
+      navToggle.setAttribute('aria-expanded', 'true');
+      if ('inert' in mainEl) { mainEl.inert = true; }
+      var firstItem = sidebarEl.querySelector('.nav-item');
+      if (firstItem) { firstItem.focus(); }
+    }
+    function closeSidebar(returnFocus) {
+      sidebarEl.classList.remove('open');
+      backdropEl.classList.remove('open');
+      navToggle.setAttribute('aria-expanded', 'false');
+      if ('inert' in mainEl) { mainEl.inert = false; }
+      if (returnFocus) { navToggle.focus(); }
+    }
+    navToggle.addEventListener('click', function () {
+      if (sidebarEl.classList.contains('open')) { closeSidebar(true); } else { openSidebar(); }
+    });
+    backdropEl.addEventListener('click', function () { closeSidebar(true); });
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && sidebarEl.classList.contains('open')) { closeSidebar(true); }
+    });
+    mobileQuery.addEventListener('change', function (e) {
+      if (!e.matches) { closeSidebar(false); }
+    });
+
+    navItems.forEach(function (item) {
+      item.addEventListener('click', function () {
+        var target = item.getAttribute('data-screen');
+        navItems.forEach(function (n) { n.classList.remove('active'); });
+        item.classList.add('active');
+        screens.forEach(function (s) { s.hidden = (s.id !== 'screen-' + target); });
+        document.getElementById('topbarTitle').textContent = titles[target][0];
+        document.getElementById('topbarSub').textContent = titles[target][1];
+        if (mobileQuery.matches) { closeSidebar(false); }
+      });
+    });
+
+    var roleSelect = document.getElementById('roleSelect');
+    function applyRole(role) {
+      document.body.setAttribute('data-role', role);
+      document.getElementById('topbarUser').textContent = role === 'head' ? 'Priya Nair' : 'Arjun Kale';
+      if (role === 'exec') {
+        var adminBtn = document.querySelector('[data-nav="admin"]');
+        if (adminBtn.classList.contains('active')) {
+          document.querySelector('[data-screen="dashboard"]').click();
+        }
+      }
+    }
+    roleSelect.addEventListener('change', function () { applyRole(this.value); });
+    applyRole('head');
+
+    var queryCards = document.querySelectorAll('.query-card');
+    queryCards.forEach(function (card) {
+      card.addEventListener('click', function () {
+        queryCards.forEach(function (c) { c.classList.remove('selected'); });
+        card.classList.add('selected');
+      });
+    });
+
+    function showToast(message, type) {
+      var stack = document.getElementById('toastStack');
+      var el = document.createElement('div');
+      el.className = 'toast ' + type;
+      el.textContent = message;
+      stack.appendChild(el);
+      setTimeout(function () { el.remove(); }, 4000);
+    }
+
+    // --- AI field confirm ---
+    var confirmCostBtn = document.getElementById('confirmCostBtn');
+    if (confirmCostBtn) {
+      confirmCostBtn.addEventListener('click', function () {
+        var field = document.getElementById('estCostField');
+        field.classList.remove('needs-confirm');
+        var foot = confirmCostBtn.parentElement;
+        foot.innerHTML = '<span class="field-ok"><svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M3.5 8.5 6.5 11.5 12.5 4.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>Confirmed</span>';
+        showToast('Estimated cost confirmed', 'success');
+      });
+    }
+
+    // --- Shared: resolving the missing ultrasound report updates every screen that cares ---
+    var ultrasoundResolved = false;
+    function markUltrasoundResolved() {
+      if (ultrasoundResolved) { return; }
+      ultrasoundResolved = true;
+
+      var uploadRow = document.getElementById('failedUploadRow');
+      if (uploadRow && uploadRow.classList.contains('is-failed')) {
+        uploadRow.classList.remove('is-failed');
+        uploadRow.innerHTML =
+          '<div class="upload-top"><div class="upload-file"><svg viewBox="0 0 16 16" fill="none"><rect x="3" y="1.5" width="10" height="13" rx="1" stroke="currentColor" stroke-width="1.3"/></svg>ultrasound_report.jpg</div><span class="upload-conf">96% match</span></div>' +
+          '<div class="upload-slot">Sorted to &middot; <b>Ultrasound report (abdomen)</b></div>';
+      }
+
+      var docItem = document.getElementById('ultrasoundDocItem');
+      docItem.classList.remove('is-missing');
+      docItem.querySelector('.doc-status').classList.remove('missing');
+      docItem.querySelector('.doc-status').classList.add('present');
+      docItem.querySelector('.doc-status').innerHTML = '<svg viewBox="0 0 16 16" fill="none"><path d="M3.5 8.5 6.5 11.5 12.5 4.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+      docItem.querySelector('.doc-req').textContent = 'Required';
+
+      var gapChip = document.getElementById('gapCountChip');
+      gapChip.textContent = '0 missing';
+      gapChip.classList.remove('chip--critical');
+      gapChip.classList.add('chip--approved');
+
+      var reqChip = document.getElementById('attachReqChip');
+      reqChip.textContent = 'Attached';
+      reqChip.classList.remove('chip--critical');
+      reqChip.classList.add('chip--approved');
+      var attachBtn = document.getElementById('attachDocBtn');
+      if (attachBtn) { attachBtn.remove(); }
+
+      var sendBtn = document.getElementById('sendReplyBtn');
+      sendBtn.disabled = false;
+      sendBtn.removeAttribute('title');
+      var note = document.getElementById('replyNote');
+      if (note) { note.textContent = 'Nothing is sent to the TPA automatically — this reply is sent only when you click Send.'; }
+    }
+
+    // --- Failed upload + retry ---
+    var retryUploadBtn = document.getElementById('retryUploadBtn');
+    if (retryUploadBtn) {
+      retryUploadBtn.addEventListener('click', function () {
+        markUltrasoundResolved();
+        showToast('ultrasound_report.jpg uploaded and sorted', 'success');
+      });
+    }
+
+    // --- Attach from the Query Inbox directly ---
+    var attachDocBtn = document.getElementById('attachDocBtn');
+    if (attachDocBtn) {
+      attachDocBtn.addEventListener('click', function () {
+        markUltrasoundResolved();
+        showToast('Ultrasound report attached from the claim file', 'success');
+      });
+    }
+
+    // --- Send reply: fails once, then succeeds on retry ---
+    var sendReplyBtn = document.getElementById('sendReplyBtn');
+    var replyAttempted = false;
+    if (sendReplyBtn) {
+      sendReplyBtn.addEventListener('click', function () {
+        if (sendReplyBtn.disabled) { return; }
+        var errorBanner = document.getElementById('replyError');
+        if (!replyAttempted) {
+          replyAttempted = true;
+          errorBanner.hidden = false;
+          sendReplyBtn.textContent = 'Retry send';
+          showToast('Reply failed to send', 'error');
+          return;
+        }
+        errorBanner.hidden = true;
+        document.getElementById('replyBox').hidden = true;
+        document.getElementById('replySentConfirm').hidden = false;
+        showToast('Reply sent to Company B TPA', 'success');
+      });
+    }
+  })();
+</script>
+</body>
+</html>
