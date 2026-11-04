@@ -64,13 +64,20 @@ everything by hand.
   with the pilot tenant's sample data).
 - ✅ Workspace scaffold (`apps/web`, `apps/api`, `packages/contracts`)
   typechecks, lints, tests, and builds clean in CI.
-- ✅ System architecture and five decision records written for the hard
+- ✅ System architecture and six decision records written for the hard
   calls: the checklist rules engine, tenant isolation, async document
   processing, the claim state machine, AI confirmation UX, and billing.
 - ✅ Four of eight core screens have a reviewed, critiqued, and
   accessibility-fixed design mockup.
-- 🚧 Feature modules (claims, checklist, documents, queries, auth,
-  billing) — not yet built.
+- ✅ Auth: Supabase JWT verification + a Custom Access Token hook that
+  stamps organization_id/role onto the token, RBAC middleware, enforced
+  on every claims route.
+- ✅ Claims module (API): list/get/create, status transitions enforced
+  against the shared state machine, desk_executive scoped to their own
+  assigned claims. Covered by unit tests and an integration test against
+  the real database.
+- 🚧 Checklist, documents, and query-inbox modules, and the web app's
+  actual screens — not yet built.
 
 ## Architecture
 
@@ -204,8 +211,9 @@ Two things worth stating plainly rather than leaving implicit:
 
 ## Roadmap
 
-- [ ] Feature modules: claims, checklist admin, document upload + AI sort,
-      query inbox (the four screens with a reviewed design mockup)
+- [x] Auth (Supabase JWT + RBAC) and the claims module (API)
+- [ ] Checklist admin, document upload + AI sort, query inbox (API + the
+      web screens — four screens already have a reviewed design mockup)
 - [ ] Doctor approval via phone link
 - [ ] Merged PDF packet per TPA
 - [ ] Self-serve organization signup + Razorpay billing integration

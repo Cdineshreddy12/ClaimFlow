@@ -1,6 +1,8 @@
 import Fastify from "fastify";
 import cors from "@fastify/cors";
 import { loadEnv } from "./config/env.js";
+import jwtPlugin from "./plugins/jwt.js";
+import { registerClaimsRoutes } from "./modules/claims/claims.routes.js";
 
 const env = loadEnv();
 
@@ -12,10 +14,13 @@ const app = Fastify({
 });
 
 await app.register(cors, { origin: true });
+await app.register(jwtPlugin);
 
 app.get("/health", async () => ({ status: "ok", service: "claimflow-api" }));
 
-// Feature modules (claims, checklist, documents, queries, auth, audit) register
+await app.register(registerClaimsRoutes, { prefix: "/claims" });
+
+// Remaining feature modules (checklist, documents, queries, audit) register
 // their routes here as they land — see docs/ARCHITECTURE.md for the module map.
 
 app
