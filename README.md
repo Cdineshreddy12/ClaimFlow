@@ -82,7 +82,13 @@ everything by hand.
   minus confirmed ones). AI auto-classification isn't wired up yet — no
   provider credentials exist for it (see docs/adr/0003) — so every
   document is confirmed into a slot manually for now.
-- 🚧 Query-inbox module and the web app's actual screens — not yet built.
+- ✅ Query inbox module (API): log a TPA query against a claim, an
+  org-wide inbox listing (open/replied/all, same desk_executive scoping
+  as claims), and reply tracking. No AI summarizer wired up yet either —
+  same boundary as documents — so the summary/requested items are
+  entered by hand for now; the original email is the source of truth
+  either way per docs/adr/0005.
+- 🚧 The web app's actual screens — not yet built.
 
 All of the above is covered by both unit tests and integration tests
 against the real Supabase database and the real S3 bucket — not mocked.
@@ -219,11 +225,12 @@ Two things worth stating plainly rather than leaving implicit:
 
 ## Roadmap
 
-- [x] Auth (Supabase JWT + RBAC), claims, checklist, and documents
-      modules (API)
-- [ ] AI document classification + OCR (pending provider credentials)
-- [ ] Query-inbox module (API) and the web app's actual screens — four
-      screens already have a reviewed design mockup
+- [x] Auth (Supabase JWT + RBAC), claims, checklist, documents, and
+      query-inbox modules (API)
+- [ ] AI document classification, OCR, and query summarization (pending
+      provider credentials)
+- [ ] The web app's actual screens — four already have a reviewed
+      design mockup
 - [ ] Doctor approval via phone link
 - [ ] Merged PDF packet per TPA
 - [ ] Self-serve organization signup + Razorpay billing integration

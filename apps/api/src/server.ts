@@ -5,6 +5,10 @@ import jwtPlugin from "./plugins/jwt.js";
 import { registerClaimsRoutes } from "./modules/claims/claims.routes.js";
 import { registerChecklistRoutes } from "./modules/checklist/checklist.routes.js";
 import { registerDocumentsRoutes } from "./modules/documents/documents.routes.js";
+import {
+  registerClaimQueriesRoutes,
+  registerQueryInboxRoutes,
+} from "./modules/queries/queries.routes.js";
 
 const env = loadEnv();
 
@@ -25,9 +29,13 @@ await app.register(registerChecklistRoutes, { prefix: "/checklist-rules" });
 await app.register(registerDocumentsRoutes, {
   prefix: "/claims/:claimId/documents",
 });
+await app.register(registerClaimQueriesRoutes, {
+  prefix: "/claims/:claimId/queries",
+});
+await app.register(registerQueryInboxRoutes, { prefix: "/queries" });
 
-// Remaining feature modules (queries, audit) register their routes here
-// as they land — see docs/ARCHITECTURE.md for the module map.
+// Remaining feature modules (audit) register their routes here as they
+// land — see docs/ARCHITECTURE.md for the module map.
 
 app
   .listen({ port: env.PORT, host: "0.0.0.0" })

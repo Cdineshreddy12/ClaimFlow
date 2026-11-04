@@ -6,7 +6,9 @@ provider credentials exist for it. Every document today goes straight from
 upload to "unclassified, pick a slot manually," which already satisfies
 the human-confirm requirement on its own; AI just hasn't arrived to make
 that pick a suggestion instead of a cold start. The job-queue decision
-below is written for when that lands, not retrofitted after.
+below is written for when that lands, not retrofitted after. Same
+boundary applies to the query inbox's AI summary field — it's entered by
+hand for now, not auto-generated.
 
 ## Context
 
