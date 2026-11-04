@@ -277,8 +277,10 @@ Two things worth stating plainly rather than leaving implicit:
 - [x] Checklist Admin screen (web) — all four mockup screens now built
 - [x] Document classification — Claude when `ANTHROPIC_API_KEY` is set,
       filename heuristic otherwise ([`adr 0003`](docs/adr/0003-document-processing-pipeline.md))
+- [x] Query summarisation — Claude reads a pasted TPA email for the
+      summary, requested items and deadline
 - [ ] OCR for handwritten notes (needs Textract access for the scoped
-      IAM user) and query summarization
+      IAM user)
 - [x] Doctor approval via phone link
 - [x] Merged PDF packet per claim
 - [x] Deductions by reason, on the dashboard

@@ -295,12 +295,17 @@ export const queries = pgTable(
     claimId: uuid("claim_id")
       .notNull()
       .references(() => claims.id, { onDelete: "cascade" }),
+    /** The source of truth. Always rendered under the summary — adr 0005. */
     tpaRawEmail: text("tpa_raw_email"),
     aiSummary: text("ai_summary"),
     requestedItems: jsonb("requested_items")
       .notNull()
       .default(sql`'[]'::jsonb`),
+    /** 'claude' when the summary was generated, null when a human typed it. */
+    summarisedBy: text("summarised_by"),
     deadline: timestamp("deadline", { withTimezone: true }),
+    /** True when the deadline was read out of the email rather than entered. */
+    deadlineInferred: boolean("deadline_inferred").notNull().default(false),
     replySentAt: timestamp("reply_sent_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()

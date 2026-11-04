@@ -2,7 +2,7 @@ import { and, desc, eq, isNotNull, isNull, type SQL } from "drizzle-orm";
 import { db } from "../../db/client.js";
 import { claims, insurers, procedures, queries } from "../../db/schema.js";
 import { getClaimById } from "../claims/claims.repository.js";
-import type { CreateQueryBody, UpdateQueryBody } from "./queries.schema.js";
+import type { CreateQueryInput, UpdateQueryBody } from "./queries.schema.js";
 
 /** Queries belong to a claim, which belongs to an organization — same boundary rule as every other module, see docs/adr/0002. */
 
@@ -19,7 +19,7 @@ export async function listForClaim(organizationId: string, claimId: string) {
 export async function create(
   organizationId: string,
   claimId: string,
-  data: CreateQueryBody,
+  data: CreateQueryInput,
 ) {
   const claim = await getClaimById(organizationId, claimId);
   if (!claim) return undefined;
@@ -31,6 +31,8 @@ export async function create(
       aiSummary: data.aiSummary ?? null,
       requestedItems: data.requestedItems,
       deadline: data.deadline ?? null,
+      summarisedBy: data.summarisedBy ?? null,
+      deadlineInferred: data.deadlineInferred ?? false,
     })
     .returning();
   return query;
@@ -102,8 +104,10 @@ export async function listInbox(
       claimId: queries.claimId,
       tpaRawEmail: queries.tpaRawEmail,
       aiSummary: queries.aiSummary,
+      summarisedBy: queries.summarisedBy,
       requestedItems: queries.requestedItems,
       deadline: queries.deadline,
+      deadlineInferred: queries.deadlineInferred,
       replySentAt: queries.replySentAt,
       createdAt: queries.createdAt,
       claimPatientName: claims.patientName,

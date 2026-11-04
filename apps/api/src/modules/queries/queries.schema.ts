@@ -38,3 +38,14 @@ export const ListInboxQuery = z.object({
   status: z.enum(["open", "replied", "all"]).default("open"),
 });
 export type ListInboxQuery = z.infer<typeof ListInboxQuery>;
+
+/**
+ * What actually gets inserted: the client's body plus anything the
+ * summariser derived. Kept separate from CreateQueryBody so the derived
+ * provenance fields can't be set by a client, and so the compiler
+ * catches them being dropped on the way to the insert.
+ */
+export interface CreateQueryInput extends CreateQueryBody {
+  summarisedBy?: string | undefined;
+  deadlineInferred?: boolean | undefined;
+}

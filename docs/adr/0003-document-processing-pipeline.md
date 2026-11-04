@@ -33,10 +33,18 @@ One call while a desk exec watches the upload doesn't need a queue; the
 queue was reserved for the multi-step OCR pipeline, and that reasoning
 still holds for when OCR lands in front of this.
 
+The query inbox is summarised the same way — Claude reads a pasted TPA
+email and returns a summary, the list of requested items, and the reply
+deadline resolved to an absolute time. It only fills fields the desk
+left blank: someone who typed their own summary has already read the
+email, and overwriting that would be the model second-guessing a human
+who was there. A generated summary is labelled as such, and a deadline
+calculated from "within 48 hours" is flagged as calculated rather than
+read. The original email always renders underneath (adr 0005).
+
 Still not built: OCR for handwritten notes. The scoped `claimflow-api`
 IAM user is S3-only, and Textract access is a permissions decision that
-hasn't been made. The query inbox's summary field is also still typed by
-hand.
+hasn't been made.
 
 The browser uploads straight to S3 using the pre-signed URL, same as any
 other client of this API — that only works cross-origin because the

@@ -78,6 +78,13 @@
       "when": 1793792108352,
       "tag": "0010_document_classification",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1793793563631,
+      "tag": "0011_query_summarisation",
+      "breakpoints": true
     }
   ]
 }

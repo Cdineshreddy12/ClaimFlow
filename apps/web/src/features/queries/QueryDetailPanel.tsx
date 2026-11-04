@@ -41,6 +41,16 @@ export function QueryDetailPanel({
               {countdown.text}
             </div>
             <div className="countdown-label">{countdown.label}</div>
+            {query.deadlineInferred ? (
+              // Calculated from "within 48 hours", not read verbatim —
+              // worth saying, because the desk may want to confirm it.
+              <div
+                className="countdown-label"
+                style={{ textTransform: "none" }}
+              >
+                calculated from the email
+              </div>
+            ) : null}
           </div>
         ) : null}
       </div>
@@ -48,7 +58,9 @@ export function QueryDetailPanel({
       {query.aiSummary ? (
         <div className="ai-block">
           <div className="ai-block-label">
-            Summary · logged manually, no AI classifier wired up yet
+            {query.summarisedBy === "claude"
+              ? "Summary · read from the email below"
+              : "Summary · written by the desk"}
           </div>
           <p>{query.aiSummary}</p>
         </div>
