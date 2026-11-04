@@ -31,6 +31,12 @@ treat as a hard requirement, not a nice-to-have.
   are planned modules, not yet implemented — this ADR exists so the schema
   (`organizations.razorpay_*` columns) and the role model (`org_admin`)
   are already shaped correctly for them rather than retrofitted later.
-- Trial/grace-period handling (what happens to access when
-  `subscription_status` moves to `past_due`) is an explicit open design
-  question, not yet decided — flag before building the billing module.
+- The actual signup → org creation → setup → invite flow, and the trial
+  length (14 days, no card required), are worked out in
+  [`0007-onboarding-flow.md`](0007-onboarding-flow.md) — including a real
+  auth-architecture gap that flow exposes (an authenticated user with no
+  org yet can't call any route today).
+- Grace-period handling once a _paying_ subscription lapses
+  (`subscription_status` moving to `past_due` after a real Razorpay
+  subscription existed, as opposed to a trial simply expiring) is still
+  open — flag before building the billing module itself.

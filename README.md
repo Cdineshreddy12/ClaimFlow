@@ -243,19 +243,23 @@ Two things worth stating plainly rather than leaving implicit:
 
 - [x] Auth (Supabase JWT + RBAC), claims, checklist, documents, and
       query-inbox modules (API)
+- [x] Dashboard, Claim File, and Query Inbox screens (web) — wired to
+      the live API, not just styled
+- [ ] Checklist Admin screen (web) — last of the four mockup screens
 - [ ] AI document classification, OCR, and query summarization (pending
       provider credentials)
-- [ ] The web app's actual screens — four already have a reviewed
-      design mockup
 - [ ] Doctor approval via phone link
 - [ ] Merged PDF packet per TPA
-- [ ] Self-serve organization signup + Razorpay billing integration
+- [ ] Self-serve organization signup + 14-day trial + Razorpay billing —
+      flow designed in [`docs/adr/0007`](docs/adr/0007-onboarding-flow.md),
+      not yet built; needs the Supabase Custom Access Token Hook enabled
+      in the dashboard before it can work end-to-end
 - [ ] Platform super-admin console with audited break-glass access
 
 ## Documentation
 
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — system overview, stack, module map
-- [`docs/adr/`](docs/adr) — decision records (checklist engine, tenant isolation, document pipeline, claim state machine, AI confirmation UX, billing)
+- [`docs/adr/`](docs/adr) — decision records (checklist engine, tenant isolation, document pipeline, claim state machine, AI confirmation UX, billing, onboarding flow)
 - [`docs/design/claims-desk-mockup.html`](docs/design/claims-desk-mockup.html) — reviewed UI reference
 
 ## License
