@@ -105,7 +105,10 @@ everything by hand.
   `.env.example`'s `VITE_DEV_TOKEN`) — swap for real Supabase auth once
   the Custom Access Token hook is enabled.
 - ✅ Document sorting — an upload gets a suggested checklist slot with a
-  confidence and the evidence behind it. Nothing is filed automatically:
+  confidence and the evidence behind it. Claude reads the document
+  itself (verified live: a scan named `IMG_0423.png` classified at 98%
+  from the image alone, and a cafeteria menu with a misleading clinical
+  filename correctly abstained). Nothing is filed automatically:
   the suggestion is pre-selected and a human clicks Confirm, so a slot
   stays missing in the gap view until someone vouches for it. The UI
   names which classifier made the suggestion rather than implying a

@@ -8,11 +8,17 @@ implementations:
 
 - **`claude`** — reads the document itself (vision for scans, PDF input
   for forms) and returns a slot, a confidence and a source snippet. Used
-  whenever `ANTHROPIC_API_KEY` is set. Written against the Messages API
-  with a forced tool call for structured output; **not yet exercised
-  against the live API**, because no key has been available.
+  whenever `ANTHROPIC_API_KEY` is set. Messages API with a forced tool
+  call for structured output. Verified against the live API on a
+  synthetic scanned ultrasound report: classified correctly at 0.98 from
+  the image alone, under the filename `IMG_0423.png` that gives the
+  heuristic nothing. Also verified it abstains — a cafeteria menu named
+  `treating-doctors-note-ultrasound-report.png` returned null and named
+  the filename mismatch in its reason, where the heuristic would have
+  filed it confidently and wrongly.
 - **`heuristic`** — matches filename tokens against the claim's
-  checklist slots. No credentials, no network. This is what runs today.
+  checklist slots. No credentials, no network. The fallback when no key
+  is configured.
 
 Falling back rather than failing is deliberate: a hospital without AI
 credentials still gets useful sorting on the common case
