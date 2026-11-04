@@ -3,6 +3,7 @@ import cors from "@fastify/cors";
 import { loadEnv } from "./config/env.js";
 import jwtPlugin from "./plugins/jwt.js";
 import { registerClaimsRoutes } from "./modules/claims/claims.routes.js";
+import { registerChecklistRoutes } from "./modules/checklist/checklist.routes.js";
 
 const env = loadEnv();
 
@@ -19,9 +20,10 @@ await app.register(jwtPlugin);
 app.get("/health", async () => ({ status: "ok", service: "claimflow-api" }));
 
 await app.register(registerClaimsRoutes, { prefix: "/claims" });
+await app.register(registerChecklistRoutes, { prefix: "/checklist-rules" });
 
-// Remaining feature modules (checklist, documents, queries, audit) register
-// their routes here as they land — see docs/ARCHITECTURE.md for the module map.
+// Remaining feature modules (documents, queries, audit) register their
+// routes here as they land — see docs/ARCHITECTURE.md for the module map.
 
 app
   .listen({ port: env.PORT, host: "0.0.0.0" })

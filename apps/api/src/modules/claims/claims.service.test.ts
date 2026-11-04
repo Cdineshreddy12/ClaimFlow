@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as claimsRepository from "./claims.repository.js";
+import * as checklistService from "../checklist/checklist.service.js";
 
 vi.mock("./claims.repository.js");
+vi.mock("../checklist/checklist.service.js");
 
 // vi.mock factories are hoisted above all other module code, so this
 // can't reference an outer const — the literal has to live inline here.
@@ -80,6 +82,41 @@ describe("claims.service", () => {
       const { getClaim } = await import("./claims.service.js");
       const claim = await getClaim(auth("desk_executive"), CLAIM_ID);
       expect(claim.id).toBe(CLAIM_ID);
+    });
+  });
+
+  describe("createClaim", () => {
+    it("snapshots the current checklist requirements onto the new claim", async () => {
+      const INSURER_ID = "55555555-5555-5555-5555-555555555555";
+      const PROCEDURE_ID = "66666666-6666-6666-6666-666666666666";
+      const snapshot = [
+        { documentType: "Pre-authorization form", required: true },
+      ];
+
+      vi.mocked(checklistService.getRequirementsSnapshot).mockResolvedValue(
+        snapshot,
+      );
+      vi.mocked(claimsRepository.createClaim).mockResolvedValue({
+        id: CLAIM_ID,
+      } as never);
+
+      const { createClaim } = await import("./claims.service.js");
+      await createClaim(auth("desk_executive"), {
+        patientName: "Rajendra Pawar",
+        insurerId: INSURER_ID,
+        procedureId: PROCEDURE_ID,
+      });
+
+      expect(checklistService.getRequirementsSnapshot).toHaveBeenCalledWith(
+        ORG_ID,
+        INSURER_ID,
+        PROCEDURE_ID,
+      );
+      expect(claimsRepository.createClaim).toHaveBeenCalledWith(
+        ORG_ID,
+        expect.objectContaining({ patientName: "Rajendra Pawar" }),
+        snapshot,
+      );
     });
   });
 

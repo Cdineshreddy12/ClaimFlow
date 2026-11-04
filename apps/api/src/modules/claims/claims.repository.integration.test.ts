@@ -52,11 +52,11 @@ describe.skipIf(!process.env.DATABASE_URL)(
     });
 
     it("creates a claim and reads it back scoped to its organization", async () => {
-      const created = await claimsRepository.createClaim(organizationId, {
-        patientName: "Test Patient",
-        insurerId,
-        procedureId,
-      });
+      const created = await claimsRepository.createClaim(
+        organizationId,
+        { patientName: "Test Patient", insurerId, procedureId },
+        [],
+      );
 
       const fetched = await claimsRepository.getClaimById(
         organizationId,
@@ -66,12 +66,30 @@ describe.skipIf(!process.env.DATABASE_URL)(
       expect(fetched?.status).toBe("DRAFT");
     });
 
+    it("persists the checklist snapshot it's given, untouched", async () => {
+      const snapshot = [
+        { documentType: "Pre-authorization form", required: true },
+        { documentType: "Previous treatment records", required: false },
+      ];
+      const created = await claimsRepository.createClaim(
+        organizationId,
+        { patientName: "Snapshot Patient", insurerId, procedureId },
+        snapshot,
+      );
+
+      const fetched = await claimsRepository.getClaimById(
+        organizationId,
+        created.id,
+      );
+      expect(fetched?.checklistSnapshot).toEqual(snapshot);
+    });
+
     it("does not return a claim when queried under a different organization", async () => {
-      const created = await claimsRepository.createClaim(organizationId, {
-        patientName: "Another Patient",
-        insurerId,
-        procedureId,
-      });
+      const created = await claimsRepository.createClaim(
+        organizationId,
+        { patientName: "Another Patient", insurerId, procedureId },
+        [],
+      );
 
       const wrongOrgResult = await claimsRepository.getClaimById(
         "00000000-0000-0000-0000-000000000000",
@@ -81,11 +99,11 @@ describe.skipIf(!process.env.DATABASE_URL)(
     });
 
     it("recordStatusChange updates status and appends a timeline event", async () => {
-      const created = await claimsRepository.createClaim(organizationId, {
-        patientName: "Timeline Patient",
-        insurerId,
-        procedureId,
-      });
+      const created = await claimsRepository.createClaim(
+        organizationId,
+        { patientName: "Timeline Patient", insurerId, procedureId },
+        [],
+      );
 
       const updated = await claimsRepository.recordStatusChange(
         organizationId,

@@ -26,3 +26,10 @@ export type ListClaimsQuery = z.infer<typeof ListClaimsQuery>;
 export const ClaimIdParams = z.object({
   id: z.string().uuid(),
 });
+
+/** Shape stored in claims.checklist_snapshot — see docs/adr/0001. */
+export const ChecklistSnapshotItem = z.object({
+  documentType: z.string(),
+  required: z.boolean(),
+});
+export type ChecklistSnapshotItem = z.infer<typeof ChecklistSnapshotItem>;

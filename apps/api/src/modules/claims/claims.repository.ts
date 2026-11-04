@@ -2,7 +2,10 @@ import { and, eq } from "drizzle-orm";
 import type { ClaimStatus } from "@claimflow/contracts";
 import { db } from "../../db/client.js";
 import { claimStatusEvents, claims } from "../../db/schema.js";
-import type { CreateClaimBody } from "./claims.schema.js";
+import type {
+  ChecklistSnapshotItem,
+  CreateClaimBody,
+} from "./claims.schema.js";
 
 /**
  * Every function here takes organizationId and filters by it — this is
@@ -38,6 +41,7 @@ export async function getClaimById(organizationId: string, id: string) {
 export async function createClaim(
   organizationId: string,
   data: CreateClaimBody,
+  checklistSnapshot: ChecklistSnapshotItem[],
 ) {
   const [claim] = await db
     .insert(claims)
@@ -49,6 +53,7 @@ export async function createClaim(
       billedAmount:
         data.billedAmount !== undefined ? data.billedAmount.toString() : null,
       admittedAt: data.admittedAt ?? null,
+      checklistSnapshot,
     })
     .returning();
   // We just inserted exactly one row — this is never actually absent.

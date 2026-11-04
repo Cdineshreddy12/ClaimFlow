@@ -6,6 +6,7 @@ import {
 } from "@claimflow/contracts";
 import { db } from "../../db/client.js";
 import { orgMembers } from "../../db/schema.js";
+import { getRequirementsSnapshot } from "../checklist/checklist.service.js";
 import * as claimsRepository from "./claims.repository.js";
 import type { CreateClaimBody, ListClaimsQuery } from "./claims.schema.js";
 
@@ -53,8 +54,22 @@ export async function getClaim(auth: AuthContext, id: string) {
   return claim;
 }
 
+/**
+ * Captures the insurer/procedure's current checklist rules onto the claim
+ * at the moment it's opened — see docs/adr/0001. Whatever the checklist
+ * admin edits afterward never reaches back into claims already in flight.
+ */
 export async function createClaim(auth: AuthContext, body: CreateClaimBody) {
-  return claimsRepository.createClaim(auth.organizationId, body);
+  const checklistSnapshot = await getRequirementsSnapshot(
+    auth.organizationId,
+    body.insurerId,
+    body.procedureId,
+  );
+  return claimsRepository.createClaim(
+    auth.organizationId,
+    body,
+    checklistSnapshot,
+  );
 }
 
 export async function transitionClaimStatus(
