@@ -34,7 +34,11 @@ export type AuditAction =
   | "organization.profile_updated"
   | "invite.created"
   | "invite.accepted"
-  | "packet.generated";
+  | "packet.generated"
+  | "doctor_approval.requested"
+  | "doctor_approval.viewed"
+  | "doctor_approval.approved"
+  | "doctor_approval.declined";
 
 interface AuditContext {
   userId: string;

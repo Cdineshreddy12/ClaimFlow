@@ -303,6 +303,39 @@ export const queries = pgTable(
   (table) => [index("queries_claim_id_idx").on(table.claimId)],
 );
 
+/**
+ * A one-off link a desk sends a treating doctor so they can approve the
+ * clinical notes on a claim from their phone — no account, no login, per
+ * the `doctor` role's definition in @claimflow/contracts.
+ *
+ * The token alone grants sight of one patient's documents, so it is
+ * deliberately short-lived and single-decision: see docs/adr/0010 for
+ * the exposure this trades away and the limits that bound it.
+ */
+export const doctorApprovals = pgTable(
+  "doctor_approvals",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    claimId: uuid("claim_id")
+      .notNull()
+      .references(() => claims.id, { onDelete: "cascade" }),
+    token: text("token").notNull().unique(),
+    /** Free text: the hospital knows who it sent this to, but doctors have no rows here. */
+    doctorName: text("doctor_name").notNull(),
+    requestedBy: uuid("requested_by").references(() => orgMembers.id),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    /** First time the link was opened — proves the doctor saw it, even if they never decide. */
+    firstViewedAt: timestamp("first_viewed_at", { withTimezone: true }),
+    approvedAt: timestamp("approved_at", { withTimezone: true }),
+    declinedAt: timestamp("declined_at", { withTimezone: true }),
+    declineReason: text("decline_reason"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [index("doctor_approvals_claim_id_idx").on(table.claimId)],
+);
+
 export const auditLog = pgTable(
   "audit_log",
   {
