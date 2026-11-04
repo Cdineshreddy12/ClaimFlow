@@ -1,7 +1,9 @@
 import { useParams } from "react-router-dom";
 import { AppShell } from "../../app/AppShell";
+import { Loader } from "../../components/ui/loader";
 import { formatAmount } from "../../lib/format";
 import { ChecklistGapsCard } from "./ChecklistGapsCard";
+import { ClaimActions } from "./ClaimActions";
 import { Stepper } from "./Stepper";
 import { UploadedDocumentsCard } from "./UploadedDocumentsCard";
 import { useClaim, useClaimGaps } from "./api";
@@ -23,7 +25,7 @@ export function ClaimFilePage() {
   if (isLoading) {
     return (
       <AppShell title="Claim File">
-        <p className="empty-state">Loading claim…</p>
+        <Loader label="Loading claim…" />
       </AppShell>
     );
   }
@@ -62,6 +64,8 @@ export function ClaimFilePage() {
       </div>
 
       <Stepper status={claim.status} />
+
+      <ClaimActions claim={claim} />
 
       <div className="label-eyebrow" style={{ marginBottom: 10 }}>
         Claim details

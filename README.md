@@ -104,6 +104,11 @@ everything by hand.
   login screen yet, so a dev-only minted token stands in for auth (see
   `.env.example`'s `VITE_DEV_TOKEN`) — swap for real Supabase auth once
   the Custom Access Token hook is enabled.
+- ✅ The desk can actually drive all of it from the UI — open a claim,
+  advance it through the state machine (only the transitions the API
+  allows, derived from the same table it enforces), log a TPA query,
+  build the packet, mint a doctor link, record a deduction. Several of
+  these had working APIs and no way in from a screen.
 - ✅ Document sorting — an upload gets a suggested checklist slot with a
   confidence and the evidence behind it. Claude reads the document
   itself (verified live: a scan named `IMG_0423.png` classified at 98%

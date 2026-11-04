@@ -1,5 +1,7 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { AppShell } from "../../app/AppShell";
+import { Button } from "@/components/ui/button";
+import { NewClaimDialog } from "../claims/NewClaimDialog";
 import { Loader } from "../../components/ui/loader";
 import { useClaims } from "../claims/api";
 import { useQueryInbox } from "../queries/api";
@@ -31,6 +33,8 @@ export function DashboardPage() {
     [claims, openQueries, now],
   );
 
+  const [newClaim, setNewClaim] = useState(false);
+
   const isLoading = claimsLoading || queriesLoading;
   const isError = claimsError || queriesError;
 
@@ -40,6 +44,13 @@ export function DashboardPage() {
       {isError ? (
         <div className="inline-error">Couldn't load the dashboard.</div>
       ) : null}
+
+      <div className="mb-5 flex justify-end">
+        <Button type="button" onClick={() => setNewClaim(true)}>
+          Open a claim
+        </Button>
+      </div>
+      <NewClaimDialog open={newClaim} onOpenChange={setNewClaim} />
 
       {!isLoading && !isError ? (
         <>
