@@ -41,6 +41,25 @@ export async function authenticate(
   };
 }
 
+/**
+ * Verifies the token but does NOT require org/role claims — the one
+ * exception to `authenticate`'s rule, for the handful of onboarding
+ * routes a just-signed-up user has to be able to reach before
+ * `org_members` exists for them at all. See docs/adr/0007.
+ */
+export async function authenticateUserOnly(
+  request: FastifyRequest,
+  reply: FastifyReply,
+) {
+  let payload: SupabaseJwtPayload;
+  try {
+    payload = await request.jwtVerify<SupabaseJwtPayload>();
+  } catch {
+    return reply.code(401).send({ error: "unauthorized" });
+  }
+  request.authUserId = payload.sub;
+}
+
 /** Gate a route to specific roles, after `authenticate` has already run. */
 export function requireRole(...roles: Role[]) {
   return async function (request: FastifyRequest, reply: FastifyReply) {

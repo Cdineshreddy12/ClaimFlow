@@ -15,13 +15,32 @@ import jwt from "jsonwebtoken";
  * The organizationId must have a matching org_members row (with that
  * userId and role) for the API to accept requests — this script only
  * signs the token, it doesn't create that row.
+ *
+ * Org-less usage: tsx scripts/mint-dev-token.ts --no-org [userId]
+ * Mints a token with no app_metadata at all — what a just-signed-up
+ * user's token actually looks like before org_members exists for them.
+ * Only accepted by authenticateUserOnly routes (see docs/adr/0007),
+ * everything else will 403 it on purpose.
  */
-const [organizationId, role, userId = crypto.randomUUID()] =
-  process.argv.slice(2);
+const args = process.argv.slice(2);
+
+if (args[0] === "--no-org") {
+  const userId = args[1] ?? crypto.randomUUID();
+  const secret = process.env.SUPABASE_JWT_SECRET;
+  if (!secret) {
+    console.error("SUPABASE_JWT_SECRET is not set — see .env.example");
+    process.exit(1);
+  }
+  console.log(jwt.sign({ sub: userId }, secret, { expiresIn: "24h" }));
+  process.exit(0);
+}
+
+const [organizationId, role, userId = crypto.randomUUID()] = args;
 
 if (!organizationId || !role) {
   console.error(
-    "usage: tsx scripts/mint-dev-token.ts <organizationId> <role> [userId]",
+    "usage: tsx scripts/mint-dev-token.ts <organizationId> <role> [userId]\n" +
+      "   or: tsx scripts/mint-dev-token.ts --no-org [userId]",
   );
   process.exit(1);
 }

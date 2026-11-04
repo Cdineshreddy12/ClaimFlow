@@ -17,6 +17,13 @@ declare module "fastify" {
       organizationId: string;
       role: Role;
     };
+    /**
+     * Set by authenticateUserOnly (see middleware/authenticate.ts) for the
+     * one sliver of routes a just-signed-up, org-less user can reach —
+     * creating their organization or accepting an invite. Everywhere else
+     * uses authUser instead, never this.
+     */
+    authUserId?: string;
   }
 }
 

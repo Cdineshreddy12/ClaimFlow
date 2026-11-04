@@ -53,6 +53,10 @@ export const organizations = pgTable("organizations", {
   plan: text("plan").notNull().default("starter"),
   razorpayCustomerId: text("razorpay_customer_id"),
   razorpaySubscriptionId: text("razorpay_subscription_id"),
+  // Set once, at signup — 14 days out, see docs/adr/0007. Enforcing
+  // read-only access once this passes is billing-module work, not yet
+  // built; this column only reserves the fact.
+  trialEndsAt: timestamp("trial_ends_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
@@ -75,6 +79,33 @@ export const orgMembers = pgTable(
     unique().on(table.userId),
     index("org_members_organization_id_idx").on(table.organizationId),
   ],
+);
+
+/**
+ * A shareable link/code an org_admin generates for one role at a time —
+ * see docs/adr/0007. Deliberately not tied to an invitee's email: there's
+ * no email provider wired up, and link-sharing (WhatsApp, in person)
+ * needs none. `usedAt`/`usedById` are null until someone redeems it;
+ * redeeming is a one-time action enforced in the service layer, not here.
+ */
+export const invites = pgTable(
+  "invites",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    role: userRole("role").notNull(),
+    token: text("token").notNull().unique(),
+    createdBy: uuid("created_by").references(() => orgMembers.id),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    usedAt: timestamp("used_at", { withTimezone: true }),
+    usedById: uuid("used_by_id"), // references auth.users(id), like org_members.userId
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [index("invites_organization_id_idx").on(table.organizationId)],
 );
 
 export const insurers = pgTable("insurers", {

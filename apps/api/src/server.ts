@@ -1,5 +1,6 @@
 import Fastify from "fastify";
 import cors from "@fastify/cors";
+import { ZodError } from "zod";
 import { loadEnv } from "./config/env.js";
 import jwtPlugin from "./plugins/jwt.js";
 import { registerClaimsRoutes } from "./modules/claims/claims.routes.js";
@@ -9,6 +10,10 @@ import {
   registerClaimQueriesRoutes,
   registerQueryInboxRoutes,
 } from "./modules/queries/queries.routes.js";
+import {
+  registerInvitesRoutes,
+  registerOnboardingRoutes,
+} from "./modules/onboarding/onboarding.routes.js";
 
 const env = loadEnv();
 
@@ -22,6 +27,21 @@ const app = Fastify({
 await app.register(cors, { origin: true });
 await app.register(jwtPlugin);
 
+// Every route validates its body/query/params with `Schema.parse(...)`
+// (see any *.routes.ts) rather than Fastify's own schema hooks, so a bad
+// request throws a raw ZodError — without this, Fastify's default handler
+// turns that into a 500, which is wrong: the client sent bad input, the
+// server didn't fail.
+app.setErrorHandler((error, request, reply) => {
+  if (error instanceof ZodError) {
+    return reply
+      .code(400)
+      .send({ error: "validation failed", details: error.issues });
+  }
+  request.log.error(error);
+  return reply.code(500).send({ error: "internal server error" });
+});
+
 app.get("/health", async () => ({ status: "ok", service: "claimflow-api" }));
 
 await app.register(registerClaimsRoutes, { prefix: "/claims" });
@@ -33,6 +53,8 @@ await app.register(registerClaimQueriesRoutes, {
   prefix: "/claims/:claimId/queries",
 });
 await app.register(registerQueryInboxRoutes, { prefix: "/queries" });
+await app.register(registerOnboardingRoutes, { prefix: "/onboarding" });
+await app.register(registerInvitesRoutes, { prefix: "/invites" });
 
 // Remaining feature modules (audit) register their routes here as they
 // land — see docs/ARCHITECTURE.md for the module map.
