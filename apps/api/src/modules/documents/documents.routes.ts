@@ -51,6 +51,7 @@ export async function registerDocumentsRoutes(app: FastifyInstance) {
         request.authUser!,
         claimId,
         body.key,
+        body.contentType,
       );
       return reply.code(201).send(document);
     } catch (err) {

@@ -104,6 +104,12 @@ everything by hand.
   login screen yet, so a dev-only minted token stands in for auth (see
   `.env.example`'s `VITE_DEV_TOKEN`) — swap for real Supabase auth once
   the Custom Access Token hook is enabled.
+- ✅ Document sorting — an upload gets a suggested checklist slot with a
+  confidence and the evidence behind it. Nothing is filed automatically:
+  the suggestion is pre-selected and a human clicks Confirm, so a slot
+  stays missing in the gap view until someone vouches for it. The UI
+  names which classifier made the suggestion rather than implying a
+  model ran.
 - ✅ Deductions by reason — recorded against a claim at settlement and
   aggregated for the dashboard, with the avoidable share (missing or
   late paperwork) called out separately, since that's the number the
@@ -266,8 +272,10 @@ Two things worth stating plainly rather than leaving implicit:
 - [x] Dashboard, Claim File, and Query Inbox screens (web) — wired to
       the live API, not just styled
 - [x] Checklist Admin screen (web) — all four mockup screens now built
-- [ ] AI document classification, OCR, and query summarization (pending
-      provider credentials)
+- [x] Document classification — Claude when `ANTHROPIC_API_KEY` is set,
+      filename heuristic otherwise ([`adr 0003`](docs/adr/0003-document-processing-pipeline.md))
+- [ ] OCR for handwritten notes (needs Textract access for the scoped
+      IAM user) and query summarization
 - [x] Doctor approval via phone link
 - [x] Merged PDF packet per claim
 - [x] Deductions by reason, on the dashboard

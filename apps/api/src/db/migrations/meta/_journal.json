@@ -71,6 +71,13 @@
       "when": 1793789121501,
       "tag": "0009_deductions_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1793792108352,
+      "tag": "0010_document_classification",
+      "breakpoints": true
     }
   ]
 }

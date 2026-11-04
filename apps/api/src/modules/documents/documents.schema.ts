@@ -18,6 +18,8 @@ export type RequestUploadUrlBody = z.infer<typeof RequestUploadUrlBody>;
 export const RegisterDocumentBody = z.object({
   key: z.string().min(1),
   fileName: z.string().min(1),
+  /** Same value the client used on the pre-signed PUT — the classifier needs it to know how to read the file. */
+  contentType: z.string().min(1).default("application/octet-stream"),
 });
 export type RegisterDocumentBody = z.infer<typeof RegisterDocumentBody>;
 

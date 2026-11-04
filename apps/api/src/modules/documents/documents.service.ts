@@ -2,9 +2,12 @@ import {
   buildObjectKey,
   deleteObject,
   getDownloadUrl,
+  getObjectBytes,
   getUploadUrl,
 } from "../../integrations/storage/s3.js";
+import { getClassifier } from "../../integrations/classifier/index.js";
 import * as auditService from "../audit/audit.service.js";
+import * as claimsRepository from "../claims/claims.repository.js";
 import { getOrgMemberId } from "../org-members/org-members.repository.js";
 import * as documentsRepository from "./documents.repository.js";
 import type { RequestUploadUrlBody } from "./documents.schema.js";
@@ -46,6 +49,7 @@ export async function registerDocument(
   auth: AuthContext,
   claimId: string,
   key: string,
+  contentType: string,
 ) {
   const created = await documentsRepository.create(
     auth.organizationId,
@@ -61,7 +65,64 @@ export async function registerDocument(
     after: { claimId },
   });
 
-  return created;
+  // Inline rather than queued: a desk exec is watching this upload and
+  // wants the suggestion now, and one classification is a single call,
+  // not the multi-step OCR pipeline docs/adr/0003 reserved a queue for.
+  // Revisit when OCR lands in front of it.
+  return (
+    (await classifyDocument(auth, claimId, created.id, key, contentType)) ??
+    created
+  );
+}
+
+/**
+ * Attaches a slot suggestion to an already-registered document.
+ *
+ * Never throws. The file is uploaded and the row exists; failing the
+ * request now would tell the desk their upload broke when it didn't,
+ * and they can always pick a slot by hand. A failure leaves the
+ * suggestion columns null, which the UI reads as "unclassified".
+ */
+export async function classifyDocument(
+  auth: AuthContext,
+  claimId: string,
+  documentId: string,
+  key: string,
+  contentType: string,
+) {
+  const claim = await claimsRepository.getClaimById(
+    auth.organizationId,
+    claimId,
+  );
+  const candidateSlots = (claim?.checklistSnapshot ?? []).map(
+    (item) => item.documentType,
+  );
+  if (candidateSlots.length === 0) return undefined;
+
+  try {
+    const classification = await getClassifier().classify({
+      fileName: displayFileName(key),
+      contentType,
+      candidateSlots,
+      readBytes: () => getObjectBytes(key),
+    });
+    return documentsRepository.saveClassification(documentId, classification);
+  } catch (err) {
+    console.error("document classification failed", {
+      documentId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return undefined;
+  }
+}
+
+/** Strips the uuid prefix buildObjectKey adds, back to what the user uploaded. */
+function displayFileName(key: string): string {
+  const base = key.split("/").pop() ?? key;
+  return base.replace(
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-/,
+    "",
+  );
 }
 
 export async function getDocumentDownloadUrl(

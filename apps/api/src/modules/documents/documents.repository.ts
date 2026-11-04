@@ -39,6 +39,32 @@ export async function create(
   return document;
 }
 
+/**
+ * Stores a suggestion. Deliberately never touches `checklistSlot` or
+ * `confirmedAt` — a classifier proposes, a human files (docs/adr/0005).
+ */
+export async function saveClassification(
+  documentId: string,
+  classification: {
+    slot: string | null;
+    confidence: number;
+    reason: string;
+    classifiedBy: string;
+  },
+) {
+  const [updated] = await db
+    .update(documents)
+    .set({
+      aiClassifiedType: classification.slot,
+      confidence: classification.confidence.toFixed(3),
+      classificationReason: classification.reason,
+      classifiedBy: classification.classifiedBy,
+    })
+    .where(eq(documents.id, documentId))
+    .returning();
+  return updated;
+}
+
 export async function getById(
   organizationId: string,
   claimId: string,

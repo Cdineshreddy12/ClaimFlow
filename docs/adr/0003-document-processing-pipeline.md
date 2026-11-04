@@ -1,14 +1,36 @@
 # 0003 — Document processing pipeline
 
-**Status: upload (pre-signed S3) and human-confirm are built and verified
-against a real bucket. OCR/AI classification is not wired up yet** — no
-provider credentials exist for it. Every document today goes straight from
-upload to "unclassified, pick a slot manually," which already satisfies
-the human-confirm requirement on its own; AI just hasn't arrived to make
-that pick a suggestion instead of a cold start. The job-queue decision
-below is written for when that lands, not retrofitted after. Same
-boundary applies to the query inbox's AI summary field — it's entered by
-hand for now, not auto-generated.
+**Status: upload, classification and human-confirm are built and
+verified against a real bucket. OCR is not.**
+
+Document sorting runs behind a `DocumentClassifier` interface with two
+implementations:
+
+- **`claude`** — reads the document itself (vision for scans, PDF input
+  for forms) and returns a slot, a confidence and a source snippet. Used
+  whenever `ANTHROPIC_API_KEY` is set. Written against the Messages API
+  with a forced tool call for structured output; **not yet exercised
+  against the live API**, because no key has been available.
+- **`heuristic`** — matches filename tokens against the claim's
+  checklist slots. No credentials, no network. This is what runs today.
+
+Falling back rather than failing is deliberate: a hospital without AI
+credentials still gets useful sorting on the common case
+(`ultrasound_report_0423.jpg`), and every downstream path is identical
+because a human confirms either way. The suggestion carries
+`classifiedBy` end to end so the UI says "Matched by filename" rather
+than implying a model ran — a classifier that overstates itself is worse
+than one that abstains.
+
+Classification runs inline on register, not through the job queue below.
+One call while a desk exec watches the upload doesn't need a queue; the
+queue was reserved for the multi-step OCR pipeline, and that reasoning
+still holds for when OCR lands in front of this.
+
+Still not built: OCR for handwritten notes. The scoped `claimflow-api`
+IAM user is S3-only, and Textract access is a permissions decision that
+hasn't been made. The query inbox's summary field is also still typed by
+hand.
 
 The browser uploads straight to S3 using the pre-signed URL, same as any
 other client of this API — that only works cross-origin because the

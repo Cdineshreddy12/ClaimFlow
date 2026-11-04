@@ -1,81 +1,18 @@
-import { useRef, useState } from "react";
-import { FileIcon } from "../../components/icons";
+import { useRef } from "react";
 import {
-  displayFileName,
   useConfirmDocument,
   useDiscardDocument,
   useDocuments,
   useUploadDocument,
 } from "../documents/api";
-import type { ClaimDocument } from "../documents/types";
 import type { Claim } from "./types";
-
-function UploadRow({ doc, claim }: { doc: ClaimDocument; claim: Claim }) {
-  const [slot, setSlot] = useState(
-    doc.checklistSlot ?? claim.checklistSnapshot[0]?.documentType ?? "",
-  );
-  const confirmDoc = useConfirmDocument(claim.id);
-  const discardDoc = useDiscardDocument(claim.id);
-
-  if (doc.confirmedAt) {
-    return (
-      <div className="upload-row">
-        <div className="upload-top">
-          <div className="upload-file">
-            <FileIcon />
-            {displayFileName(doc.fileUrl)}
-          </div>
-        </div>
-        <div className="upload-slot">
-          Sorted to · <b>{doc.checklistSlot}</b>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="upload-row is-flagged">
-      <div className="upload-top">
-        <div className="upload-file">
-          <FileIcon />
-          {displayFileName(doc.fileUrl)}
-        </div>
-        <span className="upload-conf">Needs confirm</span>
-      </div>
-      <div className="upload-confirm-row">
-        <select value={slot} onChange={(e) => setSlot(e.target.value)}>
-          {claim.checklistSnapshot.map((item) => (
-            <option key={item.documentType} value={item.documentType}>
-              {item.documentType}
-            </option>
-          ))}
-        </select>
-        <button
-          type="button"
-          className="btn btn--primary btn--sm"
-          disabled={!slot || confirmDoc.isPending}
-          onClick={() =>
-            confirmDoc.mutate({ documentId: doc.id, checklistSlot: slot })
-          }
-        >
-          Confirm
-        </button>
-        <button
-          type="button"
-          className="btn btn--ghost btn--sm"
-          disabled={discardDoc.isPending}
-          onClick={() => discardDoc.mutate(doc.id)}
-        >
-          Discard
-        </button>
-      </div>
-    </div>
-  );
-}
+import { UploadRow } from "./UploadRow";
 
 export function UploadedDocumentsCard({ claim }: { claim: Claim }) {
   const { data: documents } = useDocuments(claim.id);
   const uploadDoc = useUploadDocument(claim.id);
+  const confirmDoc = useConfirmDocument(claim.id);
+  const discardDoc = useDiscardDocument(claim.id);
   const fileInput = useRef<HTMLInputElement>(null);
 
   return (
@@ -111,7 +48,16 @@ export function UploadedDocumentsCard({ claim }: { claim: Claim }) {
       ) : (
         <div className="upload-list">
           {documents.map((doc) => (
-            <UploadRow key={doc.id} doc={doc} claim={claim} />
+            <UploadRow
+              key={doc.id}
+              doc={doc}
+              claim={claim}
+              isBusy={confirmDoc.isPending || discardDoc.isPending}
+              onConfirm={(checklistSlot) =>
+                confirmDoc.mutate({ documentId: doc.id, checklistSlot })
+              }
+              onDiscard={() => discardDoc.mutate(doc.id)}
+            />
           ))}
         </div>
       )}

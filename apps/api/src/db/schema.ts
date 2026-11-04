@@ -270,9 +270,15 @@ export const documents = pgTable(
       .notNull()
       .references(() => claims.id, { onDelete: "cascade" }),
     fileUrl: text("file_url").notNull(),
+    /** Suggested checklist slot. A suggestion only — never a placement. */
     aiClassifiedType: text("ai_classified_type"),
+    /** Where a human actually filed it. Null until someone confirms. */
     checklistSlot: text("checklist_slot"),
     confidence: numeric("confidence", { precision: 4, scale: 3 }),
+    /** 'heuristic' | 'claude' — so the UI never calls a filename match "AI". */
+    classifiedBy: text("classified_by"),
+    /** Why the classifier thinks so; shown to the human before they confirm. */
+    classificationReason: text("classification_reason"),
     confirmedBy: uuid("confirmed_by").references(() => orgMembers.id),
     confirmedAt: timestamp("confirmed_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true })

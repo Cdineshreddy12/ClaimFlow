@@ -42,6 +42,7 @@ export function useUploadDocument(claimId: string) {
       return api.post<ClaimDocument>(`/claims/${claimId}/documents`, {
         key,
         fileName: file.name,
+        contentType: file.type || "application/octet-stream",
       });
     },
     onSuccess: () => {
