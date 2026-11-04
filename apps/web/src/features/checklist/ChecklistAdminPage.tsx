@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { AppShell } from "@/app/AppShell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Loader } from "@/components/ui/loader";
 import {
   Select,
   SelectContent,
@@ -111,7 +112,7 @@ export function ChecklistAdminPage() {
             ) : null}
           </div>
 
-          {isLoading ? <p className="empty-state">Loading…</p> : null}
+          {isLoading ? <Loader label="Loading rules…" /> : null}
 
           {data && data.rules.length === 0 ? (
             <p className="empty-state">

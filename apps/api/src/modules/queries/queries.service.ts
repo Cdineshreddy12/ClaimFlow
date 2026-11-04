@@ -1,7 +1,7 @@
 import type { Role } from "@claimflow/contracts";
 import { getSummariser } from "../../integrations/summariser/claude.js";
 import * as auditService from "../audit/audit.service.js";
-import { getOrgMemberId } from "../org-members/org-members.repository.js";
+import { getMemberId } from "../members/members.repository.js";
 import * as queriesRepository from "./queries.repository.js";
 import type {
   CreateQueryBody,
@@ -15,15 +15,11 @@ export class QueryNotFoundError extends Error {}
 
 interface AuthContext {
   userId: string;
-  organizationId: string;
   role: Role;
 }
 
 export async function listForClaim(auth: AuthContext, claimId: string) {
-  const result = await queriesRepository.listForClaim(
-    auth.organizationId,
-    claimId,
-  );
+  const result = await queriesRepository.listForClaim(claimId);
   if (result === undefined) throw new ClaimNotFoundError(claimId);
   return result;
 }
@@ -38,11 +34,7 @@ export async function createQuery(
   // the model second-guessing a human who was there.
   const enriched = await summariseIfBlank(body);
 
-  const created = await queriesRepository.create(
-    auth.organizationId,
-    claimId,
-    enriched,
-  );
+  const created = await queriesRepository.create(claimId, enriched);
   if (!created) throw new ClaimNotFoundError(claimId);
 
   await auditService.record(auth, {
@@ -101,7 +93,7 @@ async function summariseIfBlank(
 }
 
 export async function getQuery(auth: AuthContext, id: string) {
-  const query = await queriesRepository.getById(auth.organizationId, id);
+  const query = await queriesRepository.getById(id);
   if (!query) throw new QueryNotFoundError(id);
   return query;
 }
@@ -111,7 +103,7 @@ export async function updateQuery(
   id: string,
   body: UpdateQueryBody,
 ) {
-  const updated = await queriesRepository.update(auth.organizationId, id, body);
+  const updated = await queriesRepository.update(id, body);
   if (!updated) throw new QueryNotFoundError(id);
 
   await auditService.record(auth, {
@@ -126,7 +118,7 @@ export async function updateQuery(
 
 /** Marking a reply sent here only records that the desk exec sent it through whatever channel — nothing goes out automatically, see docs/adr/0005. */
 export async function markReplied(auth: AuthContext, id: string) {
-  const updated = await queriesRepository.markReplied(auth.organizationId, id);
+  const updated = await queriesRepository.markReplied(id);
   if (!updated) throw new QueryNotFoundError(id);
 
   await auditService.record(auth, {
@@ -145,13 +137,13 @@ export async function markReplied(auth: AuthContext, id: string) {
  */
 export async function listInbox(auth: AuthContext, query: ListInboxQuery) {
   if (auth.role === "desk_executive") {
-    const memberId = await getOrgMemberId(auth.organizationId, auth.userId);
-    return queriesRepository.listInbox(auth.organizationId, {
+    const memberId = await getMemberId(auth.userId);
+    return queriesRepository.listInbox({
       status: query.status,
       assignedTo: memberId,
     });
   }
-  return queriesRepository.listInbox(auth.organizationId, {
+  return queriesRepository.listInbox({
     status: query.status,
   });
 }

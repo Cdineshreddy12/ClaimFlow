@@ -8,30 +8,26 @@ import { claims, documents } from "../../db/schema.js";
  * boundary rule as claims.repository.ts (see docs/adr/0002).
  */
 
-async function assertClaimInOrg(
-  organizationId: string,
-  claimId: string,
-): Promise<boolean> {
+/**
+ * A claim has to exist before anything can hang off it. This used to
+ * also prove the claim belonged to the caller's organization; with one
+ * hospital per install there is nothing left to prove but existence.
+ */
+async function claimExists(claimId: string): Promise<boolean> {
   const [claim] = await db
     .select({ id: claims.id })
     .from(claims)
-    .where(
-      and(eq(claims.id, claimId), eq(claims.organizationId, organizationId)),
-    );
+    .where(eq(claims.id, claimId));
   return Boolean(claim);
 }
 
-export async function listForClaim(organizationId: string, claimId: string) {
-  if (!(await assertClaimInOrg(organizationId, claimId))) return undefined;
+export async function listForClaim(claimId: string) {
+  if (!(await claimExists(claimId))) return undefined;
   return db.select().from(documents).where(eq(documents.claimId, claimId));
 }
 
-export async function create(
-  organizationId: string,
-  claimId: string,
-  data: { fileUrl: string },
-) {
-  if (!(await assertClaimInOrg(organizationId, claimId))) return undefined;
+export async function create(claimId: string, data: { fileUrl: string }) {
+  if (!(await claimExists(claimId))) return undefined;
   const [document] = await db
     .insert(documents)
     .values({ claimId, fileUrl: data.fileUrl })
@@ -65,12 +61,8 @@ export async function saveClassification(
   return updated;
 }
 
-export async function getById(
-  organizationId: string,
-  claimId: string,
-  documentId: string,
-) {
-  if (!(await assertClaimInOrg(organizationId, claimId))) return undefined;
+export async function getById(claimId: string, documentId: string) {
+  if (!(await claimExists(claimId))) return undefined;
   const [document] = await db
     .select()
     .from(documents)
@@ -79,13 +71,12 @@ export async function getById(
 }
 
 export async function confirm(
-  organizationId: string,
   claimId: string,
   documentId: string,
   checklistSlot: string,
   confirmedBy: string | null,
 ) {
-  if (!(await assertClaimInOrg(organizationId, claimId))) return undefined;
+  if (!(await claimExists(claimId))) return undefined;
   const [updated] = await db
     .update(documents)
     .set({ checklistSlot, confirmedBy, confirmedAt: new Date() })
@@ -94,12 +85,8 @@ export async function confirm(
   return updated;
 }
 
-export async function remove(
-  organizationId: string,
-  claimId: string,
-  documentId: string,
-) {
-  if (!(await assertClaimInOrg(organizationId, claimId))) return undefined;
+export async function remove(claimId: string, documentId: string) {
+  if (!(await claimExists(claimId))) return undefined;
   const [deleted] = await db
     .delete(documents)
     .where(and(eq(documents.id, documentId), eq(documents.claimId, claimId)))

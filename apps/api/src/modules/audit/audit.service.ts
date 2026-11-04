@@ -1,4 +1,4 @@
-import { getOrgMemberId } from "../org-members/org-members.repository.js";
+import { getMemberId } from "../members/members.repository.js";
 import * as auditRepository from "./audit.repository.js";
 
 /**
@@ -30,8 +30,8 @@ export type AuditAction =
   | "query.created"
   | "query.updated"
   | "query.replied"
-  | "organization.created"
-  | "organization.profile_updated"
+  | "hospital.created"
+  | "hospital.profile_updated"
   | "invite.created"
   | "invite.accepted"
   | "preauth.extracted"
@@ -46,7 +46,6 @@ export type AuditAction =
 
 interface AuditContext {
   userId: string;
-  organizationId: string;
 }
 
 interface RecordArgs {
@@ -67,10 +66,9 @@ export async function record(
     const actorId =
       args.actorId !== undefined
         ? args.actorId
-        : await getOrgMemberId(auth.organizationId, auth.userId);
+        : await getMemberId(auth.userId);
 
     await auditRepository.insert({
-      organizationId: auth.organizationId,
       actorId,
       action: args.action,
       entityType: args.entityType,
@@ -94,5 +92,5 @@ export async function listAuditLog(
   auth: AuditContext,
   filters: { entityType?: string; entityId?: string; limit: number },
 ) {
-  return auditRepository.listForOrganization(auth.organizationId, filters);
+  return auditRepository.list(filters);
 }

@@ -8,31 +8,22 @@ import type {
 
 /** Every function here is org-scoped — same rule as claims.repository.ts, see docs/adr/0002. */
 
-export async function listRules(
-  organizationId: string,
-  insurerId: string,
-  procedureId: string,
-) {
+export async function listRules(insurerId: string, procedureId: string) {
   return db
     .select()
     .from(checklistRules)
     .where(
       and(
-        eq(checklistRules.organizationId, organizationId),
         eq(checklistRules.insurerId, insurerId),
         eq(checklistRules.procedureId, procedureId),
       ),
     );
 }
 
-export async function createRule(
-  organizationId: string,
-  data: CreateChecklistRuleBody,
-) {
+export async function createRule(data: CreateChecklistRuleBody) {
   const [rule] = await db
     .insert(checklistRules)
     .values({
-      organizationId,
       insurerId: data.insurerId,
       procedureId: data.procedureId,
       documentType: data.documentType,
@@ -43,11 +34,7 @@ export async function createRule(
   return rule!;
 }
 
-export async function updateRule(
-  organizationId: string,
-  id: string,
-  data: UpdateChecklistRuleBody,
-) {
+export async function updateRule(id: string, data: UpdateChecklistRuleBody) {
   const patch: Partial<typeof checklistRules.$inferInsert> = {
     updatedAt: new Date(),
   };
@@ -57,25 +44,15 @@ export async function updateRule(
   const [updated] = await db
     .update(checklistRules)
     .set(patch)
-    .where(
-      and(
-        eq(checklistRules.id, id),
-        eq(checklistRules.organizationId, organizationId),
-      ),
-    )
+    .where(and(eq(checklistRules.id, id)))
     .returning();
   return updated;
 }
 
-export async function deleteRule(organizationId: string, id: string) {
+export async function deleteRule(id: string) {
   const [deleted] = await db
     .delete(checklistRules)
-    .where(
-      and(
-        eq(checklistRules.id, id),
-        eq(checklistRules.organizationId, organizationId),
-      ),
-    )
+    .where(and(eq(checklistRules.id, id)))
     // Full row, not just the id — the audit trail records what the rule
     // *was* before it was removed, which is the only place that's still
     // knowable after this returns.
@@ -91,7 +68,6 @@ export async function deleteRule(organizationId: string, id: string) {
  * block on saving.
  */
 export async function countActiveClaimsFor(
-  organizationId: string,
   insurerId: string,
   procedureId: string,
 ) {
@@ -100,7 +76,6 @@ export async function countActiveClaimsFor(
     .from(claims)
     .where(
       and(
-        eq(claims.organizationId, organizationId),
         eq(claims.insurerId, insurerId),
         eq(claims.procedureId, procedureId),
         notInArray(claims.status, ["SETTLED", "REJECTED"]),

@@ -1,92 +1,87 @@
 import { config } from "dotenv";
 config({ path: "../../.env" });
 
-import { eq } from "drizzle-orm";
-import { afterEach, describe, expect, it } from "vitest";
+import { eq, inArray } from "drizzle-orm";
+import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import { db } from "../../db/client.js";
-import { organizations } from "../../db/schema.js";
+import { invites, members } from "../../db/schema.js";
 import * as onboardingRepository from "./onboarding.repository.js";
 
+/**
+ * The trial-length and slug-collision tests that used to live here went
+ * with multi-tenancy: there is no slug and no per-tenant trial any more,
+ * and no second organization to collide with. What's left is the invite
+ * flow, which is how everyone after the first person gets an account.
+ */
 describe.skipIf(!process.env.DATABASE_URL)(
   "onboarding.repository (integration)",
   () => {
-    const createdOrgIds: string[] = [];
+    const createdMemberIds: string[] = [];
+    const createdInviteIds: string[] = [];
+    let adminMemberId: string;
+
+    beforeAll(async () => {
+      // The install may already be claimed — by the migration, the seed,
+      // or an earlier run. Either way there is exactly one hospital, so
+      // take it rather than making another.
+      if (!(await onboardingRepository.hasAnyMember())) {
+        const { member } = await onboardingRepository.setUpHospital(
+          crypto.randomUUID(),
+          "Integration Test Hospital",
+        );
+        adminMemberId = member.id;
+        createdMemberIds.push(member.id);
+        return;
+      }
+      const [existing] = await db.select().from(members).limit(1);
+      if (existing) {
+        adminMemberId = existing.id;
+        return;
+      }
+      const [created] = await db
+        .insert(members)
+        .values({ userId: crypto.randomUUID(), role: "org_admin" })
+        .returning();
+      adminMemberId = created!.id;
+      createdMemberIds.push(created!.id);
+    });
 
     afterEach(async () => {
-      for (const id of createdOrgIds.splice(0)) {
-        await db.delete(organizations).where(eq(organizations.id, id));
+      const inviteIds = createdInviteIds.splice(0);
+      if (inviteIds.length > 0) {
+        await db.delete(invites).where(inArray(invites.id, inviteIds));
+      }
+      // Keep the admin row — later tests in this file still need it.
+      const memberIds = createdMemberIds
+        .splice(0)
+        .filter((id) => id !== adminMemberId);
+      if (memberIds.length > 0) {
+        await db.delete(members).where(inArray(members.id, memberIds));
       }
     });
 
-    it("creates an organization with a 14-day trial and an org_admin membership", async () => {
-      const userId = crypto.randomUUID();
-      const { organization, member } =
-        await onboardingRepository.createOrganizationWithAdmin(
-          userId,
-          "Trial Hospital",
-        );
-      createdOrgIds.push(organization.id);
-
-      expect(organization.slug).toMatch(/^trial-hospital/);
-      expect(member.role).toBe("org_admin");
-      expect(member.userId).toBe(userId);
-
-      const trialMs = organization.trialEndsAt!.getTime() - Date.now();
-      const fourteenDaysMs = 14 * 24 * 60 * 60 * 1000;
-      expect(Math.abs(trialMs - fourteenDaysMs)).toBeLessThan(60_000);
-
-      const membership =
-        await onboardingRepository.getOrgMembershipForUser(userId);
-      expect(membership?.organizationId).toBe(organization.id);
-    });
-
-    it("appends a numeric suffix when the slug is already taken", async () => {
-      const first = await onboardingRepository.createOrganizationWithAdmin(
-        crypto.randomUUID(),
-        "Slug Collision Hospital",
-      );
-      createdOrgIds.push(first.organization.id);
-
-      const second = await onboardingRepository.createOrganizationWithAdmin(
-        crypto.randomUUID(),
-        "Slug Collision Hospital",
-      );
-      createdOrgIds.push(second.organization.id);
-
-      expect(first.organization.slug).toBe("slug-collision-hospital");
-      expect(second.organization.slug).toBe("slug-collision-hospital-1");
-    });
-
-    it("creates an invite, previews it by token, and redeems it into a real membership", async () => {
-      const { organization, member } =
-        await onboardingRepository.createOrganizationWithAdmin(
-          crypto.randomUUID(),
-          "Invite Flow Hospital",
-        );
-      createdOrgIds.push(organization.id);
-
+    it("creates an invite, previews it by token, and redeems it into a membership", async () => {
       const invite = await onboardingRepository.createInvite(
-        organization.id,
         "desk_executive",
-        member.id,
+        adminMemberId,
       );
+      createdInviteIds.push(invite.id);
       expect(invite.usedAt).toBeNull();
 
-      const preview = await onboardingRepository.getInviteWithOrgName(
+      const preview = await onboardingRepository.getInviteWithHospitalName(
         invite.token,
       );
-      expect(preview?.organizationName).toBe("Invite Flow Hospital");
+      expect(preview?.hospitalName).toBeTruthy();
       expect(preview?.invite.role).toBe("desk_executive");
 
-      const inviteeId = crypto.randomUUID();
       const redeemed = await onboardingRepository.redeemInvite(
         invite.token,
-        inviteeId,
+        crypto.randomUUID(),
       );
       expect(redeemed.ok).toBe(true);
       if (redeemed.ok) {
+        createdMemberIds.push(redeemed.member.id);
         expect(redeemed.member.role).toBe("desk_executive");
-        expect(redeemed.member.organizationId).toBe(organization.id);
       }
     });
 
@@ -99,46 +94,40 @@ describe.skipIf(!process.env.DATABASE_URL)(
     });
 
     it("rejects redeeming an already-used invite", async () => {
-      const { organization, member } =
-        await onboardingRepository.createOrganizationWithAdmin(
-          crypto.randomUUID(),
-          "Used Invite Hospital",
-        );
-      createdOrgIds.push(organization.id);
-
       const invite = await onboardingRepository.createInvite(
-        organization.id,
         "doctor",
-        member.id,
+        adminMemberId,
       );
-      const firstUserId = crypto.randomUUID();
-      await onboardingRepository.redeemInvite(invite.token, firstUserId);
+      createdInviteIds.push(invite.id);
 
-      const result = await onboardingRepository.redeemInvite(
+      const first = await onboardingRepository.redeemInvite(
         invite.token,
         crypto.randomUUID(),
       );
-      expect(result).toEqual({ ok: false, reason: "used" });
+      if (first.ok) createdMemberIds.push(first.member.id);
+
+      const second = await onboardingRepository.redeemInvite(
+        invite.token,
+        crypto.randomUUID(),
+      );
+      expect(second).toEqual({ ok: false, reason: "used" });
     });
 
-    it("rejects redeeming when the user already belongs to an organization", async () => {
-      const { organization, member } =
-        await onboardingRepository.createOrganizationWithAdmin(
-          crypto.randomUUID(),
-          "Already Member Hospital",
-        );
-      createdOrgIds.push(organization.id);
-
+    it("rejects redeeming when the user already has an account", async () => {
       const invite = await onboardingRepository.createInvite(
-        organization.id,
         "desk_head",
-        member.id,
+        adminMemberId,
       );
+      createdInviteIds.push(invite.id);
 
-      // member.userId already has an org_members row (the org_admin one).
+      const [admin] = await db
+        .select()
+        .from(members)
+        .where(eq(members.id, adminMemberId));
+
       const result = await onboardingRepository.redeemInvite(
         invite.token,
-        member.userId,
+        admin!.userId,
       );
       expect(result).toEqual({ ok: false, reason: "already_member" });
     });

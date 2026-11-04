@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
 import { SelectField } from "@/components/ui/select-field";
-import type { CurrentOrganization } from "../../organizations/api";
+import type { Hospital } from "../../hospital/api";
 
 /** Form state is wider than parsed state — see IdentityStep. Phone fields also transform (+91 stripped) so input ≠ output. */
 type FormValues = z.input<typeof HospitalContactStep>;
@@ -21,12 +21,12 @@ const STATE_OPTIONS = INDIAN_STATES.map((state) => ({
 }));
 
 export function ContactStep({
-  organization,
+  hospital,
   onSubmit,
   onBack,
   isSaving,
 }: {
-  organization: CurrentOrganization;
+  hospital: Hospital;
   onSubmit: (values: ContactValues) => void;
   onBack: () => void;
   isSaving: boolean;
@@ -39,17 +39,17 @@ export function ContactStep({
   } = useForm<FormValues, unknown, ContactValues>({
     resolver: zodResolver(HospitalContactStep),
     defaultValues: {
-      addressLine1: organization.addressLine1 ?? "",
-      addressLine2: organization.addressLine2 ?? "",
-      city: organization.city ?? "",
-      state: organization.state ?? "",
-      pincode: organization.pincode ?? "",
-      phone: organization.phone ?? "",
-      email: organization.email ?? "",
-      website: organization.website ?? "",
-      deskContactName: organization.deskContactName ?? "",
-      deskContactPhone: organization.deskContactPhone ?? "",
-      deskContactEmail: organization.deskContactEmail ?? "",
+      addressLine1: hospital.addressLine1 ?? "",
+      addressLine2: hospital.addressLine2 ?? "",
+      city: hospital.city ?? "",
+      state: hospital.state ?? "",
+      pincode: hospital.pincode ?? "",
+      phone: hospital.phone ?? "",
+      email: hospital.email ?? "",
+      website: hospital.website ?? "",
+      deskContactName: hospital.deskContactName ?? "",
+      deskContactPhone: hospital.deskContactPhone ?? "",
+      deskContactEmail: hospital.deskContactEmail ?? "",
     } as FormValues,
   });
 

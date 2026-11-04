@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
+import { Loader } from "../../components/ui/loader";
 import { AuthLayout } from "../auth/AuthLayout";
 import { refreshSessionClaims } from "../auth/api";
 import { useAuth } from "../auth/AuthProvider";
@@ -10,7 +11,7 @@ import { ROLE_LABEL } from "../../lib/roles";
 export function AcceptInvitePage() {
   const { token = "" } = useParams();
   const navigate = useNavigate();
-  const { session, organizationId } = useAuth();
+  const { session, role } = useAuth();
   const [isAccepting, setIsAccepting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -43,7 +44,7 @@ export function AcceptInvitePage() {
   if (isLoading) {
     return (
       <AuthLayout heading="Checking your invite…">
-        <p className="empty-state">One moment.</p>
+        <Loader label="One moment." />
       </AuthLayout>
     );
   }
@@ -61,7 +62,7 @@ export function AcceptInvitePage() {
 
   return (
     <AuthLayout
-      heading={`Join ${preview.organizationName}`}
+      heading={`Join ${preview.hospitalName}`}
       subheading={`You've been invited as ${ROLE_LABEL[preview.role] ?? preview.role}.`}
     >
       {error ? <div className="inline-error">{error}</div> : null}
@@ -77,10 +78,10 @@ export function AcceptInvitePage() {
           </Link>{" "}
           first, then come back to this link to join.
         </p>
-      ) : organizationId ? (
+      ) : role ? (
         <p className="empty-state">
-          You already belong to an organization — one organization per account,
-          for now.
+          You already have an account on this ClaimFlow. Invite links are for
+          people joining for the first time.
         </p>
       ) : (
         <button
@@ -89,7 +90,7 @@ export function AcceptInvitePage() {
           disabled={isAccepting}
           onClick={handleAccept}
         >
-          {isAccepting ? "Joining…" : `Join ${preview.organizationName}`}
+          {isAccepting ? "Joining…" : `Join ${preview.hospitalName}`}
         </button>
       )}
     </AuthLayout>

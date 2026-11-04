@@ -10,18 +10,18 @@ import { Button } from "@/components/ui/button";
 import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
 import { SelectField } from "@/components/ui/select-field";
-import type { CurrentOrganization } from "../../organizations/api";
+import type { Hospital } from "../../hospital/api";
 
 /** Form state is wider than parsed state — see IdentityStep. */
 type FormValues = z.input<typeof HospitalComplianceStep>;
 
 export function ComplianceStep({
-  organization,
+  hospital,
   onSubmit,
   onBack,
   isSaving,
 }: {
-  organization: CurrentOrganization;
+  hospital: Hospital;
   onSubmit: (values: ComplianceValues) => void;
   onBack: () => void;
   isSaving: boolean;
@@ -35,13 +35,13 @@ export function ComplianceStep({
   } = useForm<FormValues, unknown, ComplianceValues>({
     resolver: zodResolver(HospitalComplianceStep),
     defaultValues: {
-      rohiniId: organization.rohiniId ?? "",
-      registrationNumber: organization.registrationNumber ?? "",
-      registrationValidUntil: organization.registrationValidUntil ?? "",
-      pan: organization.pan ?? "",
-      gstin: organization.gstin ?? "",
-      nabhStatus: organization.nabhStatus ?? "none",
-      nabhValidUntil: organization.nabhValidUntil ?? "",
+      rohiniId: hospital.rohiniId ?? "",
+      registrationNumber: hospital.registrationNumber ?? "",
+      registrationValidUntil: hospital.registrationValidUntil ?? "",
+      pan: hospital.pan ?? "",
+      gstin: hospital.gstin ?? "",
+      nabhStatus: hospital.nabhStatus ?? "none",
+      nabhValidUntil: hospital.nabhValidUntil ?? "",
     } as FormValues,
   });
 

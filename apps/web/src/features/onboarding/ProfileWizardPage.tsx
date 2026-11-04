@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
+import { Loader } from "../../components/ui/loader";
 import {
-  useCurrentOrganization,
+  useHospital,
   useUpdateProfile,
   type ProfileStepPayload,
-} from "../organizations/api";
+} from "../hospital/api";
 import { ComplianceStep } from "./steps/ComplianceStep";
 import { ContactStep } from "./steps/ContactStep";
 import { IdentityStep } from "./steps/IdentityStep";
@@ -17,19 +18,19 @@ const STEPS = [
 
 export function ProfileWizardPage() {
   const navigate = useNavigate();
-  const { data: organization, isLoading } = useCurrentOrganization();
+  const { data: hospital, isLoading } = useHospital();
   const updateProfile = useUpdateProfile();
   const [stepIndex, setStepIndex] = useState(0);
 
   if (isLoading) {
     return (
       <div className="wizard-shell">
-        <p className="empty-state">Loading…</p>
+        <Loader />
       </div>
     );
   }
 
-  if (!organization) {
+  if (!hospital) {
     return (
       <div className="wizard-shell">
         <div className="wizard-card">
@@ -40,7 +41,7 @@ export function ProfileWizardPage() {
   }
 
   // Already finished — revisiting the URL shouldn't re-run setup.
-  if (organization.onboardingCompletedAt) return <Navigate to="/" replace />;
+  if (hospital.onboardingCompletedAt) return <Navigate to="/" replace />;
 
   async function save(payload: ProfileStepPayload, isLast: boolean) {
     await updateProfile.mutateAsync(payload);
@@ -58,7 +59,7 @@ export function ProfileWizardPage() {
           <span className="brand-name">Claims Desk</span>
         </div>
 
-        <h1 className="auth-heading">Set up {organization.name}</h1>
+        <h1 className="auth-heading">Set up {hospital.name}</h1>
         <p className="auth-subheading">
           A few details insurers need before you can run cashless claims.
         </p>
@@ -85,7 +86,7 @@ export function ProfileWizardPage() {
 
         {current.key === "identity" ? (
           <IdentityStep
-            organization={organization}
+            hospital={hospital}
             isSaving={updateProfile.isPending}
             onSubmit={(data) => void save({ step: "identity", data }, false)}
           />
@@ -93,7 +94,7 @@ export function ProfileWizardPage() {
 
         {current.key === "compliance" ? (
           <ComplianceStep
-            organization={organization}
+            hospital={hospital}
             isSaving={updateProfile.isPending}
             onBack={() => setStepIndex((i) => i - 1)}
             onSubmit={(data) => void save({ step: "compliance", data }, false)}
@@ -102,7 +103,7 @@ export function ProfileWizardPage() {
 
         {current.key === "contact" ? (
           <ContactStep
-            organization={organization}
+            hospital={hospital}
             isSaving={updateProfile.isPending}
             onBack={() => setStepIndex((i) => i - 1)}
             onSubmit={(data) => void save({ step: "contact", data }, true)}

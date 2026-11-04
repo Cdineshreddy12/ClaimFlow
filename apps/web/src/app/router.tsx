@@ -7,9 +7,13 @@ import { DoctorApprovalPage } from "../features/doctor-approval/DoctorApprovalPa
 import { LoginPage } from "../features/auth/LoginPage";
 import { SignupPage } from "../features/auth/SignupPage";
 import { AcceptInvitePage } from "../features/onboarding/AcceptInvitePage";
-import { CreateOrganizationPage } from "../features/onboarding/CreateOrganizationPage";
+import { SetUpHospitalPage } from "../features/onboarding/SetUpHospitalPage";
 import { ProfileWizardPage } from "../features/onboarding/ProfileWizardPage";
-import { RequireAuth, RequireCompleteProfile, RequireOrg } from "./RequireAuth";
+import {
+  RequireAuth,
+  RequireCompleteProfile,
+  RequireMembership,
+} from "./RequireAuth";
 
 export const router: ReturnType<typeof createBrowserRouter> =
   createBrowserRouter([
@@ -22,11 +26,11 @@ export const router: ReturnType<typeof createBrowserRouter> =
       element: <RequireAuth />,
       children: [
         {
-          path: "/onboarding/organization",
-          element: <CreateOrganizationPage />,
+          path: "/onboarding/hospital",
+          element: <SetUpHospitalPage />,
         },
         {
-          element: <RequireOrg />,
+          element: <RequireMembership />,
           children: [
             { path: "/onboarding/profile", element: <ProfileWizardPage /> },
             {

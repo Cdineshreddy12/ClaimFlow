@@ -13,7 +13,7 @@ import {
   registerInvitesRoutes,
   registerOnboardingRoutes,
 } from "./modules/onboarding/onboarding.routes.js";
-import { registerOrganizationsRoutes } from "./modules/organizations/organizations.routes.js";
+import { registerHospitalRoutes } from "./modules/hospital/hospital.routes.js";
 import { registerReferenceRoutes } from "./modules/reference/reference.routes.js";
 import { registerAuditRoutes } from "./modules/audit/audit.routes.js";
 import { registerPacketRoutes } from "./modules/packet/packet.routes.js";
@@ -66,7 +66,7 @@ await app.register(registerClaimQueriesRoutes, {
 await app.register(registerQueryInboxRoutes, { prefix: "/queries" });
 await app.register(registerOnboardingRoutes, { prefix: "/onboarding" });
 await app.register(registerInvitesRoutes, { prefix: "/invites" });
-await app.register(registerOrganizationsRoutes, { prefix: "/organizations" });
+await app.register(registerHospitalRoutes, { prefix: "/hospital" });
 await app.register(registerReferenceRoutes);
 await app.register(registerAuditRoutes, { prefix: "/audit-log" });
 await app.register(registerPacketRoutes, {

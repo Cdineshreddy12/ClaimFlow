@@ -1,20 +1,19 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as documentsRepository from "./documents.repository.js";
 import * as s3 from "../../integrations/storage/s3.js";
-import * as orgMembersRepository from "../org-members/org-members.repository.js";
+import * as orgMembersRepository from "../members/members.repository.js";
 
 vi.mock("./documents.repository.js");
 vi.mock("../../integrations/storage/s3.js");
-vi.mock("../org-members/org-members.repository.js");
+vi.mock("../members/members.repository.js");
 
-const ORG_ID = "11111111-1111-1111-1111-111111111111";
 const USER_ID = "22222222-2222-2222-2222-222222222222";
 const CLAIM_ID = "33333333-3333-3333-3333-333333333333";
 const DOCUMENT_ID = "44444444-4444-4444-4444-444444444444";
 const MEMBER_ID = "55555555-5555-5555-5555-555555555555";
 
 function auth() {
-  return { userId: USER_ID, organizationId: ORG_ID };
+  return { userId: USER_ID };
 }
 
 describe("documents.service", () => {
@@ -50,11 +49,7 @@ describe("documents.service", () => {
         contentType: "application/pdf",
       });
 
-      expect(s3.buildObjectKey).toHaveBeenCalledWith(
-        ORG_ID,
-        CLAIM_ID,
-        "report.pdf",
-      );
+      expect(s3.buildObjectKey).toHaveBeenCalledWith(CLAIM_ID, "report.pdf");
       expect(s3.getUploadUrl).toHaveBeenCalledWith(
         "organizations/x/claims/y/key.pdf",
         "application/pdf",
@@ -68,9 +63,7 @@ describe("documents.service", () => {
 
   describe("confirmDocument", () => {
     it("resolves the caller's org-member id and passes it through as confirmedBy", async () => {
-      vi.mocked(orgMembersRepository.getOrgMemberId).mockResolvedValue(
-        MEMBER_ID,
-      );
+      vi.mocked(orgMembersRepository.getMemberId).mockResolvedValue(MEMBER_ID);
       vi.mocked(documentsRepository.confirm).mockResolvedValue({
         id: DOCUMENT_ID,
         checklistSlot: "Pre-authorization form",
@@ -85,7 +78,6 @@ describe("documents.service", () => {
       );
 
       expect(documentsRepository.confirm).toHaveBeenCalledWith(
-        ORG_ID,
         CLAIM_ID,
         DOCUMENT_ID,
         "Pre-authorization form",
@@ -94,9 +86,7 @@ describe("documents.service", () => {
     });
 
     it("raises DocumentNotFoundError when nothing matched", async () => {
-      vi.mocked(orgMembersRepository.getOrgMemberId).mockResolvedValue(
-        MEMBER_ID,
-      );
+      vi.mocked(orgMembersRepository.getMemberId).mockResolvedValue(MEMBER_ID);
       vi.mocked(documentsRepository.confirm).mockResolvedValue(undefined);
 
       const { confirmDocument, DocumentNotFoundError } =
@@ -124,7 +114,6 @@ describe("documents.service", () => {
       await discardDocument(auth(), CLAIM_ID, DOCUMENT_ID);
 
       expect(documentsRepository.remove).toHaveBeenCalledWith(
-        ORG_ID,
         CLAIM_ID,
         DOCUMENT_ID,
       );

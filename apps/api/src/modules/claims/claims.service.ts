@@ -5,7 +5,7 @@ import {
 } from "@claimflow/contracts";
 import { getRequirementsSnapshot } from "../checklist/checklist.service.js";
 import * as documentsRepository from "../documents/documents.repository.js";
-import { getOrgMemberId } from "../org-members/org-members.repository.js";
+import { getMemberId } from "../members/members.repository.js";
 import * as auditService from "../audit/audit.service.js";
 import * as claimsRepository from "./claims.repository.js";
 import type { CreateClaimBody, ListClaimsQuery } from "./claims.schema.js";
@@ -15,7 +15,6 @@ export class InvalidTransitionError extends Error {}
 
 interface AuthContext {
   userId: string;
-  organizationId: string;
   role: Role;
 }
 
@@ -32,22 +31,22 @@ export async function listClaims(auth: AuthContext, query: ListClaimsQuery) {
     auth.role === "desk_executive" || query.scope === "mine";
 
   if (forceOwnClaimsOnly) {
-    const memberId = await getOrgMemberId(auth.organizationId, auth.userId);
-    return claimsRepository.listClaims(auth.organizationId, {
+    const memberId = await getMemberId(auth.userId);
+    return claimsRepository.listClaims({
       ...statusFilter,
       assignedTo: memberId,
     });
   }
 
-  return claimsRepository.listClaims(auth.organizationId, statusFilter);
+  return claimsRepository.listClaims(statusFilter);
 }
 
 export async function getClaim(auth: AuthContext, id: string) {
-  const claim = await claimsRepository.getClaimById(auth.organizationId, id);
+  const claim = await claimsRepository.getClaimById(id);
   if (!claim) throw new ClaimNotFoundError(id);
 
   if (auth.role === "desk_executive") {
-    const memberId = await getOrgMemberId(auth.organizationId, auth.userId);
+    const memberId = await getMemberId(auth.userId);
     if (claim.assignedTo !== memberId) throw new ClaimNotFoundError(id);
   }
 
@@ -61,15 +60,10 @@ export async function getClaim(auth: AuthContext, id: string) {
  */
 export async function createClaim(auth: AuthContext, body: CreateClaimBody) {
   const checklistSnapshot = await getRequirementsSnapshot(
-    auth.organizationId,
     body.insurerId,
     body.procedureId,
   );
-  const claim = await claimsRepository.createClaim(
-    auth.organizationId,
-    body,
-    checklistSnapshot,
-  );
+  const claim = await claimsRepository.createClaim(body, checklistSnapshot);
 
   await auditService.record(auth, {
     action: "claim.created",
@@ -87,10 +81,7 @@ export async function transitionClaimStatus(
   nextStatus: ClaimStatus,
   slaDeadline: Date | undefined,
 ) {
-  const claim = await claimsRepository.getClaimById(
-    auth.organizationId,
-    claimId,
-  );
+  const claim = await claimsRepository.getClaimById(claimId);
   if (!claim) throw new ClaimNotFoundError(claimId);
 
   if (!canTransition(claim.status, nextStatus, auth.role)) {
@@ -99,9 +90,8 @@ export async function transitionClaimStatus(
     );
   }
 
-  const memberId = await getOrgMemberId(auth.organizationId, auth.userId);
+  const memberId = await getMemberId(auth.userId);
   const updated = await claimsRepository.recordStatusChange(
-    auth.organizationId,
     claimId,
     nextStatus,
     memberId,

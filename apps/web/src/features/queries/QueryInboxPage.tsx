@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { AppShell } from "../../app/AppShell";
+import { Loader } from "../../components/ui/loader";
 import { QueryCard } from "./QueryCard";
 import { QueryDetailPanel } from "./QueryDetailPanel";
 import { useQueryInbox } from "./api";
@@ -23,7 +24,7 @@ export function QueryInboxPage() {
 
   return (
     <AppShell title="Query Inbox" subtitle="Open TPA queries across the desk">
-      {isLoading ? <p className="empty-state">Loading…</p> : null}
+      {isLoading ? <Loader label="Loading queries…" /> : null}
       {isError ? (
         <div className="inline-error">Couldn't load the query inbox.</div>
       ) : null}

@@ -8,21 +8,21 @@ import { claimPreauthFields, claims } from "../../db/schema.js";
  * boundary rule as documents.repository.ts (docs/adr/0002).
  */
 
-async function assertClaimInOrg(
-  organizationId: string,
-  claimId: string,
-): Promise<boolean> {
+/**
+ * A claim has to exist before anything can hang off it. This used to
+ * also prove the claim belonged to the caller's organization; with one
+ * hospital per install there is nothing left to prove but existence.
+ */
+async function claimExists(claimId: string): Promise<boolean> {
   const [claim] = await db
     .select({ id: claims.id })
     .from(claims)
-    .where(
-      and(eq(claims.id, claimId), eq(claims.organizationId, organizationId)),
-    );
+    .where(eq(claims.id, claimId));
   return Boolean(claim);
 }
 
-export async function listForClaim(organizationId: string, claimId: string) {
-  if (!(await assertClaimInOrg(organizationId, claimId))) return undefined;
+export async function listForClaim(claimId: string) {
+  if (!(await claimExists(claimId))) return undefined;
   return db
     .select()
     .from(claimPreauthFields)
@@ -85,13 +85,12 @@ export async function saveSuggestions(
  * the audit trail can still show what the model proposed.
  */
 export async function confirm(
-  organizationId: string,
   claimId: string,
   fieldKey: string,
   value: string,
   confirmedBy: string | null,
 ) {
-  if (!(await assertClaimInOrg(organizationId, claimId))) return undefined;
+  if (!(await claimExists(claimId))) return undefined;
   const now = new Date();
   const [row] = await db
     .insert(claimPreauthFields)
@@ -114,12 +113,8 @@ export async function confirm(
  * Clears the human value, leaving any suggestion in place so the field
  * goes back to needing a decision rather than disappearing.
  */
-export async function clearValue(
-  organizationId: string,
-  claimId: string,
-  fieldKey: string,
-) {
-  if (!(await assertClaimInOrg(organizationId, claimId))) return undefined;
+export async function clearValue(claimId: string, fieldKey: string) {
+  if (!(await claimExists(claimId))) return undefined;
   const [row] = await db
     .update(claimPreauthFields)
     .set({

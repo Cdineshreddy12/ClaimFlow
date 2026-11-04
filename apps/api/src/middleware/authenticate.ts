@@ -20,12 +20,12 @@ async function verifyRequestToken(
 
 /**
  * Verifies the request's bearer token and populates request.authUser.
- * This is the ONLY place organization_id/role get trusted from — every
- * tenant-scoped route handler reads request.authUser, never the raw
- * token, and every tenant-scoped query filters by
- * request.authUser.organizationId explicitly (see docs/adr/0002 — RLS
- * does not protect this API, this check plus org_id filtering is the
- * real boundary).
+ *
+ * This is the ONLY place the role claim gets trusted from — route
+ * handlers read request.authUser, never the raw token. Since the
+ * single-tenant change there is no scope to filter by, so role is the
+ * whole of authorization and `requireRole` below is the real boundary
+ * (docs/adr/0002 — RLS does not protect this API).
  */
 export async function authenticate(
   request: FastifyRequest,
@@ -36,30 +36,24 @@ export async function authenticate(
     return reply.code(401).send({ error: "unauthorized" });
   }
 
-  const organizationId = payload.app_metadata?.organization_id;
   const roleResult = Role.safeParse(payload.app_metadata?.role);
 
-  if (!organizationId || !roleResult.success) {
-    // Token is validly signed but carries no org/role claims — either the
-    // Custom Access Token hook isn't enabled yet (see migration 0002) or
-    // this user has no org_members row. Either way, nothing to scope to.
-    return reply
-      .code(403)
-      .send({ error: "no organization membership on this token" });
+  if (!roleResult.success) {
+    // Validly signed but carries no role — either the Custom Access
+    // Token hook isn't enabled (see migrations 0002 and 0014) or this
+    // user has no `members` row yet. Either way there's nothing to
+    // authorize against.
+    return reply.code(403).send({ error: "no desk membership on this token" });
   }
 
-  request.authUser = {
-    userId: payload.sub,
-    organizationId,
-    role: roleResult.data,
-  };
+  request.authUser = { userId: payload.sub, role: roleResult.data };
 }
 
 /**
- * Verifies the token but does NOT require org/role claims — the one
+ * Verifies the token but does NOT require a role claim — the one
  * exception to `authenticate`'s rule, for the handful of onboarding
- * routes a just-signed-up user has to be able to reach before
- * `org_members` exists for them at all. See docs/adr/0007.
+ * routes a just-signed-up user has to reach before a `members` row
+ * exists for them at all. See docs/adr/0007.
  */
 export async function authenticateUserOnly(
   request: FastifyRequest,

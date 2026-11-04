@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { signOut } from "../features/auth/api";
 import { useAuth } from "../features/auth/AuthProvider";
-import { useCurrentOrganization } from "../features/organizations/api";
+import { useHospital } from "../features/hospital/api";
 import { ROLE_LABEL } from "../lib/roles";
 
 interface AppShellProps {
@@ -13,13 +13,12 @@ interface AppShellProps {
 
 /**
  * Shared chrome ported from docs/design/claims-desk-mockup.html. The nav
- * only lists routes that actually exist yet — Checklist Admin lands here
- * once that screen is built, not before.
+ * lists only routes that exist; all four core screens are now wired.
  */
 export function AppShell({ title, subtitle, children }: AppShellProps) {
   const navigate = useNavigate();
   const { session, role } = useAuth();
-  const { data: organization } = useCurrentOrganization();
+  const { data: hospital } = useHospital();
 
   async function handleSignOut() {
     await signOut();
@@ -34,7 +33,10 @@ export function AppShell({ title, subtitle, children }: AppShellProps) {
             <span className="brand-mark" />
             <span className="brand-name">Claims Desk</span>
           </div>
-          <div className="brand-sub">{organization?.name ?? "—"}</div>
+          {/* Which hospital you're in — this is multi-tenant, and on a
+              shared machine the org name is the only thing on screen
+              that says whose data you're looking at. */}
+          <div className="brand-sub">{hospital?.name ?? "—"}</div>
         </div>
         <nav className="nav">
           <NavLink

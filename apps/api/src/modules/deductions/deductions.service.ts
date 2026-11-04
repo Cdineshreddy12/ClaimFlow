@@ -5,14 +5,13 @@ import {
   type Role,
 } from "@claimflow/contracts";
 import * as auditService from "../audit/audit.service.js";
-import { getOrgMemberId } from "../org-members/org-members.repository.js";
+import { getMemberId } from "../members/members.repository.js";
 import * as repo from "./deductions.repository.js";
 
 export class ClaimNotFoundError extends Error {}
 
 interface AuthContext {
   userId: string;
-  organizationId: string;
   role: Role;
 }
 
@@ -21,9 +20,8 @@ export async function recordDeduction(
   claimId: string,
   body: RecordDeductionBody,
 ) {
-  const memberId = await getOrgMemberId(auth.organizationId, auth.userId);
+  const memberId = await getMemberId(auth.userId);
   const created = await repo.create(
-    auth.organizationId,
     claimId,
     { reason: body.reason, amount: body.amount, note: body.note || undefined },
     memberId,
@@ -42,7 +40,7 @@ export async function recordDeduction(
 }
 
 export async function listForClaim(auth: AuthContext, claimId: string) {
-  const result = await repo.listForClaim(auth.organizationId, claimId);
+  const result = await repo.listForClaim(claimId);
   if (result === undefined) throw new ClaimNotFoundError(claimId);
   return result;
 }
@@ -62,7 +60,7 @@ export async function summarise(
   auth: AuthContext,
   since: Date,
 ): Promise<DeductionsSummary> {
-  const rows = await repo.sumByReasonSince(auth.organizationId, since);
+  const rows = await repo.sumByReasonSince(since);
 
   const byReason = rows
     .map((row) => {

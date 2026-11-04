@@ -1,35 +1,48 @@
 import type { Role } from "@claimflow/contracts";
 import * as auditService from "../audit/audit.service.js";
-import { getOrgMemberId } from "../org-members/org-members.repository.js";
+import { getMemberId } from "../members/members.repository.js";
 import * as onboardingRepository from "./onboarding.repository.js";
 import type { InvitableRole } from "./onboarding.schema.js";
 
 export class AlreadyOnboardedError extends Error {}
+/** One hospital per install — setup is a once-per-deployment action. */
+export class HospitalAlreadySetUpError extends Error {}
 export class InviteNotFoundError extends Error {}
 export class InviteExpiredError extends Error {}
 export class InviteAlreadyUsedError extends Error {}
 
 interface AuthContext {
   userId: string;
-  organizationId: string;
   role: Role;
 }
 
-export async function createOrganization(userId: string, name: string) {
-  const existing = await onboardingRepository.getOrgMembershipForUser(userId);
+/**
+ * Claims the install for one hospital and makes the caller its admin.
+ *
+ * Runs once per deployment. Anyone arriving after that joins through an
+ * invite instead — there is no second hospital for them to create.
+ *
+ * The gate is "does anyone have an account yet", not "does a hospital
+ * row exist": a migrated or seeded database has the hospital already,
+ * and refusing on that basis would leave the first real user with no
+ * way in and nobody to invite them.
+ */
+export async function setUpHospital(userId: string, name: string) {
+  const existing = await onboardingRepository.getMembershipForUser(userId);
   if (existing) throw new AlreadyOnboardedError(userId);
-  const result = await onboardingRepository.createOrganizationWithAdmin(
-    userId,
-    name,
-  );
+  if (await onboardingRepository.hasAnyMember()) {
+    throw new HospitalAlreadySetUpError();
+  }
+
+  const result = await onboardingRepository.setUpHospital(userId, name);
 
   await auditService.record(
-    { organizationId: result.organization.id, userId },
+    { userId },
     {
-      action: "organization.created",
-      entityType: "organization",
-      entityId: result.organization.id,
-      after: { name: result.organization.name },
+      action: "hospital.created",
+      entityType: "hospital",
+      entityId: result.hospital.id,
+      after: { name: result.hospital.name },
       actorId: result.member.id,
     },
   );
@@ -38,14 +51,10 @@ export async function createOrganization(userId: string, name: string) {
 }
 
 export async function createInvite(auth: AuthContext, role: InvitableRole) {
-  // auth came from a verified org_members row (see authenticate.ts), so
+  // auth came from a verified `members` row (see authenticate.ts), so
   // this is never actually absent.
-  const memberId = await getOrgMemberId(auth.organizationId, auth.userId);
-  const invite = await onboardingRepository.createInvite(
-    auth.organizationId,
-    role,
-    memberId!,
-  );
+  const memberId = await getMemberId(auth.userId);
+  const invite = await onboardingRepository.createInvite(role, memberId!);
 
   await auditService.record(auth, {
     action: "invite.created",
@@ -58,24 +67,24 @@ export async function createInvite(auth: AuthContext, role: InvitableRole) {
   return invite;
 }
 
-export async function listInvites(auth: AuthContext) {
-  return onboardingRepository.listInvites(auth.organizationId);
+export async function listInvites(_auth: AuthContext) {
+  return onboardingRepository.listInvites();
 }
 
-/** Public preview for the accept-invite screen — org name + role, before the invitee signs in. */
+/** Public preview for the accept-invite screen — hospital name + role, before the invitee signs in. */
 export async function previewInvite(token: string) {
-  const row = await onboardingRepository.getInviteWithOrgName(token);
+  const row = await onboardingRepository.getInviteWithHospitalName(token);
   if (!row) throw new InviteNotFoundError(token);
   if (row.invite.usedAt) throw new InviteAlreadyUsedError(token);
   if (row.invite.expiresAt < new Date()) throw new InviteExpiredError(token);
-  return { organizationName: row.organizationName, role: row.invite.role };
+  return { hospitalName: row.hospitalName, role: row.invite.role };
 }
 
 export async function acceptInvite(token: string, userId: string) {
   const result = await onboardingRepository.redeemInvite(token, userId);
   if (result.ok) {
     await auditService.record(
-      { organizationId: result.member.organizationId, userId },
+      { userId },
       {
         action: "invite.accepted",
         entityType: "invite",

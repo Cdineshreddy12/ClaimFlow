@@ -1,10 +1,10 @@
-import { desc, eq } from "drizzle-orm";
+import { desc, eq, sql } from "drizzle-orm";
 import { db } from "../../db/client.js";
 import {
   claims,
   doctorApprovals,
+  hospitalProfile,
   insurers,
-  organizations,
   procedures,
 } from "../../db/schema.js";
 import { getClaimById } from "../claims/claims.repository.js";
@@ -12,13 +12,12 @@ import { getClaimById } from "../claims/claims.repository.js";
 const LINK_EXPIRY_HOURS = 48;
 
 export async function create(
-  organizationId: string,
   claimId: string,
   doctorName: string,
   requestedByMemberId: string | null,
 ) {
   // Org scoping comes through the claim, same as documents and queries.
-  const claim = await getClaimById(organizationId, claimId);
+  const claim = await getClaimById(claimId);
   if (!claim) return undefined;
 
   const [approval] = await db
@@ -34,8 +33,8 @@ export async function create(
   return approval;
 }
 
-export async function listForClaim(organizationId: string, claimId: string) {
-  const claim = await getClaimById(organizationId, claimId);
+export async function listForClaim(claimId: string) {
+  const claim = await getClaimById(claimId);
   if (!claim) return undefined;
   return db
     .select()
@@ -58,12 +57,13 @@ export async function getByTokenWithContext(token: string) {
       patientName: claims.patientName,
       procedureName: procedures.name,
       insurerName: insurers.name,
-      hospitalName: organizations.name,
-      organizationId: organizations.id,
+      hospitalName: hospitalProfile.name,
     })
     .from(doctorApprovals)
     .innerJoin(claims, eq(doctorApprovals.claimId, claims.id))
-    .innerJoin(organizations, eq(claims.organizationId, organizations.id))
+    // One hospital per install, so this is an unconditional join to the
+    // only row — the doctor's page still has to name the hospital.
+    .innerJoin(hospitalProfile, sql`true`)
     .innerJoin(procedures, eq(claims.procedureId, procedures.id))
     .innerJoin(insurers, eq(claims.insurerId, insurers.id))
     .where(eq(doctorApprovals.token, token));

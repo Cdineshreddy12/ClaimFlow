@@ -5,13 +5,12 @@ import { claims, deductions } from "../../db/schema.js";
 import { getClaimById } from "../claims/claims.repository.js";
 
 export async function create(
-  organizationId: string,
   claimId: string,
   data: { reason: DeductionReason; amount: number; note?: string | undefined },
   recordedBy: string | null,
 ) {
   // Org scoping comes through the claim, like documents and queries.
-  const claim = await getClaimById(organizationId, claimId);
+  const claim = await getClaimById(claimId);
   if (!claim) return undefined;
 
   const [row] = await db
@@ -27,8 +26,8 @@ export async function create(
   return row;
 }
 
-export async function listForClaim(organizationId: string, claimId: string) {
-  const claim = await getClaimById(organizationId, claimId);
+export async function listForClaim(claimId: string) {
+  const claim = await getClaimById(claimId);
   if (!claim) return undefined;
   return db
     .select()
@@ -43,7 +42,7 @@ export async function listForClaim(organizationId: string, claimId: string) {
  * a month accumulates deductions fast, and this runs on every dashboard
  * load.
  */
-export async function sumByReasonSince(organizationId: string, since: Date) {
+export async function sumByReasonSince(since: Date) {
   return db
     .select({
       reason: deductions.reason,
@@ -52,11 +51,6 @@ export async function sumByReasonSince(organizationId: string, since: Date) {
     })
     .from(deductions)
     .innerJoin(claims, eq(deductions.claimId, claims.id))
-    .where(
-      and(
-        eq(claims.organizationId, organizationId),
-        gte(deductions.createdAt, since),
-      ),
-    )
+    .where(and(gte(deductions.createdAt, since)))
     .groupBy(deductions.reason);
 }

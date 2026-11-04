@@ -6,8 +6,8 @@ import type { CreateQueryInput, UpdateQueryBody } from "./queries.schema.js";
 
 /** Queries belong to a claim, which belongs to an organization — same boundary rule as every other module, see docs/adr/0002. */
 
-export async function listForClaim(organizationId: string, claimId: string) {
-  const claim = await getClaimById(organizationId, claimId);
+export async function listForClaim(claimId: string) {
+  const claim = await getClaimById(claimId);
   if (!claim) return undefined;
   return db
     .select()
@@ -16,12 +16,8 @@ export async function listForClaim(organizationId: string, claimId: string) {
     .orderBy(desc(queries.createdAt));
 }
 
-export async function create(
-  organizationId: string,
-  claimId: string,
-  data: CreateQueryInput,
-) {
-  const claim = await getClaimById(organizationId, claimId);
+export async function create(claimId: string, data: CreateQueryInput) {
+  const claim = await getClaimById(claimId);
   if (!claim) return undefined;
   const [query] = await db
     .insert(queries)
@@ -38,22 +34,13 @@ export async function create(
   return query;
 }
 
-/** Scoped by joining through claims, since a bare query id doesn't carry organizationId on its own. */
-export async function getById(organizationId: string, id: string) {
-  const [row] = await db
-    .select({ query: queries })
-    .from(queries)
-    .innerJoin(claims, eq(queries.claimId, claims.id))
-    .where(and(eq(queries.id, id), eq(claims.organizationId, organizationId)));
-  return row?.query;
+export async function getById(id: string) {
+  const [row] = await db.select().from(queries).where(eq(queries.id, id));
+  return row;
 }
 
-export async function update(
-  organizationId: string,
-  id: string,
-  data: UpdateQueryBody,
-) {
-  const existing = await getById(organizationId, id);
+export async function update(id: string, data: UpdateQueryBody) {
+  const existing = await getById(id);
   if (!existing) return undefined;
 
   const patch: Partial<typeof queries.$inferInsert> = {};
@@ -70,8 +57,8 @@ export async function update(
   return updated;
 }
 
-export async function markReplied(organizationId: string, id: string) {
-  const existing = await getById(organizationId, id);
+export async function markReplied(id: string) {
+  const existing = await getById(id);
   if (!existing) return undefined;
   const [updated] = await db
     .update(queries)
@@ -82,16 +69,16 @@ export async function markReplied(organizationId: string, id: string) {
 }
 
 /**
- * Org-wide inbox listing — the brief's "Query Inbox" screen, which spans
- * claims rather than living inside one. assignedTo mirrors
- * claims.service's desk_executive scoping: forced to their own assigned
- * claims' queries, not an org-wide view.
+ * The brief's "Query Inbox" screen, which spans claims rather than
+ * living inside one. assignedTo mirrors claims.service's desk_executive
+ * scoping: an exec sees queries on their own claims, a desk head sees
+ * the lot.
  */
-export async function listInbox(
-  organizationId: string,
-  filters: { status: "open" | "replied" | "all"; assignedTo?: string | null },
-) {
-  const conditions = [eq(claims.organizationId, organizationId)];
+export async function listInbox(filters: {
+  status: "open" | "replied" | "all";
+  assignedTo?: string | null;
+}) {
+  const conditions = [];
   if (filters.status === "open") conditions.push(isNull(queries.replySentAt));
   if (filters.status === "replied")
     conditions.push(isNotNull(queries.replySentAt));

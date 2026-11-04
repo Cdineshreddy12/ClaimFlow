@@ -13,18 +13,17 @@ import type {
 } from "./claims.schema.js";
 
 /**
- * Every function here takes organizationId and filters by it — this is
- * not optional decoration, it's the actual tenant boundary for this API.
- * See docs/adr/0002: RLS does not protect queries made through Drizzle,
- * because the API connects as the postgres superuser. This file is the
- * one place that boundary has to be gotten right.
+ * One hospital per install, so there is no tenant predicate here any
+ * more (docs/adr/0002). What still matters is `assignedTo`: a desk
+ * executive sees their own claims, a desk head sees all of them, and
+ * that filter is applied by the service, not assumed here.
  */
 
-export async function listClaims(
-  organizationId: string,
-  filters: { status?: ClaimStatus; assignedTo?: string | null },
-) {
-  const conditions = [eq(claims.organizationId, organizationId)];
+export async function listClaims(filters: {
+  status?: ClaimStatus;
+  assignedTo?: string | null;
+}) {
+  const conditions = [];
   if (filters.status) conditions.push(eq(claims.status, filters.status));
   if (filters.assignedTo)
     conditions.push(eq(claims.assignedTo, filters.assignedTo));
@@ -38,11 +37,11 @@ export async function listClaims(
     .from(claims)
     .innerJoin(insurers, eq(claims.insurerId, insurers.id))
     .innerJoin(procedures, eq(claims.procedureId, procedures.id))
-    .where(and(...conditions));
+    .where(conditions.length > 0 ? and(...conditions) : undefined);
 }
 
 /** Joins insurer/procedure names on — anything rendering a single claim needs a name, not a bare id. */
-export async function getClaimById(organizationId: string, id: string) {
+export async function getClaimById(id: string) {
   const [claim] = await db
     .select({
       ...getTableColumns(claims),
@@ -52,19 +51,17 @@ export async function getClaimById(organizationId: string, id: string) {
     .from(claims)
     .innerJoin(insurers, eq(claims.insurerId, insurers.id))
     .innerJoin(procedures, eq(claims.procedureId, procedures.id))
-    .where(and(eq(claims.id, id), eq(claims.organizationId, organizationId)));
+    .where(eq(claims.id, id));
   return claim;
 }
 
 export async function createClaim(
-  organizationId: string,
   data: CreateClaimBody,
   checklistSnapshot: ChecklistSnapshotItem[],
 ) {
   const [claim] = await db
     .insert(claims)
     .values({
-      organizationId,
       patientName: data.patientName,
       insurerId: data.insurerId,
       procedureId: data.procedureId,
@@ -88,7 +85,6 @@ export async function createClaim(
  * called on confirmation, never from a suggestion.
  */
 export async function updateConfirmedFacts(
-  organizationId: string,
   claimId: string,
   facts: { admittedAt?: Date; billedAmount?: string },
 ) {
@@ -106,9 +102,7 @@ export async function updateConfirmedFacts(
         : {}),
       updatedAt: new Date(),
     })
-    .where(
-      and(eq(claims.id, claimId), eq(claims.organizationId, organizationId)),
-    )
+    .where(eq(claims.id, claimId))
     .returning();
   return updated;
 }
@@ -120,7 +114,6 @@ export async function updateConfirmedFacts(
  * @claimflow/contracts so the API and the UI agree on what's legal.
  */
 export async function recordStatusChange(
-  organizationId: string,
   claimId: string,
   status: ClaimStatus,
   actorId: string | null,
@@ -129,9 +122,7 @@ export async function recordStatusChange(
   const [updated] = await db
     .update(claims)
     .set({ status, updatedAt: new Date() })
-    .where(
-      and(eq(claims.id, claimId), eq(claims.organizationId, organizationId)),
-    )
+    .where(eq(claims.id, claimId))
     .returning();
 
   if (!updated) return undefined;

@@ -4,34 +4,18 @@ config({ path: "../../.env" });
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { db } from "../../db/client.js";
-import { insurers, organizations, procedures } from "../../db/schema.js";
+import { claims, insurers, procedures } from "../../db/schema.js";
 import * as claimsRepository from "../claims/claims.repository.js";
 import * as preauthRepository from "./preauth.repository.js";
 
 describe.skipIf(!process.env.DATABASE_URL)(
   "preauth.repository (integration)",
   () => {
-    let organizationId: string;
-    let otherOrganizationId: string;
     let insurerId: string;
     let procedureId: string;
     let claimId: string;
 
     beforeAll(async () => {
-      const [org] = await db
-        .insert(organizations)
-        .values({
-          name: "Preauth Test Org",
-          slug: `test-preauth-${Date.now()}`,
-        })
-        .returning();
-      const [otherOrg] = await db
-        .insert(organizations)
-        .values({
-          name: "Other Org",
-          slug: `test-preauth-other-${Date.now()}`,
-        })
-        .returning();
       const [insurer] = await db
         .insert(insurers)
         .values({ name: "Preauth Test Insurer", type: "tpa" })
@@ -40,13 +24,10 @@ describe.skipIf(!process.env.DATABASE_URL)(
         .insert(procedures)
         .values({ name: "Preauth Test Procedure" })
         .returning();
-      organizationId = org!.id;
-      otherOrganizationId = otherOrg!.id;
       insurerId = insurer!.id;
       procedureId = procedure!.id;
 
       const claim = await claimsRepository.createClaim(
-        organizationId,
         { patientName: "Preauth Test Patient", insurerId, procedureId },
         [{ documentType: "Treating doctor's note", required: true }],
       );
@@ -54,12 +35,9 @@ describe.skipIf(!process.env.DATABASE_URL)(
     });
 
     afterAll(async () => {
-      await db
-        .delete(organizations)
-        .where(eq(organizations.id, organizationId));
-      await db
-        .delete(organizations)
-        .where(eq(organizations.id, otherOrganizationId));
+      // The organization used to cascade these away on delete. Without
+      // it the claims hold a foreign key onto the insurer below.
+      await db.delete(claims).where(eq(claims.insurerId, insurerId));
       await db.delete(insurers).where(eq(insurers.id, insurerId));
       await db.delete(procedures).where(eq(procedures.id, procedureId));
     });
@@ -80,10 +58,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         new Date(),
       );
 
-      const rows = await preauthRepository.listForClaim(
-        organizationId,
-        claimId,
-      );
+      const rows = await preauthRepository.listForClaim(claimId);
       const row = rows?.find((r) => r.fieldKey === "provisionalDiagnosis");
       expect(row?.aiValue).toBe("Acute cholecystitis");
       expect(row?.confidence).toBe("0.910");
@@ -122,10 +97,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         new Date(),
       );
 
-      const rows = await preauthRepository.listForClaim(
-        organizationId,
-        claimId,
-      );
+      const rows = await preauthRepository.listForClaim(claimId);
       const matching = rows?.filter((r) => r.fieldKey === "icd10Code") ?? [];
       expect(matching).toHaveLength(1);
       expect(matching[0]?.aiValue).toBe("K81.0");
@@ -150,7 +122,6 @@ describe.skipIf(!process.env.DATABASE_URL)(
         new Date(),
       );
       await preauthRepository.confirm(
-        organizationId,
         claimId,
         "totalExpectedCost",
         "192500.00",
@@ -172,10 +143,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         new Date(),
       );
 
-      const rows = await preauthRepository.listForClaim(
-        organizationId,
-        claimId,
-      );
+      const rows = await preauthRepository.listForClaim(claimId);
       const row = rows?.find((r) => r.fieldKey === "totalExpectedCost");
       expect(row?.value).toBe("192500.00");
       expect(row?.confirmedAt).not.toBeNull();
@@ -186,7 +154,6 @@ describe.skipIf(!process.env.DATABASE_URL)(
     it("confirms a field that was never suggested", async () => {
       // Half the form will never be in the documents — a desk types it.
       const row = await preauthRepository.confirm(
-        organizationId,
         claimId,
         "roomType",
         "Twin sharing",
@@ -213,7 +180,6 @@ describe.skipIf(!process.env.DATABASE_URL)(
         new Date(),
       );
       await preauthRepository.confirm(
-        organizationId,
         claimId,
         "roomRentPerDay",
         "5000.00",
@@ -221,7 +187,6 @@ describe.skipIf(!process.env.DATABASE_URL)(
       );
 
       const cleared = await preauthRepository.clearValue(
-        organizationId,
         claimId,
         "roomRentPerDay",
       );
@@ -231,25 +196,18 @@ describe.skipIf(!process.env.DATABASE_URL)(
       expect(cleared?.aiValue).toBe("4500.00");
     });
 
-    it("refuses every read and write under a different organization", async () => {
+    // The cross-organization tests that sat here went with
+    // multi-tenancy — there is no other organization to be refused
+    // from. What still holds is that an unknown claim id yields
+    // nothing rather than throwing, so that is what's pinned now.
+    it("refuses every read and write against a claim that doesn't exist", async () => {
+      const missing = "00000000-0000-0000-0000-000000000000";
+      expect(await preauthRepository.listForClaim(missing)).toBeUndefined();
       expect(
-        await preauthRepository.listForClaim(otherOrganizationId, claimId),
+        await preauthRepository.confirm(missing, "icd10Code", "K81.0", null),
       ).toBeUndefined();
       expect(
-        await preauthRepository.confirm(
-          otherOrganizationId,
-          claimId,
-          "icd10Code",
-          "K81.0",
-          null,
-        ),
-      ).toBeUndefined();
-      expect(
-        await preauthRepository.clearValue(
-          otherOrganizationId,
-          claimId,
-          "icd10Code",
-        ),
+        await preauthRepository.clearValue(missing, "icd10Code"),
       ).toBeUndefined();
     });
   },

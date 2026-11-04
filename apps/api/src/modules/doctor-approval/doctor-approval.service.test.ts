@@ -7,11 +7,10 @@ import { getDownloadUrl } from "../../integrations/storage/s3.js";
 vi.mock("./doctor-approval.repository.js");
 vi.mock("../documents/documents.repository.js");
 vi.mock("../audit/audit.service.js");
-vi.mock("../org-members/org-members.repository.js");
+vi.mock("../members/members.repository.js");
 vi.mock("../../integrations/storage/s3.js");
 
 const TOKEN = "11111111-1111-1111-1111-111111111111";
-const ORG_ID = "22222222-2222-2222-2222-222222222222";
 const CLAIM_ID = "33333333-3333-3333-3333-333333333333";
 
 function row(approvalOverrides: Record<string, unknown> = {}) {
@@ -26,7 +25,6 @@ function row(approvalOverrides: Record<string, unknown> = {}) {
       ...approvalOverrides,
     },
     claimId: CLAIM_ID,
-    organizationId: ORG_ID,
     patientName: "Rajendra Pawar",
     procedureName: "Gall bladder removal",
     insurerName: "Company B",
@@ -112,7 +110,7 @@ describe("doctor-approval.service", () => {
 
       expect(repo.markFirstViewed).toHaveBeenCalledWith("approval-1");
       expect(auditService.record).toHaveBeenCalledWith(
-        expect.objectContaining({ organizationId: ORG_ID }),
+        expect.objectContaining({ userId: "" }),
         expect.objectContaining({
           action: "doctor_approval.viewed",
           actorId: null,

@@ -3,7 +3,6 @@ import { db } from "../../db/client.js";
 import { auditLog } from "../../db/schema.js";
 
 export interface AuditEntry {
-  organizationId: string;
   actorId: string | null;
   action: string;
   entityType: string;
@@ -14,7 +13,6 @@ export interface AuditEntry {
 
 export async function insert(entry: AuditEntry) {
   await db.insert(auditLog).values({
-    organizationId: entry.organizationId,
     actorId: entry.actorId,
     action: entry.action,
     entityType: entry.entityType,
@@ -24,11 +22,12 @@ export async function insert(entry: AuditEntry) {
   });
 }
 
-export async function listForOrganization(
-  organizationId: string,
-  filters: { entityType?: string; entityId?: string; limit: number },
-) {
-  const conditions = [eq(auditLog.organizationId, organizationId)];
+export async function list(filters: {
+  entityType?: string;
+  entityId?: string;
+  limit: number;
+}) {
+  const conditions = [];
   if (filters.entityType)
     conditions.push(eq(auditLog.entityType, filters.entityType));
   if (filters.entityId)
@@ -37,7 +36,7 @@ export async function listForOrganization(
   return db
     .select()
     .from(auditLog)
-    .where(and(...conditions))
+    .where(conditions.length > 0 ? and(...conditions) : undefined)
     .orderBy(desc(auditLog.createdAt))
     .limit(filters.limit);
 }

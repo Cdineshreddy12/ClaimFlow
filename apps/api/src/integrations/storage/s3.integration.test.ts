@@ -18,8 +18,8 @@ const hasAwsCreds = Boolean(
 /** Hits the real S3 bucket in AWS_S3_BUCKET. Skips when AWS creds aren't set (e.g. in CI). */
 describe.skipIf(!hasAwsCreds)("s3 (integration)", () => {
   it("round-trips an object through pre-signed PUT and GET URLs", async () => {
-    const key = buildObjectKey("test-org", "test-claim", "report.txt");
-    expect(key).toContain("organizations/test-org/claims/test-claim/");
+    const key = buildObjectKey("test-claim", "report.txt");
+    expect(key).toContain("claims/test-claim/");
 
     const uploadUrl = await getUploadUrl(key, "text/plain");
     const putResponse = await fetch(uploadUrl, {

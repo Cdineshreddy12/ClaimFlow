@@ -1,42 +1,37 @@
 import type { FastifyInstance } from "fastify";
 import { authenticate, requireRole } from "../../middleware/authenticate.js";
-import * as organizationsService from "./organizations.service.js";
-import { OrganizationNotFoundError } from "./organizations.service.js";
-import { UpdateProfileBody } from "./organizations.schema.js";
+import * as hospitalService from "./hospital.service.js";
+import { HospitalNotFoundError } from "./hospital.service.js";
+import { UpdateProfileBody } from "./hospital.schema.js";
 
-export async function registerOrganizationsRoutes(app: FastifyInstance) {
+export async function registerHospitalRoutes(app: FastifyInstance) {
   app.addHook("preHandler", authenticate);
 
-  /** Any org member reads their own org — the shell shows its name on every screen. */
-  app.get("/me", async (request, reply) => {
+  /** Any member reads it — the shell shows the hospital's name on every screen. */
+  app.get("/", async (_request, reply) => {
     try {
-      const organization = await organizationsService.getOrganization(
-        request.authUser!.organizationId,
-      );
-      return reply.send(organization);
+      return reply.send(await hospitalService.getHospital());
     } catch (err) {
-      if (err instanceof OrganizationNotFoundError) {
-        return reply.code(404).send({ error: "organization not found" });
+      if (err instanceof HospitalNotFoundError) {
+        return reply.code(404).send({ error: "hospital profile not set up" });
       }
       throw err;
     }
   });
 
-  /** Only org_admin edits the hospital's legal/registration details — this is the data that goes to insurers. */
+  /** Only an admin edits the legal/registration details — this is what goes to insurers. */
   app.patch(
-    "/me/profile",
+    "/profile",
     { preHandler: requireRole("org_admin") },
     async (request, reply) => {
       const body = UpdateProfileBody.parse(request.body);
       try {
-        const organization = await organizationsService.updateProfile(
-          request.authUser!,
-          body,
+        return reply.send(
+          await hospitalService.updateProfile(request.authUser!, body),
         );
-        return reply.send(organization);
       } catch (err) {
-        if (err instanceof OrganizationNotFoundError) {
-          return reply.code(404).send({ error: "organization not found" });
+        if (err instanceof HospitalNotFoundError) {
+          return reply.code(404).send({ error: "hospital profile not set up" });
         }
         throw err;
       }

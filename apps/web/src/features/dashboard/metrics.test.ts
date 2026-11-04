@@ -8,7 +8,6 @@ const NOW = new Date("2026-11-04T12:00:00Z").getTime();
 function claim(overrides: Partial<Claim>): Claim {
   return {
     id: "c1",
-    organizationId: "org1",
     patientName: "Test Patient",
     insurerId: "i1",
     insurerName: "Insurer",

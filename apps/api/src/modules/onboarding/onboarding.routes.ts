@@ -7,34 +7,40 @@ import {
 import * as onboardingService from "./onboarding.service.js";
 import {
   AlreadyOnboardedError,
+  HospitalAlreadySetUpError,
   InviteAlreadyUsedError,
   InviteExpiredError,
   InviteNotFoundError,
 } from "./onboarding.service.js";
 import {
   CreateInviteBody,
-  CreateOrganizationBody,
+  SetUpHospitalBody,
   InviteTokenParams,
 } from "./onboarding.schema.js";
 
-/** Org-less — the one place a just-signed-up user can reach before org_members exists for them. */
+/** The one place a just-signed-up user can reach before a `members` row exists for them. */
 export async function registerOnboardingRoutes(app: FastifyInstance) {
   app.post(
-    "/organizations",
+    "/hospital",
     { preHandler: authenticateUserOnly },
     async (request, reply) => {
-      const body = CreateOrganizationBody.parse(request.body);
+      const body = SetUpHospitalBody.parse(request.body);
       try {
-        const result = await onboardingService.createOrganization(
+        const result = await onboardingService.setUpHospital(
           request.authUserId!,
           body.name,
         );
         return reply.code(201).send(result);
       } catch (err) {
         if (err instanceof AlreadyOnboardedError) {
-          return reply
-            .code(409)
-            .send({ error: "you already belong to an organization" });
+          return reply.code(409).send({ error: "you already have an account" });
+        }
+        if (err instanceof HospitalAlreadySetUpError) {
+          // One hospital per install — whoever arrives second joins by
+          // invite, and saying so beats a bare 409.
+          return reply.code(409).send({
+            error: "this ClaimFlow is already set up — ask for an invite link",
+          });
         }
         throw err;
       }

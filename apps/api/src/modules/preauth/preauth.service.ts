@@ -13,7 +13,7 @@ import { getObjectBytes } from "../../integrations/storage/s3.js";
 import * as auditService from "../audit/audit.service.js";
 import * as claimsRepository from "../claims/claims.repository.js";
 import * as documentsRepository from "../documents/documents.repository.js";
-import { getOrgMemberId } from "../org-members/org-members.repository.js";
+import { getMemberId } from "../members/members.repository.js";
 import * as preauthRepository from "./preauth.repository.js";
 
 export class ClaimNotFoundError extends Error {}
@@ -24,7 +24,6 @@ export class ExtractionFailedError extends Error {}
 
 interface AuthContext {
   userId: string;
-  organizationId: string;
 }
 
 /** Guessed from the stored key, which is all we keep — the extractor only needs image vs PDF. */
@@ -57,10 +56,7 @@ function displayFileName(key: string): string {
 }
 
 export async function listFields(auth: AuthContext, claimId: string) {
-  const rows = await preauthRepository.listForClaim(
-    auth.organizationId,
-    claimId,
-  );
+  const rows = await preauthRepository.listForClaim(claimId);
   if (rows === undefined) throw new ClaimNotFoundError(claimId);
   // The web app renders from the catalogue in @claimflow/contracts, so
   // this only has to carry the rows plus whether the action is wired up.
@@ -83,22 +79,16 @@ export async function listFields(auth: AuthContext, claimId: string) {
  * reads, five of them superseded.
  */
 export async function extractFields(auth: AuthContext, claimId: string) {
-  const claim = await claimsRepository.getClaimById(
-    auth.organizationId,
-    claimId,
-  );
+  const claim = await claimsRepository.getClaimById(claimId);
   if (!claim) throw new ClaimNotFoundError(claimId);
 
-  const existing =
-    (await preauthRepository.listForClaim(auth.organizationId, claimId)) ?? [];
+  const existing = (await preauthRepository.listForClaim(claimId)) ?? [];
   const confirmedKeys = new Set(
     existing.filter((row) => row.confirmedAt).map((row) => row.fieldKey),
   );
   const fields = PREAUTH_FIELDS.filter((f) => !confirmedKeys.has(f.key));
 
-  const allDocuments =
-    (await documentsRepository.listForClaim(auth.organizationId, claimId)) ??
-    [];
+  const allDocuments = (await documentsRepository.listForClaim(claimId)) ?? [];
   const confirmed = allDocuments.filter(
     (doc) => doc.confirmedAt && doc.checklistSlot,
   );
@@ -226,9 +216,8 @@ export async function confirmField(
   const value = parsePreauthValue(field, rawValue);
   if (value === null) throw new InvalidFieldValueError(fieldKey);
 
-  const memberId = await getOrgMemberId(auth.organizationId, auth.userId);
+  const memberId = await getMemberId(auth.userId);
   const row = await preauthRepository.confirm(
-    auth.organizationId,
     claimId,
     fieldKey,
     value,
@@ -267,7 +256,7 @@ async function writeThroughToClaim(
   value: string,
 ) {
   if (fieldKey === "totalExpectedCost") {
-    await claimsRepository.updateConfirmedFacts(auth.organizationId, claimId, {
+    await claimsRepository.updateConfirmedFacts(claimId, {
       billedAmount: value,
     });
     return;
@@ -275,8 +264,7 @@ async function writeThroughToClaim(
 
   if (fieldKey !== "admissionDate" && fieldKey !== "admissionTime") return;
 
-  const rows =
-    (await preauthRepository.listForClaim(auth.organizationId, claimId)) ?? [];
+  const rows = (await preauthRepository.listForClaim(claimId)) ?? [];
   const byKey = new Map(rows.map((r) => [r.fieldKey, r]));
   const date =
     fieldKey === "admissionDate" ? value : byKey.get("admissionDate")?.value;
@@ -287,7 +275,7 @@ async function writeThroughToClaim(
   const admittedAt = new Date(`${date}T${time ?? "00:00"}:00`);
   if (Number.isNaN(admittedAt.getTime())) return;
 
-  await claimsRepository.updateConfirmedFacts(auth.organizationId, claimId, {
+  await claimsRepository.updateConfirmedFacts(claimId, {
     admittedAt,
   });
 }
@@ -299,11 +287,7 @@ export async function clearField(
   fieldKey: string,
 ) {
   if (!PREAUTH_FIELD_BY_KEY[fieldKey]) throw new UnknownFieldError(fieldKey);
-  const row = await preauthRepository.clearValue(
-    auth.organizationId,
-    claimId,
-    fieldKey,
-  );
+  const row = await preauthRepository.clearValue(claimId, fieldKey);
   if (!row) throw new ClaimNotFoundError(claimId);
 
   await auditService.record(auth, {

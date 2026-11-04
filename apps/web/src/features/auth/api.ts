@@ -23,10 +23,10 @@ export async function signOut() {
 }
 
 /**
- * After the org-less org-creation/invite-accept call succeeds, org_members
- * exists for this user but the token in hand still doesn't know it — the
- * Custom Access Token hook only runs at mint/refresh time. This forces a
- * refresh so the next token actually carries organization_id/role.
+ * Once hospital setup or invite-accept succeeds, a `members` row exists
+ * for this user but the token in hand still doesn't know it — the Custom
+ * Access Token hook only runs at mint/refresh time, never retroactively.
+ * This forces a refresh so the next token actually carries the role.
  */
 export async function refreshSessionClaims() {
   const { data, error } = await supabase.auth.refreshSession();

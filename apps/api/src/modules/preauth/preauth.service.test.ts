@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as claimsRepository from "../claims/claims.repository.js";
 import * as documentsRepository from "../documents/documents.repository.js";
-import * as orgMembersRepository from "../org-members/org-members.repository.js";
+import * as orgMembersRepository from "../members/members.repository.js";
 import * as preauthIntegration from "../../integrations/preauth/index.js";
 import * as ocr from "../../integrations/ocr/textract.js";
 import * as s3 from "../../integrations/storage/s3.js";
@@ -10,7 +10,7 @@ import * as preauthRepository from "./preauth.repository.js";
 vi.mock("./preauth.repository.js");
 vi.mock("../claims/claims.repository.js");
 vi.mock("../documents/documents.repository.js");
-vi.mock("../org-members/org-members.repository.js");
+vi.mock("../members/members.repository.js");
 vi.mock("../../integrations/preauth/index.js");
 vi.mock("../../integrations/ocr/textract.js");
 vi.mock("../../integrations/storage/s3.js");
@@ -47,7 +47,7 @@ function confirmedDoc(overrides: Record<string, unknown> = {}) {
 describe("preauth.service", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(orgMembersRepository.getOrgMemberId).mockResolvedValue(MEMBER_ID);
+    vi.mocked(orgMembersRepository.getMemberId).mockResolvedValue(MEMBER_ID);
     vi.mocked(preauthIntegration.hasPreauthExtractor).mockReturnValue(true);
     vi.mocked(s3.getObjectBytes).mockResolvedValue(new Uint8Array([1, 2]));
     vi.mocked(ocr.canOcr).mockReturnValue(false);
@@ -202,7 +202,6 @@ describe("preauth.service", () => {
       const { confirmField } = await import("./preauth.service.js");
       await confirmField(auth(), CLAIM_ID, "totalExpectedCost", " 185000 ");
       expect(preauthRepository.confirm).toHaveBeenCalledWith(
-        ORG_ID,
         CLAIM_ID,
         "totalExpectedCost",
         "185000.00",
@@ -214,7 +213,6 @@ describe("preauth.service", () => {
       const { confirmField } = await import("./preauth.service.js");
       await confirmField(auth(), CLAIM_ID, "totalExpectedCost", "185000");
       expect(claimsRepository.updateConfirmedFacts).toHaveBeenCalledWith(
-        ORG_ID,
         CLAIM_ID,
         { billedAmount: "185000.00" },
       );
@@ -229,7 +227,7 @@ describe("preauth.service", () => {
       await confirmField(auth(), CLAIM_ID, "admissionDate", "2026-10-30");
 
       const call = vi.mocked(claimsRepository.updateConfirmedFacts).mock
-        .calls[0]?.[2];
+        .calls[0]?.[1];
       expect(call?.admittedAt).toEqual(new Date("2026-10-30T09:40:00"));
     });
 
@@ -238,7 +236,7 @@ describe("preauth.service", () => {
       await confirmField(auth(), CLAIM_ID, "admissionDate", "2026-10-30");
 
       const call = vi.mocked(claimsRepository.updateConfirmedFacts).mock
-        .calls[0]?.[2];
+        .calls[0]?.[1];
       expect(call?.admittedAt).toEqual(new Date("2026-10-30T00:00:00"));
     });
 

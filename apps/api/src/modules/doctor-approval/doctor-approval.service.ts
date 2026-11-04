@@ -2,7 +2,7 @@ import type { Role } from "@claimflow/contracts";
 import { getDownloadUrl } from "../../integrations/storage/s3.js";
 import * as auditService from "../audit/audit.service.js";
 import * as documentsRepository from "../documents/documents.repository.js";
-import { getOrgMemberId } from "../org-members/org-members.repository.js";
+import { getMemberId } from "../members/members.repository.js";
 import * as repo from "./doctor-approval.repository.js";
 
 export class ClaimNotFoundError extends Error {}
@@ -12,7 +12,6 @@ export class LinkAlreadyDecidedError extends Error {}
 
 interface AuthContext {
   userId: string;
-  organizationId: string;
   role: Role;
 }
 
@@ -24,13 +23,8 @@ export async function requestApproval(
   claimId: string,
   doctorName: string,
 ) {
-  const memberId = await getOrgMemberId(auth.organizationId, auth.userId);
-  const approval = await repo.create(
-    auth.organizationId,
-    claimId,
-    doctorName,
-    memberId,
-  );
+  const memberId = await getMemberId(auth.userId);
+  const approval = await repo.create(claimId, doctorName, memberId);
   if (!approval) throw new ClaimNotFoundError(claimId);
 
   await auditService.record(auth, {
@@ -45,7 +39,7 @@ export async function requestApproval(
 }
 
 export async function listForClaim(auth: AuthContext, claimId: string) {
-  const result = await repo.listForClaim(auth.organizationId, claimId);
+  const result = await repo.listForClaim(claimId);
   if (result === undefined) throw new ClaimNotFoundError(claimId);
   return result;
 }
@@ -75,22 +69,20 @@ export async function viewByToken(token: string) {
   if (!row.approval.firstViewedAt) {
     await repo.markFirstViewed(row.approval.id);
     await auditService.record(
-      { organizationId: row.organizationId, userId: "" },
+      { userId: "" },
       {
         action: "doctor_approval.viewed",
         entityType: "claim",
         entityId: row.claimId,
         after: { doctorName: row.approval.doctorName },
-        // No org_members row exists for a link-holder — the actor is the
+        // No `members` row exists for a link-holder — the actor is the
         // token, and null says that honestly rather than inventing one.
         actorId: null,
       },
     );
   }
 
-  const documents =
-    (await documentsRepository.listForClaim(row.organizationId, row.claimId)) ??
-    [];
+  const documents = (await documentsRepository.listForClaim(row.claimId)) ?? [];
 
   const clinical = documents.filter(
     (doc) =>
@@ -126,7 +118,7 @@ export async function decide(
   const updated = await repo.recordDecision(row.approval.id, decision);
 
   await auditService.record(
-    { organizationId: row.organizationId, userId: "" },
+    { userId: "" },
     {
       action: decision.approved
         ? "doctor_approval.approved"

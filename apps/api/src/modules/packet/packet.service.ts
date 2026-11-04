@@ -7,14 +7,13 @@ import {
 import * as auditService from "../audit/audit.service.js";
 import * as claimsService from "../claims/claims.service.js";
 import * as documentsRepository from "../documents/documents.repository.js";
-import * as organizationsRepository from "../organizations/organizations.repository.js";
+import * as hospitalRepository from "../hospital/hospital.repository.js";
 import { buildPacket, type PacketDocument } from "./packet.builder.js";
 
 export class ClaimNotFoundError extends Error {}
 
 interface AuthContext {
   userId: string;
-  organizationId: string;
   role: Role;
 }
 
@@ -44,15 +43,10 @@ export async function generatePacket(auth: AuthContext, claimId: string) {
   // an exec can't generate a packet for someone else's claim.
   const claim = await claimsService.getClaim(auth, claimId);
 
-  const organization = await organizationsRepository.getById(
-    auth.organizationId,
-  );
-  if (!organization) throw new ClaimNotFoundError(claimId);
+  const hospital = await hospitalRepository.get();
+  if (!hospital) throw new ClaimNotFoundError(claimId);
 
-  const allDocuments = await documentsRepository.listForClaim(
-    auth.organizationId,
-    claimId,
-  );
+  const allDocuments = await documentsRepository.listForClaim(claimId);
   if (allDocuments === undefined) throw new ClaimNotFoundError(claimId);
 
   const confirmed = allDocuments.filter(
@@ -80,9 +74,9 @@ export async function generatePacket(auth: AuthContext, claimId: string) {
 
   const { bytes, skipped } = await buildPacket(
     {
-      hospitalName: organization.name,
-      hospitalAddress: formatAddress(organization),
-      rohiniId: organization.rohiniId,
+      hospitalName: hospital.name,
+      hospitalAddress: formatAddress(hospital),
+      rohiniId: hospital.rohiniId,
       insurerName: claim.insurerName,
       patientName: claim.patientName,
       procedureName: claim.procedureName,
@@ -96,7 +90,7 @@ export async function generatePacket(auth: AuthContext, claimId: string) {
   // Timestamped key rather than a fixed one: a desk may regenerate after
   // adding a document, and overwriting would destroy the packet that was
   // actually sent to the TPA earlier.
-  const key = `organizations/${auth.organizationId}/claims/${claimId}/packets/${Date.now()}-claim-packet.pdf`;
+  const key = `claims/${claimId}/packets/${Date.now()}-claim-packet.pdf`;
   await putObject(key, bytes, "application/pdf");
 
   await auditService.record(auth, {

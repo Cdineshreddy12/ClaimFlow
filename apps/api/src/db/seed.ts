@@ -3,18 +3,18 @@ import {
   checklistRules,
   claims,
   insurers,
-  organizations,
+  hospitalProfile,
   procedures,
   queries,
 } from "./schema.js";
 
 /**
- * Local/dev seed: the three sample claims from the product brief, for the
- * demo tenant. Run with `tsx src/db/seed.ts`.
+ * Local/dev seed: the three sample claims from the product brief. Run
+ * with `tsx src/db/seed.ts`.
  *
- * Org members (users) are intentionally NOT seeded here — they're created
- * through the real sign-up/invite flow once it exists, not faked in, so
- * local auth behaves the same as production.
+ * Members (users) are intentionally NOT seeded here — they're created
+ * through the real sign-up/invite flow, not faked in, so local auth
+ * behaves the same as production.
  */
 
 /** A row we just inserted ourselves is never actually absent — asserts that for TS. */
@@ -25,16 +25,11 @@ function must<T>(value: T | undefined, what: string): T {
 }
 
 async function seed() {
-  const [orgRow] = await db
-    .insert(organizations)
-    .values({
-      name: "City General Hospital",
-      slug: "city-general-hospital",
-      subscriptionStatus: "active",
-      plan: "pilot",
-    })
+  const [hospitalRow] = await db
+    .insert(hospitalProfile)
+    .values({ name: "City General Hospital" })
     .returning();
-  const org = must(orgRow, "organization");
+  must(hospitalRow, "hospital profile");
 
   const [companyBRow, companyCRow, companyDRow] = await db
     .insert(insurers)
@@ -62,42 +57,36 @@ async function seed() {
 
   await db.insert(checklistRules).values([
     {
-      organizationId: org.id,
       insurerId: companyB.id,
       procedureId: gallBladder.id,
       documentType: "Pre-authorization form",
       required: true,
     },
     {
-      organizationId: org.id,
       insurerId: companyB.id,
       procedureId: gallBladder.id,
       documentType: "Treating doctor's note",
       required: true,
     },
     {
-      organizationId: org.id,
       insurerId: companyB.id,
       procedureId: gallBladder.id,
       documentType: "Ultrasound report (abdomen)",
       required: true,
     },
     {
-      organizationId: org.id,
       insurerId: companyB.id,
       procedureId: gallBladder.id,
       documentType: "Photo ID proof",
       required: true,
     },
     {
-      organizationId: org.id,
       insurerId: companyB.id,
       procedureId: gallBladder.id,
       documentType: "Policy / e-card copy",
       required: true,
     },
     {
-      organizationId: org.id,
       insurerId: companyB.id,
       procedureId: gallBladder.id,
       documentType: "Previous treatment records",
@@ -108,7 +97,6 @@ async function seed() {
   const [clm3381Row] = await db
     .insert(claims)
     .values({
-      organizationId: org.id,
       patientName: "Rajendra Pawar",
       insurerId: companyB.id,
       procedureId: gallBladder.id,
@@ -134,7 +122,6 @@ async function seed() {
     .insert(claims)
     .values([
       {
-        organizationId: org.id,
         patientName: "Sunita Deshmukh",
         insurerId: companyC.id,
         procedureId: kneeReplacement.id,
@@ -143,7 +130,6 @@ async function seed() {
         admittedAt: new Date(Date.now() - 60 * 60 * 1000),
       },
       {
-        organizationId: org.id,
         patientName: "Imran Shaikh",
         insurerId: companyD.id,
         procedureId: dengue.id,
@@ -180,7 +166,7 @@ async function seed() {
     },
   ]);
 
-  console.log(`Seeded organization ${org.slug} with 3 claims.`);
+  console.log("Seeded City General Hospital with 3 claims.");
   process.exit(0);
 }
 

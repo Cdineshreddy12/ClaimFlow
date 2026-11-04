@@ -9,11 +9,12 @@ export const QueryIdParams = z.object({
 });
 
 /**
- * No AI summarizer is wired up yet (see docs/adr/0003 — same boundary as
- * the documents module). A desk exec pastes the TPA's email and fills in
- * the summary/requested items by hand for now. When AI lands, aiSummary
- * becomes a pre-filled suggestion instead of a blank field — the original
- * email stays mandatory either way, per docs/adr/0005.
+ * A desk exec pastes the TPA's email; the summariser fills `aiSummary`,
+ * `requestedItems` and `deadline` when they're left blank, and leaves
+ * anything they typed themselves alone (docs/adr/0003). Every one of
+ * those is optional here because the desk can always type its own, and
+ * because a summariser failure must not cost them the paste. The raw
+ * email stays mandatory either way — it's the record, per docs/adr/0005.
  */
 export const CreateQueryBody = z.object({
   tpaRawEmail: z.string().min(1),

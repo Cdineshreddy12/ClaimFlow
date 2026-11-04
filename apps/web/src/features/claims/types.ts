@@ -7,7 +7,6 @@ export interface ChecklistSnapshotItem {
 
 export interface Claim {
   id: string;
-  organizationId: string;
   patientName: string;
   insurerId: string;
   insurerName: string;

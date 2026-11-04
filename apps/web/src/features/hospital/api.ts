@@ -9,14 +9,10 @@ import type {
 } from "@claimflow/contracts";
 import { api } from "../../lib/api-client";
 
-/** Mirrors the organizations row — every profile field is nullable until the wizard fills it. */
-export interface CurrentOrganization {
+/** Mirrors the hospital_profile row — every profile field is nullable until the wizard fills it. */
+export interface Hospital {
   id: string;
   name: string;
-  slug: string;
-  plan: string;
-  subscriptionStatus: string;
-  trialEndsAt: string | null;
 
   legalEntityName: string | null;
   hospitalType: HospitalType | null;
@@ -47,10 +43,10 @@ export interface CurrentOrganization {
   onboardingCompletedAt: string | null;
 }
 
-export function useCurrentOrganization() {
+export function useHospital() {
   return useQuery({
-    queryKey: ["organizations", "me"],
-    queryFn: () => api.get<CurrentOrganization>("/organizations/me"),
+    queryKey: ["hospital"],
+    queryFn: () => api.get<Hospital>("/hospital"),
     staleTime: 60 * 1000,
   });
 }
@@ -64,11 +60,11 @@ export function useUpdateProfile() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (payload: ProfileStepPayload) =>
-      api.patch<CurrentOrganization>("/organizations/me/profile", payload),
-    onSuccess: (organization) => {
+      api.patch<Hospital>("/hospital/profile", payload),
+    onSuccess: (hospital) => {
       // Seed the cache directly — the wizard reads defaults straight back
       // out of it when stepping backwards.
-      queryClient.setQueryData(["organizations", "me"], organization);
+      queryClient.setQueryData(["hospital"], hospital);
     },
   });
 }

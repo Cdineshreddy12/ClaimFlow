@@ -35,14 +35,10 @@ function getClient(): { client: S3Client; bucket: string } {
   return { client, bucket: bucket! };
 }
 
-/** organizations/{orgId}/claims/{claimId}/{uuid}-{filename} — keeps every tenant's files under their own prefix. */
-export function buildObjectKey(
-  organizationId: string,
-  claimId: string,
-  fileName: string,
-): string {
+/** claims/{claimId}/{uuid}-{filename} — one bucket prefix per claim. */
+export function buildObjectKey(claimId: string, fileName: string): string {
   const safeName = fileName.replace(/[^a-zA-Z0-9.\-_]/g, "_");
-  return `organizations/${organizationId}/claims/${claimId}/${crypto.randomUUID()}-${safeName}`;
+  return `claims/${claimId}/${crypto.randomUUID()}-${safeName}`;
 }
 
 /** Pre-signed PUT URL the frontend uploads directly to — the API never streams file bytes through itself. */

@@ -1,23 +1,16 @@
 import { api } from "../../lib/api-client";
 
-interface CreateOrganizationResult {
-  organization: {
-    id: string;
-    name: string;
-    slug: string;
-    trialEndsAt: string | null;
-  };
+interface SetUpHospitalResult {
+  hospital: { id: string; name: string };
   member: { id: string; role: string };
 }
 
-export function createOrganization(name: string) {
-  return api.post<CreateOrganizationResult>("/onboarding/organizations", {
-    name,
-  });
+export function setUpHospital(name: string) {
+  return api.post<SetUpHospitalResult>("/onboarding/hospital", { name });
 }
 
 export interface InvitePreview {
-  organizationName: string;
+  hospitalName: string;
   role: string;
 }
 

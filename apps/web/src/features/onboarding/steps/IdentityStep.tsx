@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
 import { SelectField } from "@/components/ui/select-field";
-import type { CurrentOrganization } from "../../organizations/api";
+import type { Hospital } from "../../hospital/api";
 
 /** Form state is wider than parsed state: an untouched select holds "", which zod rejects on submit with a real message. */
 type FormValues = z.input<typeof HospitalIdentityStep>;
@@ -20,11 +20,11 @@ const toOptions = (labels: Record<string, string>) =>
   Object.entries(labels).map(([value, label]) => ({ value, label }));
 
 export function IdentityStep({
-  organization,
+  hospital,
   onSubmit,
   isSaving,
 }: {
-  organization: CurrentOrganization;
+  hospital: Hospital;
   onSubmit: (values: IdentityValues) => void;
   isSaving: boolean;
 }) {
@@ -36,11 +36,11 @@ export function IdentityStep({
   } = useForm<FormValues, unknown, IdentityValues>({
     resolver: zodResolver(HospitalIdentityStep),
     defaultValues: {
-      name: organization.name ?? "",
-      legalEntityName: organization.legalEntityName ?? "",
-      hospitalType: organization.hospitalType ?? "",
-      ownershipType: organization.ownershipType ?? "",
-      bedCount: organization.bedCount ?? "",
+      name: hospital.name ?? "",
+      legalEntityName: hospital.legalEntityName ?? "",
+      hospitalType: hospital.hospitalType ?? "",
+      ownershipType: hospital.ownershipType ?? "",
+      bedCount: hospital.bedCount ?? "",
     } as FormValues,
   });
 

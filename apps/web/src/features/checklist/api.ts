@@ -15,7 +15,6 @@ export interface Procedure {
 
 export interface ChecklistRule {
   id: string;
-  organizationId: string;
   insurerId: string;
   procedureId: string;
   documentType: string;

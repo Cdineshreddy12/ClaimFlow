@@ -1,73 +1,61 @@
 import { eq } from "drizzle-orm";
 import { db } from "../../db/client.js";
-import { invites, orgMembers, organizations } from "../../db/schema.js";
+import { hospitalProfile, invites, members } from "../../db/schema.js";
 import type { InvitableRole } from "./onboarding.schema.js";
 
-const TRIAL_DAYS = 14;
 const INVITE_EXPIRY_DAYS = 7;
 
-/** Lowercase, hyphenated, no leading/trailing hyphens — "City General Hospital" -> "city-general-hospital". */
-function slugify(name: string): string {
-  return name
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-}
-
-export async function getOrgMembershipForUser(userId: string) {
+export async function getMembershipForUser(userId: string) {
   const [member] = await db
     .select()
-    .from(orgMembers)
-    .where(eq(orgMembers.userId, userId));
+    .from(members)
+    .where(eq(members.userId, userId));
   return member;
 }
 
 /**
- * Creates the organization and its first org_admin membership together —
- * either both exist or neither does, there's no valid in-between state
- * for a signed-up user. Slug uniqueness is resolved inside the
- * transaction so two hospitals signing up with the same name at the same
- * moment can't collide.
+ * Whether anyone has claimed this install yet.
+ *
+ * Deliberately "are there any members", not "is there a hospital row".
+ * A seeded or migrated database can arrive with a hospital and nobody
+ * able to sign into it; keying off the hospital row would lock the
+ * first real user out with no way back in.
  */
-export async function createOrganizationWithAdmin(
-  userId: string,
-  name: string,
-) {
-  const baseSlug = slugify(name) || "hospital";
-  const trialEndsAt = new Date(Date.now() + TRIAL_DAYS * 24 * 60 * 60 * 1000);
+export async function hasAnyMember(): Promise<boolean> {
+  const [row] = await db.select({ id: members.id }).from(members).limit(1);
+  return Boolean(row);
+}
 
+/**
+ * Claims the install: the hospital row and its first admin, together or
+ * neither. A signed-up user with a hospital but no membership is a state
+ * nobody can get out of, so the transaction is the point.
+ *
+ * Adopts an existing hospital row rather than insisting on creating one.
+ * A database restored from a seed, or migrated off the multi-tenant
+ * schema, already has the hospital; what it lacks is somebody who can
+ * sign in. The singleton index from migration 0015 would reject a second
+ * insert anyway.
+ */
+export async function setUpHospital(userId: string, name: string) {
   return db.transaction(async (tx) => {
-    let slug = baseSlug;
-    let suffix = 0;
-    while (suffix < 50) {
-      const [existing] = await tx
-        .select({ id: organizations.id })
-        .from(organizations)
-        .where(eq(organizations.slug, slug));
-      if (!existing) break;
-      suffix += 1;
-      slug = `${baseSlug}-${suffix}`;
-    }
-
-    const [organization] = await tx
-      .insert(organizations)
-      .values({ name, slug, trialEndsAt })
-      .returning();
-    if (!organization) throw new Error("failed to create organization");
+    const [existing] = await tx.select().from(hospitalProfile).limit(1);
+    const hospital =
+      existing ??
+      (await tx.insert(hospitalProfile).values({ name }).returning())[0];
+    if (!hospital) throw new Error("failed to create the hospital profile");
 
     const [member] = await tx
-      .insert(orgMembers)
-      .values({ organizationId: organization.id, userId, role: "org_admin" })
+      .insert(members)
+      .values({ userId, role: "org_admin" })
       .returning();
-    if (!member) throw new Error("failed to create org_admin membership");
+    if (!member) throw new Error("failed to create the first admin");
 
-    return { organization, member };
+    return { hospital, member };
   });
 }
 
 export async function createInvite(
-  organizationId: string,
   role: InvitableRole,
   createdByMemberId: string,
 ) {
@@ -77,37 +65,32 @@ export async function createInvite(
   );
   const [invite] = await db
     .insert(invites)
-    .values({
-      organizationId,
-      role,
-      token,
-      createdBy: createdByMemberId,
-      expiresAt,
-    })
+    .values({ role, token, createdBy: createdByMemberId, expiresAt })
     .returning();
   // We just inserted exactly one row — this is never actually absent.
   return invite!;
 }
 
-export async function listInvites(organizationId: string) {
-  return db
-    .select()
-    .from(invites)
-    .where(eq(invites.organizationId, organizationId));
+export async function listInvites() {
+  return db.select().from(invites);
 }
 
-/** Joins the organization's name on — the accept-invite preview screen needs it, and invites alone don't carry it. */
-export async function getInviteWithOrgName(token: string) {
-  const [row] = await db
-    .select({ invite: invites, organizationName: organizations.name })
+/** Joins the hospital's name on — the accept-invite preview needs it, and invites don't carry it. */
+export async function getInviteWithHospitalName(token: string) {
+  const [invite] = await db
+    .select()
     .from(invites)
-    .innerJoin(organizations, eq(invites.organizationId, organizations.id))
     .where(eq(invites.token, token));
-  return row;
+  if (!invite) return undefined;
+  const [hospital] = await db
+    .select({ name: hospitalProfile.name })
+    .from(hospitalProfile)
+    .limit(1);
+  return { invite, hospitalName: hospital?.name ?? "" };
 }
 
 export type RedeemInviteResult =
-  | { ok: true; member: typeof orgMembers.$inferSelect }
+  | { ok: true; member: typeof members.$inferSelect }
   | { ok: false; reason: "not_found" | "expired" | "used" | "already_member" };
 
 export async function redeemInvite(
@@ -124,18 +107,14 @@ export async function redeemInvite(
     if (invite.expiresAt < new Date()) return { ok: false, reason: "expired" };
 
     const [existingMembership] = await tx
-      .select({ id: orgMembers.id })
-      .from(orgMembers)
-      .where(eq(orgMembers.userId, userId));
+      .select({ id: members.id })
+      .from(members)
+      .where(eq(members.userId, userId));
     if (existingMembership) return { ok: false, reason: "already_member" };
 
     const [member] = await tx
-      .insert(orgMembers)
-      .values({
-        organizationId: invite.organizationId,
-        userId,
-        role: invite.role,
-      })
+      .insert(members)
+      .values({ userId, role: invite.role })
       .returning();
     if (!member) throw new Error("failed to create membership from invite");
 

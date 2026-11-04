@@ -1,17 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as onboardingRepository from "./onboarding.repository.js";
-import * as orgMembersRepository from "../org-members/org-members.repository.js";
+import * as membersRepository from "../members/members.repository.js";
 
 vi.mock("./onboarding.repository.js");
-vi.mock("../org-members/org-members.repository.js");
+vi.mock("../members/members.repository.js");
 
-const ORG_ID = "11111111-1111-1111-1111-111111111111";
 const USER_ID = "22222222-2222-2222-2222-222222222222";
 const MEMBER_ID = "33333333-3333-3333-3333-333333333333";
 const TOKEN = "some-invite-token";
 
 function auth(role: "org_admin" | "desk_head" = "org_admin") {
-  return { userId: USER_ID, organizationId: ORG_ID, role };
+  return { userId: USER_ID, role };
 }
 
 describe("onboarding.service", () => {
@@ -19,45 +18,62 @@ describe("onboarding.service", () => {
     vi.clearAllMocks();
   });
 
-  describe("createOrganization", () => {
+  describe("setUpHospital", () => {
     it("raises AlreadyOnboardedError when the user already has a membership", async () => {
-      vi.mocked(onboardingRepository.getOrgMembershipForUser).mockResolvedValue(
-        { id: MEMBER_ID } as never,
-      );
+      vi.mocked(onboardingRepository.getMembershipForUser).mockResolvedValue({
+        id: MEMBER_ID,
+      } as never);
 
-      const { createOrganization, AlreadyOnboardedError } =
+      const { setUpHospital, AlreadyOnboardedError } =
         await import("./onboarding.service.js");
 
-      await expect(createOrganization(USER_ID, "New Hospital")).rejects.toThrow(
+      await expect(setUpHospital(USER_ID, "New Hospital")).rejects.toThrow(
         AlreadyOnboardedError,
       );
-      expect(
-        onboardingRepository.createOrganizationWithAdmin,
-      ).not.toHaveBeenCalled();
+      expect(onboardingRepository.setUpHospital).not.toHaveBeenCalled();
     });
 
-    it("creates the organization when the user has no membership yet", async () => {
-      vi.mocked(onboardingRepository.getOrgMembershipForUser).mockResolvedValue(
+    it("refuses once somebody already has an account here", async () => {
+      // One install, one hospital — whoever arrives second joins by
+      // invite. Keyed off members, not the hospital row, so a seeded
+      // database doesn't lock out its first real user.
+      vi.mocked(onboardingRepository.getMembershipForUser).mockResolvedValue(
         undefined,
       );
-      vi.mocked(
-        onboardingRepository.createOrganizationWithAdmin,
-      ).mockResolvedValue({ organization: {}, member: {} } as never);
+      vi.mocked(onboardingRepository.hasAnyMember).mockResolvedValue(true);
 
-      const { createOrganization } = await import("./onboarding.service.js");
-      await createOrganization(USER_ID, "New Hospital");
+      const { setUpHospital, HospitalAlreadySetUpError } =
+        await import("./onboarding.service.js");
 
-      expect(
-        onboardingRepository.createOrganizationWithAdmin,
-      ).toHaveBeenCalledWith(USER_ID, "New Hospital");
+      await expect(setUpHospital(USER_ID, "Second Hospital")).rejects.toThrow(
+        HospitalAlreadySetUpError,
+      );
+      expect(onboardingRepository.setUpHospital).not.toHaveBeenCalled();
+    });
+
+    it("claims the install when nobody has yet", async () => {
+      vi.mocked(onboardingRepository.getMembershipForUser).mockResolvedValue(
+        undefined,
+      );
+      vi.mocked(onboardingRepository.hasAnyMember).mockResolvedValue(false);
+      vi.mocked(onboardingRepository.setUpHospital).mockResolvedValue({
+        hospital: { id: "h1", name: "New Hospital" },
+        member: { id: MEMBER_ID },
+      } as never);
+
+      const { setUpHospital } = await import("./onboarding.service.js");
+      await setUpHospital(USER_ID, "New Hospital");
+
+      expect(onboardingRepository.setUpHospital).toHaveBeenCalledWith(
+        USER_ID,
+        "New Hospital",
+      );
     });
   });
 
   describe("createInvite", () => {
     it("resolves the caller's own member id and passes it as createdBy", async () => {
-      vi.mocked(orgMembersRepository.getOrgMemberId).mockResolvedValue(
-        MEMBER_ID,
-      );
+      vi.mocked(membersRepository.getMemberId).mockResolvedValue(MEMBER_ID);
       vi.mocked(onboardingRepository.createInvite).mockResolvedValue(
         {} as never,
       );
@@ -66,7 +82,6 @@ describe("onboarding.service", () => {
       await createInvite(auth(), "desk_executive");
 
       expect(onboardingRepository.createInvite).toHaveBeenCalledWith(
-        ORG_ID,
         "desk_executive",
         MEMBER_ID,
       );
@@ -75,9 +90,9 @@ describe("onboarding.service", () => {
 
   describe("previewInvite", () => {
     it("raises InviteNotFoundError when no invite matches the token", async () => {
-      vi.mocked(onboardingRepository.getInviteWithOrgName).mockResolvedValue(
-        undefined,
-      );
+      vi.mocked(
+        onboardingRepository.getInviteWithHospitalName,
+      ).mockResolvedValue(undefined);
 
       const { previewInvite, InviteNotFoundError } =
         await import("./onboarding.service.js");
@@ -86,9 +101,11 @@ describe("onboarding.service", () => {
     });
 
     it("raises InviteAlreadyUsedError when usedAt is already set", async () => {
-      vi.mocked(onboardingRepository.getInviteWithOrgName).mockResolvedValue({
+      vi.mocked(
+        onboardingRepository.getInviteWithHospitalName,
+      ).mockResolvedValue({
         invite: { usedAt: new Date(), expiresAt: new Date(Date.now() + 1_000) },
-        organizationName: "Test Hospital",
+        hospitalName: "Test Hospital",
       } as never);
 
       const { previewInvite, InviteAlreadyUsedError } =
@@ -100,9 +117,11 @@ describe("onboarding.service", () => {
     });
 
     it("raises InviteExpiredError when the deadline has passed", async () => {
-      vi.mocked(onboardingRepository.getInviteWithOrgName).mockResolvedValue({
+      vi.mocked(
+        onboardingRepository.getInviteWithHospitalName,
+      ).mockResolvedValue({
         invite: { usedAt: null, expiresAt: new Date(Date.now() - 1_000) },
-        organizationName: "Test Hospital",
+        hospitalName: "Test Hospital",
       } as never);
 
       const { previewInvite, InviteExpiredError } =
@@ -111,21 +130,23 @@ describe("onboarding.service", () => {
       await expect(previewInvite(TOKEN)).rejects.toThrow(InviteExpiredError);
     });
 
-    it("returns the org name and role for a live, unused invite", async () => {
-      vi.mocked(onboardingRepository.getInviteWithOrgName).mockResolvedValue({
+    it("returns the hospital name and role for a live, unused invite", async () => {
+      vi.mocked(
+        onboardingRepository.getInviteWithHospitalName,
+      ).mockResolvedValue({
         invite: {
           role: "desk_head",
           usedAt: null,
           expiresAt: new Date(Date.now() + 1_000),
         },
-        organizationName: "Test Hospital",
+        hospitalName: "Test Hospital",
       } as never);
 
       const { previewInvite } = await import("./onboarding.service.js");
       const result = await previewInvite(TOKEN);
 
       expect(result).toEqual({
-        organizationName: "Test Hospital",
+        hospitalName: "Test Hospital",
         role: "desk_head",
       });
     });

@@ -16,16 +16,21 @@ import {
 
 /**
  * Schema mirrors docs/ARCHITECTURE.md and the ADRs under docs/adr/,
- * especially 0001 (checklist engine), 0002 (tenant isolation),
- * 0004 (claim state machine), and 0006 (billing/onboarding).
+ * especially 0001 (checklist engine), 0002 (authorization),
+ * 0004 (claim state machine), and 0006 (onboarding).
+ *
+ * One install per hospital — there is no tenant column on anything, and
+ * `hospital_profile` holds the single hospital's identity (docs/adr/0002,
+ * revised in 0011). Authorization is by role, not by scope: every signed-in
+ * member is a member of the one hospital.
  *
  * This connects to Postgres as the `postgres` superuser (see .env.example
- * and docs/adr/0002) — RLS defined alongside this schema in
- * src/db/migrations/0001_row_level_security.sql does NOT apply to queries
- * made through this schema/client. It protects any other, RLS-subject
- * connection (e.g. the Supabase anon/authenticated roles, if the frontend
- * ever talks to Supabase directly). Tenant isolation for everything that
- * goes through Drizzle is enforced in the Fastify route layer.
+ * and docs/adr/0002) — RLS defined alongside this schema in the migrations
+ * does NOT apply to queries made through this schema/client. It protects
+ * any other, RLS-subject connection (e.g. the Supabase anon/authenticated
+ * roles, if the frontend ever talks to Supabase directly). Role checks for
+ * everything that goes through Drizzle are enforced in the Fastify route
+ * layer.
  */
 
 export const userRole = pgEnum("user_role", [
@@ -47,21 +52,21 @@ export const claimStatus = pgEnum("claim_status", [
   "REJECTED",
 ]);
 
-export const organizations = pgTable("organizations", {
+/**
+ * The hospital this install belongs to — exactly one row, enforced by a
+ * unique index on a constant (see migration 0014).
+ *
+ * This is identity, not tenancy. Every field here lands on a pre-auth
+ * form or identifies the hospital to a TPA, which is why removing
+ * multi-tenancy didn't remove the table: a cashless desk cannot send
+ * anything without a ROHINI id and a registration number.
+ */
+export const hospitalProfile = pgTable("hospital_profile", {
   id: uuid("id").primaryKey().defaultRandom(),
   name: text("name").notNull(),
-  slug: text("slug").notNull().unique(),
-  subscriptionStatus: text("subscription_status").notNull().default("trialing"),
-  plan: text("plan").notNull().default("starter"),
-  razorpayCustomerId: text("razorpay_customer_id"),
-  razorpaySubscriptionId: text("razorpay_subscription_id"),
-  // Set once, at signup — 14 days out, see docs/adr/0007. Enforcing
-  // read-only access once this passes is billing-module work, not yet
-  // built; this column only reserves the fact.
-  trialEndsAt: timestamp("trial_ends_at", { withTimezone: true }),
 
   // --- Hospital profile (docs/adr/0008) ---
-  // All nullable: signup creates the org with just a name so the user
+  // All nullable: the row is created with just a name so the first user
   // gets in fast, then the onboarding wizard fills these. Validation
   // lives in @claimflow/contracts, enforced at the route, not as NOT NULL
   // constraints that would make a half-finished wizard unrepresentable.
@@ -104,51 +109,39 @@ export const organizations = pgTable("organizations", {
     .defaultNow(),
 });
 
-export const orgMembers = pgTable(
-  "org_members",
+/** Desk staff. Role is the whole of authorization now — see docs/adr/0002. */
+export const members = pgTable(
+  "members",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    organizationId: uuid("organization_id")
-      .notNull()
-      .references(() => organizations.id, { onDelete: "cascade" }),
     userId: uuid("user_id").notNull(), // references auth.users(id) — managed by Supabase, not this schema
     role: userRole("role").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
   },
-  (table) => [
-    unique().on(table.userId),
-    index("org_members_organization_id_idx").on(table.organizationId),
-  ],
+  (table) => [unique().on(table.userId)],
 );
 
 /**
- * A shareable link/code an org_admin generates for one role at a time —
+ * A shareable link/code an admin generates for one role at a time —
  * see docs/adr/0007. Deliberately not tied to an invitee's email: there's
  * no email provider wired up, and link-sharing (WhatsApp, in person)
  * needs none. `usedAt`/`usedById` are null until someone redeems it;
  * redeeming is a one-time action enforced in the service layer, not here.
  */
-export const invites = pgTable(
-  "invites",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    organizationId: uuid("organization_id")
-      .notNull()
-      .references(() => organizations.id, { onDelete: "cascade" }),
-    role: userRole("role").notNull(),
-    token: text("token").notNull().unique(),
-    createdBy: uuid("created_by").references(() => orgMembers.id),
-    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
-    usedAt: timestamp("used_at", { withTimezone: true }),
-    usedById: uuid("used_by_id"), // references auth.users(id), like org_members.userId
-    createdAt: timestamp("created_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
-  },
-  (table) => [index("invites_organization_id_idx").on(table.organizationId)],
-);
+export const invites = pgTable("invites", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  role: userRole("role").notNull(),
+  token: text("token").notNull().unique(),
+  createdBy: uuid("created_by").references(() => members.id),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  usedAt: timestamp("used_at", { withTimezone: true }),
+  usedById: uuid("used_by_id"), // references auth.users(id), like members.userId
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
 
 export const insurers = pgTable("insurers", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -172,9 +165,6 @@ export const checklistRules = pgTable(
   "checklist_rules",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    organizationId: uuid("organization_id")
-      .notNull()
-      .references(() => organizations.id, { onDelete: "cascade" }),
     insurerId: uuid("insurer_id")
       .notNull()
       .references(() => insurers.id),
@@ -191,17 +181,8 @@ export const checklistRules = pgTable(
       .defaultNow(),
   },
   (table) => [
-    unique().on(
-      table.organizationId,
-      table.insurerId,
-      table.procedureId,
-      table.documentType,
-    ),
-    index("checklist_rules_org_lookup_idx").on(
-      table.organizationId,
-      table.insurerId,
-      table.procedureId,
-    ),
+    unique().on(table.insurerId, table.procedureId, table.documentType),
+    index("checklist_rules_lookup_idx").on(table.insurerId, table.procedureId),
   ],
 );
 
@@ -209,9 +190,6 @@ export const claims = pgTable(
   "claims",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    organizationId: uuid("organization_id")
-      .notNull()
-      .references(() => organizations.id, { onDelete: "cascade" }),
     patientName: text("patient_name").notNull(),
     insurerId: uuid("insurer_id")
       .notNull()
@@ -220,7 +198,7 @@ export const claims = pgTable(
       .notNull()
       .references(() => procedures.id),
     status: claimStatus("status").notNull().default("DRAFT"),
-    assignedTo: uuid("assigned_to").references(() => orgMembers.id),
+    assignedTo: uuid("assigned_to").references(() => members.id),
     // Snapshot of the checklist_rules that applied when this claim was
     // opened — see docs/adr/0001. Editing the live rules later must never
     // change what an in-flight claim requires.
@@ -237,10 +215,7 @@ export const claims = pgTable(
       .notNull()
       .defaultNow(),
   },
-  (table) => [
-    index("claims_organization_id_idx").on(table.organizationId),
-    index("claims_assigned_to_idx").on(table.assignedTo),
-  ],
+  (table) => [index("claims_assigned_to_idx").on(table.assignedTo)],
 );
 
 export const claimStatusEvents = pgTable(
@@ -251,7 +226,7 @@ export const claimStatusEvents = pgTable(
       .notNull()
       .references(() => claims.id, { onDelete: "cascade" }),
     status: claimStatus("status").notNull(),
-    actorId: uuid("actor_id").references(() => orgMembers.id),
+    actorId: uuid("actor_id").references(() => members.id),
     // Persisted server-side at write time — never computed from the
     // frontend clock. Backs the IRDAI/TPA SLA countdowns.
     slaDeadline: timestamp("sla_deadline", { withTimezone: true }),
@@ -279,7 +254,7 @@ export const documents = pgTable(
     classifiedBy: text("classified_by"),
     /** Why the classifier thinks so; shown to the human before they confirm. */
     classificationReason: text("classification_reason"),
-    confirmedBy: uuid("confirmed_by").references(() => orgMembers.id),
+    confirmedBy: uuid("confirmed_by").references(() => members.id),
     confirmedAt: timestamp("confirmed_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
@@ -330,7 +305,7 @@ export const claimPreauthFields = pgTable(
     /** 'claude' — so the UI never implies a model ran when none did. */
     extractedBy: text("extracted_by"),
     extractedAt: timestamp("extracted_at", { withTimezone: true }),
-    confirmedBy: uuid("confirmed_by").references(() => orgMembers.id),
+    confirmedBy: uuid("confirmed_by").references(() => members.id),
     confirmedAt: timestamp("confirmed_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
@@ -395,7 +370,7 @@ export const doctorApprovals = pgTable(
     token: text("token").notNull().unique(),
     /** Free text: the hospital knows who it sent this to, but doctors have no rows here. */
     doctorName: text("doctor_name").notNull(),
-    requestedBy: uuid("requested_by").references(() => orgMembers.id),
+    requestedBy: uuid("requested_by").references(() => members.id),
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
     /** First time the link was opened — proves the doctor saw it, even if they never decide. */
     firstViewedAt: timestamp("first_viewed_at", { withTimezone: true }),
@@ -427,7 +402,7 @@ export const deductions = pgTable(
     reason: text("reason").notNull(),
     amount: numeric("amount", { precision: 12, scale: 2 }).notNull(),
     note: text("note"),
-    recordedBy: uuid("recorded_by").references(() => orgMembers.id),
+    recordedBy: uuid("recorded_by").references(() => members.id),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -439,10 +414,7 @@ export const auditLog = pgTable(
   "audit_log",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    organizationId: uuid("organization_id")
-      .notNull()
-      .references(() => organizations.id, { onDelete: "cascade" }),
-    actorId: uuid("actor_id").references(() => orgMembers.id),
+    actorId: uuid("actor_id").references(() => members.id),
     action: text("action").notNull(),
     entityType: text("entity_type").notNull(),
     entityId: uuid("entity_id"),
@@ -452,5 +424,5 @@ export const auditLog = pgTable(
       .notNull()
       .defaultNow(),
   },
-  (table) => [index("audit_log_organization_id_idx").on(table.organizationId)],
+  (table) => [index("audit_log_created_at_idx").on(table.createdAt)],
 );

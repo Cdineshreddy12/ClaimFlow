@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as auditRepository from "./audit.repository.js";
-import * as orgMembersRepository from "../org-members/org-members.repository.js";
+import * as orgMembersRepository from "../members/members.repository.js";
 
 vi.mock("./audit.repository.js");
-vi.mock("../org-members/org-members.repository.js");
+vi.mock("../members/members.repository.js");
 
 const ORG_ID = "11111111-1111-1111-1111-111111111111";
 const USER_ID = "22222222-2222-2222-2222-222222222222";
@@ -17,7 +17,7 @@ describe("audit.service.record", () => {
     // wipes recorded calls, leaving that rejection in place for every
     // later test.
     vi.resetAllMocks();
-    vi.mocked(orgMembersRepository.getOrgMemberId).mockResolvedValue(MEMBER_ID);
+    vi.mocked(orgMembersRepository.getMemberId).mockResolvedValue(MEMBER_ID);
   });
 
   it("resolves the acting org_member and scopes the entry to their org", async () => {
@@ -31,7 +31,6 @@ describe("audit.service.record", () => {
 
     expect(auditRepository.insert).toHaveBeenCalledWith(
       expect.objectContaining({
-        organizationId: ORG_ID,
         actorId: MEMBER_ID,
         action: "claim.created",
         entityType: "claim",
@@ -50,7 +49,7 @@ describe("audit.service.record", () => {
       actorId: "already-known",
     });
 
-    expect(orgMembersRepository.getOrgMemberId).not.toHaveBeenCalled();
+    expect(orgMembersRepository.getMemberId).not.toHaveBeenCalled();
     expect(auditRepository.insert).toHaveBeenCalledWith(
       expect.objectContaining({ actorId: "already-known" }),
     );

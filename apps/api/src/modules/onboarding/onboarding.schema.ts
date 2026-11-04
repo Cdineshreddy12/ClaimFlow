@@ -1,9 +1,9 @@
 import { z } from "zod";
 
-export const CreateOrganizationBody = z.object({
+export const SetUpHospitalBody = z.object({
   name: z.string().min(1).max(200),
 });
-export type CreateOrganizationBody = z.infer<typeof CreateOrganizationBody>;
+export type SetUpHospitalBody = z.infer<typeof SetUpHospitalBody>;
 
 /**
  * Deliberately narrower than the full Role enum — an org_admin invites

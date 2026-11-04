@@ -2,26 +2,25 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as claimsRepository from "./claims.repository.js";
 import * as checklistService from "../checklist/checklist.service.js";
 import * as documentsRepository from "../documents/documents.repository.js";
-import * as orgMembersRepository from "../org-members/org-members.repository.js";
+import * as orgMembersRepository from "../members/members.repository.js";
 
 vi.mock("./claims.repository.js");
 vi.mock("../checklist/checklist.service.js");
 vi.mock("../documents/documents.repository.js");
-vi.mock("../org-members/org-members.repository.js");
+vi.mock("../members/members.repository.js");
 
 const MEMBER_ID = "22222222-2222-2222-2222-222222222222";
-const ORG_ID = "11111111-1111-1111-1111-111111111111";
 const USER_ID = "33333333-3333-3333-3333-333333333333";
 const CLAIM_ID = "44444444-4444-4444-4444-444444444444";
 
 function auth(role: "desk_executive" | "desk_head") {
-  return { userId: USER_ID, organizationId: ORG_ID, role };
+  return { userId: USER_ID, role };
 }
 
 describe("claims.service", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(orgMembersRepository.getOrgMemberId).mockResolvedValue(MEMBER_ID);
+    vi.mocked(orgMembersRepository.getMemberId).mockResolvedValue(MEMBER_ID);
   });
 
   describe("listClaims", () => {
@@ -33,7 +32,6 @@ describe("claims.service", () => {
       );
 
       expect(claimsRepository.listClaims).toHaveBeenCalledWith(
-        ORG_ID,
         expect.objectContaining({ assignedTo: MEMBER_ID }),
       );
     });
@@ -46,7 +44,6 @@ describe("claims.service", () => {
       );
 
       expect(claimsRepository.listClaims).toHaveBeenCalledWith(
-        ORG_ID,
         expect.not.objectContaining({ assignedTo: expect.anything() }),
       );
     });
@@ -102,12 +99,10 @@ describe("claims.service", () => {
       });
 
       expect(checklistService.getRequirementsSnapshot).toHaveBeenCalledWith(
-        ORG_ID,
         INSURER_ID,
         PROCEDURE_ID,
       );
       expect(claimsRepository.createClaim).toHaveBeenCalledWith(
-        ORG_ID,
         expect.objectContaining({ patientName: "Rajendra Pawar" }),
         snapshot,
       );
@@ -215,7 +210,6 @@ describe("claims.service", () => {
 
       expect(result.status).toBe("QUERY_RAISED");
       expect(claimsRepository.recordStatusChange).toHaveBeenCalledWith(
-        ORG_ID,
         CLAIM_ID,
         "QUERY_RAISED",
         MEMBER_ID,

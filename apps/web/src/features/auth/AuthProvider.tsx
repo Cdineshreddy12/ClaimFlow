@@ -14,7 +14,11 @@ interface AuthState {
   session: Session | null;
   /** Resolved once the initial session check completes — distinct from "logged out", which is session === null after loading finishes. */
   loading: boolean;
-  organizationId: string | null;
+  /**
+   * The desk role from the token's app_metadata, stamped by the Custom
+   * Access Token hook. Null means the signed-in user has no `members`
+   * row yet, which is what routes them into onboarding.
+   */
   role: string | null;
   /** True when running on the VITE_DEV_TOKEN bridge rather than a real Supabase session. */
   isDevSession: boolean;
@@ -76,8 +80,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => subscription.subscription.unsubscribe();
   }, []);
 
-  const organizationId =
-    (session?.user.app_metadata.organization_id as string | undefined) ?? null;
   const role = (session?.user.app_metadata.role as string | undefined) ?? null;
 
   return (
@@ -85,7 +87,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       value={{
         session,
         loading,
-        organizationId,
         role,
         isDevSession: Boolean(DEV_TOKEN),
       }}

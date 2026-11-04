@@ -4,7 +4,6 @@ import * as checklistRepository from "./checklist.repository.js";
 vi.mock("./checklist.repository.js");
 
 const USER_ID = "22222222-2222-2222-2222-222222222222";
-const ORG_ID = "11111111-1111-1111-1111-111111111111";
 const INSURER_ID = "22222222-2222-2222-2222-222222222222";
 const PROCEDURE_ID = "33333333-3333-3333-3333-333333333333";
 
@@ -27,7 +26,7 @@ describe("checklist.service", () => {
 
       await expect(
         createRule(
-          { organizationId: ORG_ID, userId: USER_ID },
+          { userId: USER_ID },
           {
             insurerId: INSURER_ID,
             procedureId: PROCEDURE_ID,
@@ -47,7 +46,7 @@ describe("checklist.service", () => {
 
       await expect(
         createRule(
-          { organizationId: ORG_ID, userId: USER_ID },
+          { userId: USER_ID },
           {
             insurerId: INSURER_ID,
             procedureId: PROCEDURE_ID,
@@ -67,7 +66,7 @@ describe("checklist.service", () => {
         await import("./checklist.service.js");
 
       await expect(
-        updateRule({ organizationId: ORG_ID, userId: USER_ID }, "missing-id", {
+        updateRule({ userId: USER_ID }, "missing-id", {
           required: false,
         }),
       ).rejects.toThrow(RuleNotFoundError);
@@ -80,7 +79,7 @@ describe("checklist.service", () => {
         await import("./checklist.service.js");
 
       await expect(
-        deleteRule({ organizationId: ORG_ID, userId: USER_ID }, "missing-id"),
+        deleteRule({ userId: USER_ID }, "missing-id"),
       ).rejects.toThrow(RuleNotFoundError);
     });
   });
@@ -90,7 +89,6 @@ describe("checklist.service", () => {
       vi.mocked(checklistRepository.listRules).mockResolvedValue([
         {
           id: "r1",
-          organizationId: ORG_ID,
           insurerId: INSURER_ID,
           procedureId: PROCEDURE_ID,
           documentType: "Pre-auth form",
@@ -100,7 +98,6 @@ describe("checklist.service", () => {
         },
         {
           id: "r2",
-          organizationId: ORG_ID,
           insurerId: INSURER_ID,
           procedureId: PROCEDURE_ID,
           documentType: "Previous records",
@@ -112,11 +109,7 @@ describe("checklist.service", () => {
 
       const { getRequirementsSnapshot } =
         await import("./checklist.service.js");
-      const snapshot = await getRequirementsSnapshot(
-        ORG_ID,
-        INSURER_ID,
-        PROCEDURE_ID,
-      );
+      const snapshot = await getRequirementsSnapshot(INSURER_ID, PROCEDURE_ID);
 
       expect(snapshot).toEqual([
         { documentType: "Pre-auth form", required: true },

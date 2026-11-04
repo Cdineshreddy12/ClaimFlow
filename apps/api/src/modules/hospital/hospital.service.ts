@@ -1,8 +1,8 @@
 import * as auditService from "../audit/audit.service.js";
-import * as organizationsRepository from "./organizations.repository.js";
-import type { UpdateProfileBody } from "./organizations.schema.js";
+import * as hospitalRepository from "./hospital.repository.js";
+import type { UpdateProfileBody } from "./hospital.schema.js";
 
-export class OrganizationNotFoundError extends Error {}
+export class HospitalNotFoundError extends Error {}
 
 /** The fields each step owns — also what decides whether the profile counts as complete. */
 const REQUIRED_BY_STEP = {
@@ -35,10 +35,10 @@ function blankToNull<T extends Record<string, unknown>>(data: T) {
   );
 }
 
-export async function getOrganization(organizationId: string) {
-  const organization = await organizationsRepository.getById(organizationId);
-  if (!organization) throw new OrganizationNotFoundError(organizationId);
-  return organization;
+export async function getHospital() {
+  const hospital = await hospitalRepository.get();
+  if (!hospital) throw new HospitalNotFoundError();
+  return hospital;
 }
 
 /**
@@ -47,12 +47,11 @@ export async function getOrganization(organizationId: string) {
  * last step completes it, but so does coming back later to fill a gap.
  */
 export async function updateProfile(
-  auth: { organizationId: string; userId: string },
+  auth: { userId: string },
   body: UpdateProfileBody,
 ) {
-  const { organizationId } = auth;
-  const existing = await organizationsRepository.getById(organizationId);
-  if (!existing) throw new OrganizationNotFoundError(organizationId);
+  const existing = await hospitalRepository.get();
+  if (!existing) throw new HospitalNotFoundError();
 
   const patch = blankToNull(body.data);
   const merged = { ...existing, ...patch } as Record<string, unknown>;
@@ -66,16 +65,13 @@ export async function updateProfile(
     patch.onboardingCompletedAt = new Date();
   }
 
-  const updated = await organizationsRepository.updateProfile(
-    organizationId,
-    patch,
-  );
-  if (!updated) throw new OrganizationNotFoundError(organizationId);
+  const updated = await hospitalRepository.updateProfile(patch);
+  if (!updated) throw new HospitalNotFoundError();
 
   await auditService.record(auth, {
-    action: "organization.profile_updated",
-    entityType: "organization",
-    entityId: organizationId,
+    action: "hospital.profile_updated",
+    entityType: "hospital",
+    entityId: existing.id,
     after: { step: body.step, fields: Object.keys(body.data) },
   });
 
