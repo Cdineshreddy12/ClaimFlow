@@ -88,7 +88,13 @@ everything by hand.
   same boundary as documents — so the summary/requested items are
   entered by hand for now; the original email is the source of truth
   either way per docs/adr/0005.
-- 🚧 The web app's actual screens — not yet built.
+- ✅ Web app: Claim File screen wired end-to-end against the live API —
+  status timeline, live document-gap view, and a real upload flow (the
+  browser PUTs straight to S3, same pre-signed-URL path as the API).
+  No login screen yet, so a dev-only minted token stands in for auth
+  (see `.env.example`'s `VITE_DEV_TOKEN`) — swap for real Supabase auth
+  once the Custom Access Token hook is enabled. Dashboard, Query Inbox,
+  and Checklist Admin screens are next.
 
 All of the above is covered by both unit tests and integration tests
 against the real Supabase database and the real S3 bucket — not mocked.

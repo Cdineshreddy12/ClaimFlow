@@ -1,7 +1,12 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, getTableColumns } from "drizzle-orm";
 import type { ClaimStatus } from "@claimflow/contracts";
 import { db } from "../../db/client.js";
-import { claimStatusEvents, claims } from "../../db/schema.js";
+import {
+  claimStatusEvents,
+  claims,
+  insurers,
+  procedures,
+} from "../../db/schema.js";
 import type {
   ChecklistSnapshotItem,
   CreateClaimBody,
@@ -25,15 +30,28 @@ export async function listClaims(
     conditions.push(eq(claims.assignedTo, filters.assignedTo));
 
   return db
-    .select()
+    .select({
+      ...getTableColumns(claims),
+      insurerName: insurers.name,
+      procedureName: procedures.name,
+    })
     .from(claims)
+    .innerJoin(insurers, eq(claims.insurerId, insurers.id))
+    .innerJoin(procedures, eq(claims.procedureId, procedures.id))
     .where(and(...conditions));
 }
 
+/** Joins insurer/procedure names on — anything rendering a single claim needs a name, not a bare id. */
 export async function getClaimById(organizationId: string, id: string) {
   const [claim] = await db
-    .select()
+    .select({
+      ...getTableColumns(claims),
+      insurerName: insurers.name,
+      procedureName: procedures.name,
+    })
     .from(claims)
+    .innerJoin(insurers, eq(claims.insurerId, insurers.id))
+    .innerJoin(procedures, eq(claims.procedureId, procedures.id))
     .where(and(eq(claims.id, id), eq(claims.organizationId, organizationId)));
   return claim;
 }

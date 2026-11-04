@@ -10,6 +10,13 @@ below is written for when that lands, not retrofitted after. Same
 boundary applies to the query inbox's AI summary field — it's entered by
 hand for now, not auto-generated.
 
+The browser uploads straight to S3 using the pre-signed URL, same as any
+other client of this API — that only works cross-origin because the
+bucket has a CORS rule allowing `PUT`/`GET` from `http://localhost:*`.
+That rule lives on the bucket itself (not in this repo, set via `aws
+s3api put-bucket-cors`) and needs a matching entry for the real web app's
+origin before this works outside local dev.
+
 ## Context
 
 Upload → OCR → AI classification → checklist match → human confirmation →

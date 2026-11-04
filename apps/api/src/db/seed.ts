@@ -115,6 +115,17 @@ async function seed() {
       status: "QUERY_RAISED",
       billedAmount: "185000",
       admittedAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000),
+      // Normally frozen onto the claim by claims.service.createClaim at
+      // open time (docs/adr/0001) — inlined here since this seed inserts
+      // the row directly rather than going through that service.
+      checklistSnapshot: [
+        { documentType: "Pre-authorization form", required: true },
+        { documentType: "Treating doctor's note", required: true },
+        { documentType: "Ultrasound report (abdomen)", required: true },
+        { documentType: "Photo ID proof", required: true },
+        { documentType: "Policy / e-card copy", required: true },
+        { documentType: "Previous treatment records", required: false },
+      ],
     })
     .returning();
   const clm3381 = must(clm3381Row, "CLM-3381");
