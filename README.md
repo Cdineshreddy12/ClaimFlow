@@ -74,10 +74,18 @@ everything by hand.
   on every claims route.
 - ✅ Claims module (API): list/get/create, status transitions enforced
   against the shared state machine, desk_executive scoped to their own
-  assigned claims. Covered by unit tests and an integration test against
-  the real database.
-- 🚧 Checklist, documents, and query-inbox modules, and the web app's
-  actual screens — not yet built.
+  assigned claims.
+- ✅ Checklist module (API): rules CRUD, gated to org_admin/desk_head.
+  Claim creation now actually snapshots the live rules onto the claim.
+- ✅ Documents module (API): pre-signed S3 upload, human-confirm into a
+  checklist slot, discard, and a live gap-view endpoint (required docs
+  minus confirmed ones). AI auto-classification isn't wired up yet — no
+  provider credentials exist for it (see docs/adr/0003) — so every
+  document is confirmed into a slot manually for now.
+- 🚧 Query-inbox module and the web app's actual screens — not yet built.
+
+All of the above is covered by both unit tests and integration tests
+against the real Supabase database and the real S3 bucket — not mocked.
 
 ## Architecture
 
@@ -211,9 +219,11 @@ Two things worth stating plainly rather than leaving implicit:
 
 ## Roadmap
 
-- [x] Auth (Supabase JWT + RBAC) and the claims module (API)
-- [ ] Checklist admin, document upload + AI sort, query inbox (API + the
-      web screens — four screens already have a reviewed design mockup)
+- [x] Auth (Supabase JWT + RBAC), claims, checklist, and documents
+      modules (API)
+- [ ] AI document classification + OCR (pending provider credentials)
+- [ ] Query-inbox module (API) and the web app's actual screens — four
+      screens already have a reviewed design mockup
 - [ ] Doctor approval via phone link
 - [ ] Merged PDF packet per TPA
 - [ ] Self-serve organization signup + Razorpay billing integration

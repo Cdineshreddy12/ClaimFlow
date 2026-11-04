@@ -1,12 +1,11 @@
-import { and, eq } from "drizzle-orm";
 import {
   canTransition,
   type ClaimStatus,
   type Role,
 } from "@claimflow/contracts";
-import { db } from "../../db/client.js";
-import { orgMembers } from "../../db/schema.js";
 import { getRequirementsSnapshot } from "../checklist/checklist.service.js";
+import * as documentsRepository from "../documents/documents.repository.js";
+import { getOrgMemberId } from "../org-members/org-members.repository.js";
 import * as claimsRepository from "./claims.repository.js";
 import type { CreateClaimBody, ListClaimsQuery } from "./claims.schema.js";
 
@@ -102,18 +101,23 @@ export async function transitionClaimStatus(
   return updated;
 }
 
-async function getOrgMemberId(
-  organizationId: string,
-  userId: string,
-): Promise<string | null> {
-  const [member] = await db
-    .select({ id: orgMembers.id })
-    .from(orgMembers)
-    .where(
-      and(
-        eq(orgMembers.organizationId, organizationId),
-        eq(orgMembers.userId, userId),
-      ),
-    );
-  return member?.id ?? null;
+/**
+ * required docs in the claim's checklist snapshot minus the ones with a
+ * *confirmed* document in that slot — the brief's "see at a glance what's
+ * missing" requirement, computed live, never stored (see docs/adr/0001).
+ */
+export async function getClaimGaps(auth: AuthContext, claimId: string) {
+  const claim = await getClaim(auth, claimId);
+  const confirmedSlots = new Set(
+    await documentsRepository.confirmedSlotsForClaim(claimId),
+  );
+
+  const missing = claim.checklistSnapshot
+    .filter((item) => item.required && !confirmedSlots.has(item.documentType))
+    .map((item) => item.documentType);
+  const satisfied = claim.checklistSnapshot
+    .filter((item) => confirmedSlots.has(item.documentType))
+    .map((item) => item.documentType);
+
+  return { missing, satisfied };
 }

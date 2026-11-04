@@ -4,6 +4,7 @@ import { loadEnv } from "./config/env.js";
 import jwtPlugin from "./plugins/jwt.js";
 import { registerClaimsRoutes } from "./modules/claims/claims.routes.js";
 import { registerChecklistRoutes } from "./modules/checklist/checklist.routes.js";
+import { registerDocumentsRoutes } from "./modules/documents/documents.routes.js";
 
 const env = loadEnv();
 
@@ -21,9 +22,12 @@ app.get("/health", async () => ({ status: "ok", service: "claimflow-api" }));
 
 await app.register(registerClaimsRoutes, { prefix: "/claims" });
 await app.register(registerChecklistRoutes, { prefix: "/checklist-rules" });
+await app.register(registerDocumentsRoutes, {
+  prefix: "/claims/:claimId/documents",
+});
 
-// Remaining feature modules (documents, queries, audit) register their
-// routes here as they land — see docs/ARCHITECTURE.md for the module map.
+// Remaining feature modules (queries, audit) register their routes here
+// as they land — see docs/ARCHITECTURE.md for the module map.
 
 app
   .listen({ port: env.PORT, host: "0.0.0.0" })

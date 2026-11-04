@@ -152,6 +152,7 @@ export const claims = pgTable(
     // opened — see docs/adr/0001. Editing the live rules later must never
     // change what an in-flight claim requires.
     checklistSnapshot: jsonb("checklist_snapshot")
+      .$type<{ documentType: string; required: boolean }[]>()
       .notNull()
       .default(sql`'[]'::jsonb`),
     billedAmount: numeric("billed_amount", { precision: 12, scale: 2 }),

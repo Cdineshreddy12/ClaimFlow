@@ -1,5 +1,13 @@
 # 0003 — Document processing pipeline
 
+**Status: upload (pre-signed S3) and human-confirm are built and verified
+against a real bucket. OCR/AI classification is not wired up yet** — no
+provider credentials exist for it. Every document today goes straight from
+upload to "unclassified, pick a slot manually," which already satisfies
+the human-confirm requirement on its own; AI just hasn't arrived to make
+that pick a suggestion instead of a cold start. The job-queue decision
+below is written for when that lands, not retrofitted after.
+
 ## Context
 
 Upload → OCR → AI classification → checklist match → human confirmation →

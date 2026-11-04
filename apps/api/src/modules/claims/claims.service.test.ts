@@ -1,20 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as claimsRepository from "./claims.repository.js";
 import * as checklistService from "../checklist/checklist.service.js";
+import * as documentsRepository from "../documents/documents.repository.js";
+import * as orgMembersRepository from "../org-members/org-members.repository.js";
 
 vi.mock("./claims.repository.js");
 vi.mock("../checklist/checklist.service.js");
-
-// vi.mock factories are hoisted above all other module code, so this
-// can't reference an outer const — the literal has to live inline here.
-vi.mock("../../db/client.js", () => {
-  const where = vi
-    .fn()
-    .mockResolvedValue([{ id: "22222222-2222-2222-2222-222222222222" }]);
-  const from = vi.fn().mockReturnValue({ where });
-  const select = vi.fn().mockReturnValue({ from });
-  return { db: { select } };
-});
+vi.mock("../documents/documents.repository.js");
+vi.mock("../org-members/org-members.repository.js");
 
 const MEMBER_ID = "22222222-2222-2222-2222-222222222222";
 const ORG_ID = "11111111-1111-1111-1111-111111111111";
@@ -28,6 +21,7 @@ function auth(role: "desk_executive" | "desk_head") {
 describe("claims.service", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(orgMembersRepository.getOrgMemberId).mockResolvedValue(MEMBER_ID);
   });
 
   describe("listClaims", () => {
@@ -117,6 +111,47 @@ describe("claims.service", () => {
         expect.objectContaining({ patientName: "Rajendra Pawar" }),
         snapshot,
       );
+    });
+  });
+
+  describe("getClaimGaps", () => {
+    it("splits the checklist snapshot into missing vs satisfied by confirmed document slots", async () => {
+      vi.mocked(claimsRepository.getClaimById).mockResolvedValue({
+        id: CLAIM_ID,
+        assignedTo: MEMBER_ID,
+        checklistSnapshot: [
+          { documentType: "Pre-authorization form", required: true },
+          { documentType: "Ultrasound report (abdomen)", required: true },
+          { documentType: "Previous treatment records", required: false },
+        ],
+      } as never);
+      vi.mocked(documentsRepository.confirmedSlotsForClaim).mockResolvedValue([
+        "Pre-authorization form",
+      ]);
+
+      const { getClaimGaps } = await import("./claims.service.js");
+      const result = await getClaimGaps(auth("desk_executive"), CLAIM_ID);
+
+      expect(result.missing).toEqual(["Ultrasound report (abdomen)"]);
+      expect(result.satisfied).toEqual(["Pre-authorization form"]);
+    });
+
+    it("never lists an optional document as missing", async () => {
+      vi.mocked(claimsRepository.getClaimById).mockResolvedValue({
+        id: CLAIM_ID,
+        assignedTo: MEMBER_ID,
+        checklistSnapshot: [
+          { documentType: "Previous treatment records", required: false },
+        ],
+      } as never);
+      vi.mocked(documentsRepository.confirmedSlotsForClaim).mockResolvedValue(
+        [],
+      );
+
+      const { getClaimGaps } = await import("./claims.service.js");
+      const result = await getClaimGaps(auth("desk_executive"), CLAIM_ID);
+
+      expect(result.missing).toEqual([]);
     });
   });
 

@@ -40,6 +40,19 @@ export async function registerClaimsRoutes(app: FastifyInstance) {
     return reply.code(201).send(claim);
   });
 
+  app.get("/:id/gaps", async (request, reply) => {
+    const { id } = ClaimIdParams.parse(request.params);
+    try {
+      const gaps = await claimsService.getClaimGaps(request.authUser!, id);
+      return reply.send(gaps);
+    } catch (err) {
+      if (err instanceof ClaimNotFoundError) {
+        return reply.code(404).send({ error: "claim not found" });
+      }
+      throw err;
+    }
+  });
+
   app.patch("/:id/status", async (request, reply) => {
     const { id } = ClaimIdParams.parse(request.params);
     const body = UpdateClaimStatusBody.parse(request.body);
