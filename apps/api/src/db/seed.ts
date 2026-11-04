@@ -10,7 +10,7 @@ import {
 
 /**
  * Local/dev seed: the three sample claims from the product brief, for the
- * pilot tenant (Company A, Nashik). Run with `tsx src/db/seed.ts`.
+ * demo tenant. Run with `tsx src/db/seed.ts`.
  *
  * Org members (users) are intentionally NOT seeded here — they're created
  * through the real sign-up/invite flow once it exists, not faked in, so
@@ -28,8 +28,8 @@ async function seed() {
   const [orgRow] = await db
     .insert(organizations)
     .values({
-      name: "Company A — Nashik Multispecialty",
-      slug: "company-a-nashik",
+      name: "City General Hospital",
+      slug: "city-general-hospital",
       subscriptionStatus: "active",
       plan: "pilot",
     })

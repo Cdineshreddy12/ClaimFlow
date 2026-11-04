@@ -2,10 +2,11 @@
 
 ClaimFlow is a multi-tenant SaaS for hospital insurance desks — every
 hospital that signs up is an `organization`, isolated from every other.
-The pilot tenant is a 180-bed multispecialty hospital in Nashik (insurance
-desk of 9 staff, ~650 cashless admissions/month across 20+ insurers and
-TPAs); the product is built to onboard the next one without a schema
-change.
+Sizing comes from the pilot tenant — a 180-bed multispecialty hospital
+with a 9-person insurance desk, ~650 cashless admissions/month across
+20+ insurers and TPAs — but nothing about that tenant is baked in: the
+product onboards the next hospital through the same self-serve flow, no
+schema change, no per-tenant code.
 
 ## Stack
 

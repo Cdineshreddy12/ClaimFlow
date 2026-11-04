@@ -6,8 +6,8 @@ ClaimFlow is a multi-tenant SaaS: multiple hospitals, each with their own
 staff, insurers-in-use, and checklist configuration, on one shared
 deployment. Patient records are sensitive personal data under India's DPDP
 Act 2023 — cross-tenant data leakage here isn't a bug, it's an incident.
-Company A (Nashik) is the pilot tenant, not a hardcoded assumption baked
-into the schema.
+The pilot hospital is simply the first tenant, not a hardcoded assumption
+baked into the schema.
 
 ## Decision
 

@@ -6,7 +6,7 @@ import type { InvitableRole } from "./onboarding.schema.js";
 const TRIAL_DAYS = 14;
 const INVITE_EXPIRY_DAYS = 7;
 
-/** Lowercase, hyphenated, no leading/trailing hyphens — "Company A — Nashik" -> "company-a-nashik". */
+/** Lowercase, hyphenated, no leading/trailing hyphens — "City General Hospital" -> "city-general-hospital". */
 function slugify(name: string): string {
   return name
     .toLowerCase()
