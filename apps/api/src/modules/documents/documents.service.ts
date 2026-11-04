@@ -6,6 +6,7 @@ import {
   getUploadUrl,
 } from "../../integrations/storage/s3.js";
 import { getClassifier } from "../../integrations/classifier/index.js";
+import { canOcr, detectText } from "../../integrations/ocr/textract.js";
 import * as auditService from "../audit/audit.service.js";
 import * as claimsRepository from "../claims/claims.repository.js";
 import { getOrgMemberId } from "../org-members/org-members.repository.js";
@@ -100,16 +101,50 @@ export async function classifyDocument(
   if (candidateSlots.length === 0) return undefined;
 
   try {
+    // Read the bytes once and share them: OCR and the classifier both
+    // want the same object, and S3 shouldn't be paid for twice.
+    let cached: Uint8Array | undefined;
+    const readBytes = async () => (cached ??= await getObjectBytes(key));
+
     const classification = await getClassifier().classify({
       fileName: displayFileName(key),
       contentType,
       candidateSlots,
-      readBytes: () => getObjectBytes(key),
+      readBytes,
+      ocrText: await extractText(contentType, readBytes),
     });
     return documentsRepository.saveClassification(documentId, classification);
   } catch (err) {
     console.error("document classification failed", {
       documentId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return undefined;
+  }
+}
+
+/**
+ * OCR, when the file is an image Textract can read.
+ *
+ * Runs in front of the classifier rather than instead of it — the model
+ * already reads printed scans well, and this is for the brief's hard
+ * case, handwritten doctors' notes, where character extraction is the
+ * part a vision model is weakest at.
+ *
+ * Never throws: OCR is an enhancement to a suggestion that is itself
+ * optional, so a Textract outage must not stop a document being
+ * classified, let alone uploaded.
+ */
+async function extractText(
+  contentType: string,
+  readBytes: () => Promise<Uint8Array>,
+): Promise<string | undefined> {
+  if (!canOcr(contentType)) return undefined;
+  try {
+    const result = await detectText(await readBytes());
+    return result?.text;
+  } catch (err) {
+    console.error("OCR failed, classifying without it", {
       error: err instanceof Error ? err.message : String(err),
     });
     return undefined;

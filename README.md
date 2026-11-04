@@ -279,8 +279,7 @@ Two things worth stating plainly rather than leaving implicit:
       filename heuristic otherwise ([`adr 0003`](docs/adr/0003-document-processing-pipeline.md))
 - [x] Query summarisation — Claude reads a pasted TPA email for the
       summary, requested items and deadline
-- [ ] OCR for handwritten notes (needs Textract access for the scoped
-      IAM user)
+- [x] OCR for handwritten notes (Textract, feeding the classifier)
 - [x] Doctor approval via phone link
 - [x] Merged PDF packet per claim
 - [x] Deductions by reason, on the dashboard

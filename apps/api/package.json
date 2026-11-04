@@ -18,6 +18,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^1.4.0",
     "@aws-sdk/client-s3": "^3.1161.0",
+    "@aws-sdk/client-textract": "^3.1161.0",
     "@aws-sdk/s3-request-presigner": "^3.1161.0",
     "@claimflow/contracts": "workspace:*",
     "@fastify/cors": "^10.0.1",

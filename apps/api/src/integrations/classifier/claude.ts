@@ -127,6 +127,16 @@ export class ClaudeClassifier implements DocumentClassifier {
               text: [
                 "This is a document uploaded to a hospital insurance claim.",
                 `Filename: ${input.fileName}`,
+                ...(input.ocrText
+                  ? [
+                      "",
+                      "OCR text extracted from the page (may be imperfect on",
+                      "handwriting — trust the image where they disagree):",
+                      "---",
+                      input.ocrText.slice(0, 6000),
+                      "---",
+                    ]
+                  : []),
                 "",
                 "Decide which of these checklist slots it belongs in:",
                 ...input.candidateSlots.map((s) => `- ${s}`),

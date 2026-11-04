@@ -1,7 +1,7 @@
 # 0003 — Document processing pipeline
 
-**Status: upload, classification and human-confirm are built and
-verified against a real bucket. OCR is not.**
+**Status: upload, OCR, classification and human-confirm are all built
+and verified against real infrastructure.**
 
 Document sorting runs behind a `DocumentClassifier` interface with two
 implementations:
@@ -42,9 +42,34 @@ who was there. A generated summary is labelled as such, and a deadline
 calculated from "within 48 hours" is flagged as calculated rather than
 read. The original email always renders underneath (adr 0005).
 
-Still not built: OCR for handwritten notes. The scoped `claimflow-api`
-IAM user is S3-only, and Textract access is a permissions decision that
-hasn't been made.
+## OCR
+
+Textract `DetectDocumentText` runs **in front of** the classifier for
+image uploads, and its text is passed alongside the image rather than
+instead of it. The two are good at different things: Textract gets
+characters out of messy handwriting, the model works out what the
+document actually is. Giving both beats either alone.
+
+Verified on a simulated handwritten ward note — jittered baseline,
+slight page rotation, handwriting face. Textract read 13 lines at 0.955
+mean confidence, and the classifier then placed it as "Treating
+doctor's note" at 0.98 from a file named `scan0091.png`, which tells
+you nothing.
+
+Deliberately the synchronous API only. The async one
+(`StartDocumentTextDetection`) would additionally require granting
+Textract its own read access into the documents bucket; passing bytes
+inline keeps that grant unnecessary. The cost is that PDFs don't go
+through OCR — the sync call won't take one — but the model reads PDF
+text natively anyway, so OCR adds nothing there.
+
+OCR never breaks anything. It enhances a suggestion that is itself
+optional, so a Textract outage leaves the classifier working without
+it, and a classifier failure still leaves the upload intact.
+
+The `claimflow-api` IAM user was granted `textract:DetectDocumentText`
+and nothing else — see `infra/iam/README.md`, which now holds the full
+policy and the reasoning for each grant.
 
 The browser uploads straight to S3 using the pre-signed URL, same as any
 other client of this API — that only works cross-origin because the
