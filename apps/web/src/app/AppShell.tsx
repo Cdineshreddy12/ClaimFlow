@@ -1,5 +1,9 @@
 import type { ReactNode } from "react";
-import { NavLink } from "react-router-dom";
+import { NavLink, useNavigate } from "react-router-dom";
+import { signOut } from "../features/auth/api";
+import { useAuth } from "../features/auth/AuthProvider";
+import { useCurrentOrganization } from "../features/organizations/api";
+import { ROLE_LABEL } from "../lib/roles";
 
 interface AppShellProps {
   title: string;
@@ -13,6 +17,15 @@ interface AppShellProps {
  * once that screen is built, not before.
  */
 export function AppShell({ title, subtitle, children }: AppShellProps) {
+  const navigate = useNavigate();
+  const { session, role } = useAuth();
+  const { data: organization } = useCurrentOrganization();
+
+  async function handleSignOut() {
+    await signOut();
+    navigate("/login");
+  }
+
   return (
     <div className="shell">
       <aside className="sidebar">
@@ -21,7 +34,7 @@ export function AppShell({ title, subtitle, children }: AppShellProps) {
             <span className="brand-mark" />
             <span className="brand-name">Claims Desk</span>
           </div>
-          <div className="brand-sub">Company A — Nashik</div>
+          <div className="brand-sub">{organization?.name ?? "—"}</div>
         </div>
         <nav className="nav">
           <NavLink
@@ -82,8 +95,17 @@ export function AppShell({ title, subtitle, children }: AppShellProps) {
         <div className="sidebar-foot">
           <div style={{ fontSize: 12.5, color: "var(--ink-faint)" }}>
             Signed in as{" "}
-            <strong style={{ color: "var(--ink)" }}>Desk Head</strong>
+            <strong style={{ color: "var(--ink)" }}>
+              {session?.user.email}
+            </strong>
           </div>
+          <button
+            type="button"
+            className="btn btn--ghost btn--sm"
+            onClick={handleSignOut}
+          >
+            Sign out
+          </button>
         </div>
       </aside>
 
@@ -94,9 +116,9 @@ export function AppShell({ title, subtitle, children }: AppShellProps) {
             {subtitle ? <div className="topbar-sub">{subtitle}</div> : null}
           </div>
           <div className="topbar-user">
-            <strong>Priya Nair</strong>
+            <strong>{session?.user.email}</strong>
             <br />
-            Insurance Desk
+            {role ? (ROLE_LABEL[role] ?? role) : null}
           </div>
         </header>
         <main className="content">{children}</main>

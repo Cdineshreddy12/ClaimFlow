@@ -33,7 +33,13 @@
     "typescript-eslint": "^8.8.1"
   },
   "lint-staged": {
-    "*.{ts,tsx,js,jsx}": "eslint --fix",
-    "*.{ts,tsx,js,jsx,json,md,css}": "prettier --write"
+    "_comment": "One entry per file, not two overlapping globs. Separate entries run concurrently, so `prettier --write` was rewriting a .tsx while `eslint --fix` read it — producing a bogus 'Parsing error' on a file that lints fine. Chaining them keeps the order deterministic.",
+    "*.{ts,tsx,js,jsx}": [
+      "prettier --write",
+      "eslint --fix"
+    ],
+    "*.{json,md,css}": [
+      "prettier --write"
+    ]
   }
 }

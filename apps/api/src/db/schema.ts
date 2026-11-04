@@ -1,7 +1,9 @@
 import { sql } from "drizzle-orm";
 import {
   boolean,
+  date,
   index,
+  integer,
   jsonb,
   numeric,
   pgEnum,
@@ -57,6 +59,46 @@ export const organizations = pgTable("organizations", {
   // read-only access once this passes is billing-module work, not yet
   // built; this column only reserves the fact.
   trialEndsAt: timestamp("trial_ends_at", { withTimezone: true }),
+
+  // --- Hospital profile (docs/adr/0008) ---
+  // All nullable: signup creates the org with just a name so the user
+  // gets in fast, then the onboarding wizard fills these. Validation
+  // lives in @claimflow/contracts, enforced at the route, not as NOT NULL
+  // constraints that would make a half-finished wizard unrepresentable.
+  legalEntityName: text("legal_entity_name"),
+  hospitalType: text("hospital_type"),
+  ownershipType: text("ownership_type"),
+  bedCount: integer("bed_count"),
+
+  // IRDAI requires a ROHINI id for cashless settlement — the one
+  // identifier a cashless desk genuinely cannot operate without.
+  rohiniId: text("rohini_id"),
+  registrationNumber: text("registration_number"),
+  registrationValidUntil: date("registration_valid_until"),
+  pan: text("pan"),
+  gstin: text("gstin"),
+  nabhStatus: text("nabh_status"),
+  nabhValidUntil: date("nabh_valid_until"),
+
+  addressLine1: text("address_line1"),
+  addressLine2: text("address_line2"),
+  city: text("city"),
+  state: text("state"),
+  pincode: text("pincode"),
+  phone: text("phone"),
+  email: text("email"),
+  website: text("website"),
+
+  // Whoever the TPA actually calls about a claim.
+  deskContactName: text("desk_contact_name"),
+  deskContactPhone: text("desk_contact_phone"),
+  deskContactEmail: text("desk_contact_email"),
+
+  /** Null until the wizard is finished — what the app checks to decide whether to route into onboarding. */
+  onboardingCompletedAt: timestamp("onboarding_completed_at", {
+    withTimezone: true,
+  }),
+
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),

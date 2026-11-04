@@ -1,0 +1,102 @@
+import type { Session } from "@supabase/supabase-js";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  type ReactNode,
+} from "react";
+import { supabase } from "../../lib/supabase-client";
+
+const DEV_TOKEN = import.meta.env.VITE_DEV_TOKEN;
+
+interface AuthState {
+  session: Session | null;
+  /** Resolved once the initial session check completes — distinct from "logged out", which is session === null after loading finishes. */
+  loading: boolean;
+  organizationId: string | null;
+  role: string | null;
+  /** True when running on the VITE_DEV_TOKEN bridge rather than a real Supabase session. */
+  isDevSession: boolean;
+}
+
+const AuthContext = createContext<AuthState | undefined>(undefined);
+
+/**
+ * Reads the dev token's claims without verifying it — the API verifies
+ * for real (apps/api/src/lib/supabase-jwt.ts); this only needs to know
+ * what to render. Returns a shape that satisfies the parts of Session
+ * the app actually reads.
+ */
+function decodeDevSession(token: string): Session | null {
+  try {
+    const payload = JSON.parse(atob(token.split(".")[1]!));
+    return {
+      access_token: token,
+      token_type: "bearer",
+      expires_in: 0,
+      refresh_token: "",
+      user: {
+        id: payload.sub,
+        email: payload.email ?? "dev@localhost",
+        app_metadata: payload.app_metadata ?? {},
+        user_metadata: {},
+        aud: "authenticated",
+        created_at: "",
+      },
+    } as Session;
+  } catch {
+    return null;
+  }
+}
+
+export function AuthProvider({ children }: { children: ReactNode }) {
+  const [session, setSession] = useState<Session | null>(() =>
+    DEV_TOKEN ? decodeDevSession(DEV_TOKEN) : null,
+  );
+  const [loading, setLoading] = useState(!DEV_TOKEN);
+
+  useEffect(() => {
+    // On the dev bridge there's no Supabase session to track — the token
+    // in .env is the whole story, and subscribing would immediately
+    // overwrite it with null.
+    if (DEV_TOKEN) return;
+
+    supabase.auth.getSession().then(({ data }) => {
+      setSession(data.session);
+      setLoading(false);
+    });
+
+    const { data: subscription } = supabase.auth.onAuthStateChange(
+      (_event, newSession) => {
+        setSession(newSession);
+      },
+    );
+
+    return () => subscription.subscription.unsubscribe();
+  }, []);
+
+  const organizationId =
+    (session?.user.app_metadata.organization_id as string | undefined) ?? null;
+  const role = (session?.user.app_metadata.role as string | undefined) ?? null;
+
+  return (
+    <AuthContext.Provider
+      value={{
+        session,
+        loading,
+        organizationId,
+        role,
+        isDevSession: Boolean(DEV_TOKEN),
+      }}
+    >
+      {children}
+    </AuthContext.Provider>
+  );
+}
+
+export function useAuth(): AuthState {
+  const ctx = useContext(AuthContext);
+  if (!ctx) throw new Error("useAuth must be used within AuthProvider");
+  return ctx;
+}

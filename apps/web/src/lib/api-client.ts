@@ -1,3 +1,5 @@
+import { supabase } from "./supabase-client";
+
 const API_URL = import.meta.env.VITE_API_URL;
 const DEV_TOKEN = import.meta.env.VITE_DEV_TOKEN;
 
@@ -10,13 +12,21 @@ export class ApiError extends Error {
   }
 }
 
+/** The dev token, when set, always wins — it's an explicit opt-in to skip signing in locally, not a silent fallback that should ever surprise a real logged-in session. */
+async function getAuthToken(): Promise<string | null> {
+  if (DEV_TOKEN) return DEV_TOKEN;
+  const { data } = await supabase.auth.getSession();
+  return data.session?.access_token ?? null;
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const token = await getAuthToken();
+
   const res = await fetch(`${API_URL}${path}`, {
     ...init,
     headers: {
       ...(init?.body ? { "Content-Type": "application/json" } : {}),
-      // Stand-in for real login — see .env.example's VITE_DEV_TOKEN comment.
-      Authorization: `Bearer ${DEV_TOKEN}`,
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...init?.headers,
     },
   });

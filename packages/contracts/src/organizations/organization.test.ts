@@ -5,8 +5,8 @@ describe("Organization contract", () => {
   it("accepts a well-formed organization", () => {
     const result = Organization.safeParse({
       id: "00000000-0000-0000-0000-000000000001",
-      name: "Company A — Nashik Multispecialty",
-      slug: "company-a-nashik",
+      name: "City General Hospital",
+      slug: "city-general-hospital",
       plan: "pilot",
       subscriptionStatus: "active",
       createdAt: new Date().toISOString(),

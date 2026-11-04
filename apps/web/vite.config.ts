@@ -7,6 +7,13 @@ export default defineConfig({
   // Reads the monorepo's single root .env instead of needing its own —
   // same file apps/api loads, see .env.example.
   envDir: fileURLToPath(new URL("../..", import.meta.url)),
+  resolve: {
+    // Mirrors the "@/*" path in tsconfig.json — without it the alias
+    // typechecks but fails to resolve at runtime.
+    alias: {
+      "@": fileURLToPath(new URL("./src", import.meta.url)),
+    },
+  },
   server: {
     port: 5173,
   },

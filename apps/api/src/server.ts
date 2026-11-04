@@ -2,7 +2,6 @@ import Fastify from "fastify";
 import cors from "@fastify/cors";
 import { ZodError } from "zod";
 import { loadEnv } from "./config/env.js";
-import jwtPlugin from "./plugins/jwt.js";
 import { registerClaimsRoutes } from "./modules/claims/claims.routes.js";
 import { registerChecklistRoutes } from "./modules/checklist/checklist.routes.js";
 import { registerDocumentsRoutes } from "./modules/documents/documents.routes.js";
@@ -14,6 +13,7 @@ import {
   registerInvitesRoutes,
   registerOnboardingRoutes,
 } from "./modules/onboarding/onboarding.routes.js";
+import { registerOrganizationsRoutes } from "./modules/organizations/organizations.routes.js";
 
 const env = loadEnv();
 
@@ -25,7 +25,6 @@ const app = Fastify({
 });
 
 await app.register(cors, { origin: true });
-await app.register(jwtPlugin);
 
 // Every route validates its body/query/params with `Schema.parse(...)`
 // (see any *.routes.ts) rather than Fastify's own schema hooks, so a bad
@@ -55,6 +54,7 @@ await app.register(registerClaimQueriesRoutes, {
 await app.register(registerQueryInboxRoutes, { prefix: "/queries" });
 await app.register(registerOnboardingRoutes, { prefix: "/onboarding" });
 await app.register(registerInvitesRoutes, { prefix: "/invites" });
+await app.register(registerOrganizationsRoutes, { prefix: "/organizations" });
 
 // Remaining feature modules (audit) register their routes here as they
 // land — see docs/ARCHITECTURE.md for the module map.

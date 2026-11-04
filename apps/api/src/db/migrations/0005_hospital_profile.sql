@@ -1,0 +1,23 @@
+ALTER TABLE "organizations" ADD COLUMN "legal_entity_name" text;--> statement-breakpoint
+ALTER TABLE "organizations" ADD COLUMN "hospital_type" text;--> statement-breakpoint
+ALTER TABLE "organizations" ADD COLUMN "ownership_type" text;--> statement-breakpoint
+ALTER TABLE "organizations" ADD COLUMN "bed_count" integer;--> statement-breakpoint
+ALTER TABLE "organizations" ADD COLUMN "rohini_id" text;--> statement-breakpoint
+ALTER TABLE "organizations" ADD COLUMN "registration_number" text;--> statement-breakpoint
+ALTER TABLE "organizations" ADD COLUMN "registration_valid_until" date;--> statement-breakpoint
+ALTER TABLE "organizations" ADD COLUMN "pan" text;--> statement-breakpoint
+ALTER TABLE "organizations" ADD COLUMN "gstin" text;--> statement-breakpoint
+ALTER TABLE "organizations" ADD COLUMN "nabh_status" text;--> statement-breakpoint
+ALTER TABLE "organizations" ADD COLUMN "nabh_valid_until" date;--> statement-breakpoint
+ALTER TABLE "organizations" ADD COLUMN "address_line1" text;--> statement-breakpoint
+ALTER TABLE "organizations" ADD COLUMN "address_line2" text;--> statement-breakpoint
+ALTER TABLE "organizations" ADD COLUMN "city" text;--> statement-breakpoint
+ALTER TABLE "organizations" ADD COLUMN "state" text;--> statement-breakpoint
+ALTER TABLE "organizations" ADD COLUMN "pincode" text;--> statement-breakpoint
+ALTER TABLE "organizations" ADD COLUMN "phone" text;--> statement-breakpoint
+ALTER TABLE "organizations" ADD COLUMN "email" text;--> statement-breakpoint
+ALTER TABLE "organizations" ADD COLUMN "website" text;--> statement-breakpoint
+ALTER TABLE "organizations" ADD COLUMN "desk_contact_name" text;--> statement-breakpoint
+ALTER TABLE "organizations" ADD COLUMN "desk_contact_phone" text;--> statement-breakpoint
+ALTER TABLE "organizations" ADD COLUMN "desk_contact_email" text;--> statement-breakpoint
+ALTER TABLE "organizations" ADD COLUMN "onboarding_completed_at" timestamp with time zone;

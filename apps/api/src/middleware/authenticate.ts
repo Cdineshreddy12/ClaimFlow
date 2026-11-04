@@ -1,6 +1,22 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
 import { Role } from "@claimflow/contracts";
-import type { SupabaseJwtPayload } from "../plugins/jwt.js";
+import {
+  extractBearerToken,
+  verifySupabaseToken,
+  type SupabaseJwtPayload,
+} from "../lib/supabase-jwt.js";
+
+async function verifyRequestToken(
+  request: FastifyRequest,
+): Promise<SupabaseJwtPayload | null> {
+  const token = extractBearerToken(request.headers.authorization);
+  if (!token) return null;
+  try {
+    return await verifySupabaseToken(token);
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Verifies the request's bearer token and populates request.authUser.
@@ -15,10 +31,8 @@ export async function authenticate(
   request: FastifyRequest,
   reply: FastifyReply,
 ) {
-  let payload: SupabaseJwtPayload;
-  try {
-    payload = await request.jwtVerify<SupabaseJwtPayload>();
-  } catch {
+  const payload = await verifyRequestToken(request);
+  if (!payload) {
     return reply.code(401).send({ error: "unauthorized" });
   }
 
@@ -51,10 +65,8 @@ export async function authenticateUserOnly(
   request: FastifyRequest,
   reply: FastifyReply,
 ) {
-  let payload: SupabaseJwtPayload;
-  try {
-    payload = await request.jwtVerify<SupabaseJwtPayload>();
-  } catch {
+  const payload = await verifyRequestToken(request);
+  if (!payload) {
     return reply.code(401).send({ error: "unauthorized" });
   }
   request.authUserId = payload.sub;
