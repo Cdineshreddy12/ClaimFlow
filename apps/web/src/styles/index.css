@@ -186,11 +186,6 @@ h3 {
   font-size: 15.5px;
   letter-spacing: -0.01em;
 }
-.brand-sub {
-  font-size: 12px;
-  color: var(--ink-faint);
-  padding: 0 0 0 38px;
-}
 .nav {
   display: flex;
   flex-direction: column;
@@ -531,6 +526,122 @@ h3 {
 .field-value {
   font-size: 15px;
   font-weight: 600;
+}
+
+/* ---------- Pre-auth fields ----------
+   An unconfirmed suggestion is dashed and tinted, a confirmed value is
+   an ordinary field. That difference is load-bearing, not decoration:
+   docs/adr/0005 turns on a desk executive being able to see at a glance
+   which figures on this form a human has actually stood behind. */
+.field--needs-confirm {
+  border-style: dashed;
+  border-color: var(--pending);
+  background: var(--pending-bg);
+}
+.field-source {
+  font-size: 12px;
+  color: var(--ink-faint);
+  font-style: italic;
+  line-height: 1.45;
+}
+.field-conf {
+  font-size: 12px;
+  color: var(--ink-faint);
+}
+.field-hint-low {
+  font-size: 12px;
+  color: var(--pending);
+  font-weight: 600;
+}
+.field-foot {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: auto;
+  padding-top: 2px;
+}
+.field-ok {
+  font-size: 12px;
+  color: var(--approved);
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.field-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.field-input {
+  width: 100%;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 13.5px;
+  background: var(--surface-raised);
+  color: var(--ink);
+  font-family: inherit;
+}
+
+.preauth-card {
+  margin-top: 22px;
+}
+.preauth-head-left,
+.preauth-head-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.preauth-head-right {
+  flex-shrink: 0;
+}
+.preauth-toggle {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  color: inherit;
+}
+.preauth-caret {
+  display: inline-block;
+  font-size: 15px;
+  line-height: 1;
+  color: var(--ink-faint);
+  transition: transform 120ms ease;
+}
+.preauth-caret.is-open {
+  transform: rotate(90deg);
+}
+@media (prefers-reduced-motion: reduce) {
+  .preauth-caret {
+    transition: none;
+  }
+}
+.preauth-count {
+  font-size: 12px;
+  color: var(--ink-faint);
+}
+.preauth-groups {
+  margin-top: 18px;
+}
+.preauth-group + .preauth-group {
+  margin-top: 6px;
+}
+.preauth-group-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-soft);
+  margin-bottom: 9px;
+}
+/* The grid's own margin handles the gap between groups. */
+.preauth-group .field-row {
+  margin-bottom: 18px;
 }
 
 .checklist {
@@ -1199,9 +1310,6 @@ details.email-raw[open] > summary {
     padding: 12px 16px;
     border-right: none;
     border-bottom: 1px solid var(--border);
-  }
-  .brand-sub {
-    display: none;
   }
   .nav {
     flex-direction: row;

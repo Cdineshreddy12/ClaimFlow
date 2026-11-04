@@ -17,6 +17,7 @@ import { registerOrganizationsRoutes } from "./modules/organizations/organizatio
 import { registerReferenceRoutes } from "./modules/reference/reference.routes.js";
 import { registerAuditRoutes } from "./modules/audit/audit.routes.js";
 import { registerPacketRoutes } from "./modules/packet/packet.routes.js";
+import { registerPreauthRoutes } from "./modules/preauth/preauth.routes.js";
 import {
   registerClaimDeductionRoutes,
   registerDeductionSummaryRoutes,
@@ -70,6 +71,9 @@ await app.register(registerReferenceRoutes);
 await app.register(registerAuditRoutes, { prefix: "/audit-log" });
 await app.register(registerPacketRoutes, {
   prefix: "/claims/:claimId/packet",
+});
+await app.register(registerPreauthRoutes, {
+  prefix: "/claims/:claimId/preauth-fields",
 });
 await app.register(registerClaimDoctorApprovalRoutes, {
   prefix: "/claims/:claimId/doctor-approvals",

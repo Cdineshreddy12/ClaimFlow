@@ -4,6 +4,7 @@ import { Loader } from "../../components/ui/loader";
 import { formatAmount } from "../../lib/format";
 import { ChecklistGapsCard } from "./ChecklistGapsCard";
 import { ClaimActions } from "./ClaimActions";
+import { PreauthFieldsCard } from "./PreauthFieldsCard";
 import { Stepper } from "./Stepper";
 import { UploadedDocumentsCard } from "./UploadedDocumentsCard";
 import { useClaim, useClaimGaps } from "./api";
@@ -95,6 +96,11 @@ export function ClaimFilePage() {
         <ChecklistGapsCard claim={claim} gaps={gaps} />
         <UploadedDocumentsCard claim={claim} />
       </div>
+
+      {/* Below the gap view on purpose: the brief wants what's missing
+          and overdue readable without scrolling, and this is two dozen
+          fields. It opens itself when any of them need a decision. */}
+      <PreauthFieldsCard claim={claim} />
     </AppShell>
   );
 }

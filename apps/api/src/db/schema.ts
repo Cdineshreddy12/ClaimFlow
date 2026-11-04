@@ -288,6 +288,68 @@ export const documents = pgTable(
   (table) => [index("documents_claim_id_idx").on(table.claimId)],
 );
 
+/**
+ * One row per pre-auth form field the desk has either been offered a
+ * value for or filled in. Sparse on purpose: a claim nobody has run the
+ * extractor on has no rows here at all.
+ *
+ * The column split mirrors `documents` deliberately — `aiValue` is what
+ * was suggested, `value` is what a human stands behind, and nothing
+ * reads the suggestion as truth (docs/adr/0005). Keeping both means the
+ * audit trail can always answer "what did the model say, and what did
+ * the desk change it to".
+ *
+ * `value` is text for every field type; @claimflow/contracts owns the
+ * catalogue, the per-type parsing and the canonical form. That keeps the
+ * form's shape in one place both the API and the web app read, rather
+ * than as two dozen columns that have to be migrated to add a field.
+ */
+export const claimPreauthFields = pgTable(
+  "claim_preauth_fields",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    claimId: uuid("claim_id")
+      .notNull()
+      .references(() => claims.id, { onDelete: "cascade" }),
+    /** A key from PREAUTH_FIELDS in @claimflow/contracts. */
+    fieldKey: text("field_key").notNull(),
+    /** What a human stands behind. Null until someone confirms or types one. */
+    value: text("value"),
+    /** The suggestion. Never read as truth, never copied here on its own. */
+    aiValue: text("ai_value"),
+    confidence: numeric("confidence", { precision: 4, scale: 3 }),
+    /** Quoted from the document, shown before the human confirms. */
+    sourceSnippet: text("source_snippet"),
+    /** Which upload it was read out of, where the extractor could say. */
+    sourceDocumentId: uuid("source_document_id").references(
+      () => documents.id,
+      {
+        onDelete: "set null",
+      },
+    ),
+    /** 'claude' — so the UI never implies a model ran when none did. */
+    extractedBy: text("extracted_by"),
+    extractedAt: timestamp("extracted_at", { withTimezone: true }),
+    confirmedBy: uuid("confirmed_by").references(() => orgMembers.id),
+    confirmedAt: timestamp("confirmed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("claim_preauth_fields_claim_id_idx").on(table.claimId),
+    // One row per field per claim — re-running the extractor updates in
+    // place rather than stacking up suggestions nobody asked for.
+    unique("claim_preauth_fields_claim_id_field_key_key").on(
+      table.claimId,
+      table.fieldKey,
+    ),
+  ],
+);
+
 export const queries = pgTable(
   "queries",
   {

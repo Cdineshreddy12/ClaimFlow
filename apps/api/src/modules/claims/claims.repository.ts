@@ -79,6 +79,41 @@ export async function createClaim(
 }
 
 /**
+ * Writes back the two facts the claim header and the dashboard already
+ * read off columns, once a human has confirmed them on the pre-auth form.
+ *
+ * Without this there'd be two answers to "when was this patient
+ * admitted" — the pre-auth field and `claims.admittedAt` — and the
+ * dashboard would keep showing the one nobody filled in. Only ever
+ * called on confirmation, never from a suggestion.
+ */
+export async function updateConfirmedFacts(
+  organizationId: string,
+  claimId: string,
+  facts: { admittedAt?: Date; billedAmount?: string },
+) {
+  if (facts.admittedAt === undefined && facts.billedAmount === undefined) {
+    return undefined;
+  }
+  const [updated] = await db
+    .update(claims)
+    .set({
+      ...(facts.admittedAt !== undefined
+        ? { admittedAt: facts.admittedAt }
+        : {}),
+      ...(facts.billedAmount !== undefined
+        ? { billedAmount: facts.billedAmount }
+        : {}),
+      updatedAt: new Date(),
+    })
+    .where(
+      and(eq(claims.id, claimId), eq(claims.organizationId, organizationId)),
+    )
+    .returning();
+  return updated;
+}
+
+/**
  * Updates status and appends the timeline event in one call — the two
  * must never drift apart. Does not validate the transition itself; that's
  * claims.service.ts's job, using the shared state machine in
