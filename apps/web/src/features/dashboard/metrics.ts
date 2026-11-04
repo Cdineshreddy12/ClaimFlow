@@ -1,5 +1,4 @@
 import type { ClaimStatus } from "@claimflow/contracts";
-import { STATUS_LABEL } from "../claims/types";
 import type { Claim } from "../claims/types";
 import type { InboxQuery } from "../queries/types";
 
@@ -16,7 +15,6 @@ export interface DashboardMetrics {
   overdueQueries: number;
   /** Hours, averaged over open claims' time since their last status change — a real, computable stand-in for the brief's discharge-wait metric, which would need event tracking this schema doesn't have yet. */
   avgTimeInStageHours: number | null;
-  byStatus: { status: ClaimStatus; label: string; count: number }[];
 }
 
 export function computeDashboardMetrics(
@@ -34,13 +32,6 @@ export function computeDashboardMetrics(
       ? stageHours.reduce((a, b) => a + b, 0) / stageHours.length
       : null;
 
-  const counts = new Map<ClaimStatus, number>();
-  for (const claim of claims)
-    counts.set(claim.status, (counts.get(claim.status) ?? 0) + 1);
-  const byStatus = [...counts.entries()]
-    .map(([status, count]) => ({ status, label: STATUS_LABEL[status], count }))
-    .sort((a, b) => b.count - a.count);
-
   return {
     openClaims: open.length,
     needsAttention: claims.filter((c) => NEEDS_ATTENTION.includes(c.status))
@@ -50,6 +41,5 @@ export function computeDashboardMetrics(
       (q) => q.deadline && new Date(q.deadline).getTime() < now,
     ).length,
     avgTimeInStageHours,
-    byStatus,
   };
 }

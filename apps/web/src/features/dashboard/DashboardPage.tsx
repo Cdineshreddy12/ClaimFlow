@@ -1,8 +1,10 @@
 import { useMemo } from "react";
 import { AppShell } from "../../app/AppShell";
+import { Loader } from "../../components/ui/loader";
 import { useClaims } from "../claims/api";
 import { useQueryInbox } from "../queries/api";
-import { ClaimsByStatusCard } from "./ClaimsByStatusCard";
+import { useDeductionsSummary } from "../deductions/api";
+import { DeductionsByReasonCard } from "./DeductionsByReasonCard";
 import { ClaimsTableCard } from "./ClaimsTableCard";
 import { KpiRow } from "./KpiRow";
 import { computeDashboardMetrics } from "./metrics";
@@ -18,6 +20,7 @@ export function DashboardPage() {
     isLoading: queriesLoading,
     isError: queriesError,
   } = useQueryInbox("open");
+  const { data: deductions } = useDeductionsSummary();
 
   // Stamped once per mount rather than re-read on every render — keeps the
   // "time in stage" figures stable while the page sits open.
@@ -33,19 +36,19 @@ export function DashboardPage() {
 
   return (
     <AppShell title="Dashboard" subtitle="Across the cashless desk">
-      {isLoading ? <p className="empty-state">Loading…</p> : null}
+      {isLoading ? <Loader label="Loading the desk…" /> : null}
       {isError ? (
         <div className="inline-error">Couldn't load the dashboard.</div>
       ) : null}
 
       {!isLoading && !isError ? (
         <>
-          <KpiRow metrics={metrics} />
+          <KpiRow metrics={metrics} deductions={deductions} />
           {/* Ratio lives in CSS, not an inline style — an inline
               grid-template-columns outranks every media query, which is
               exactly how this silently stayed 2-up on a phone. */}
           <div className="two-col two-col--dashboard">
-            <ClaimsByStatusCard byStatus={metrics.byStatus} />
+            <DeductionsByReasonCard summary={deductions} />
             <ClaimsTableCard claims={claims ?? []} now={now} />
           </div>
         </>

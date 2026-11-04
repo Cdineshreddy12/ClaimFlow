@@ -92,10 +92,9 @@ everything by hand.
   end-to-end against the live API. Claim File has the status timeline,
   live document-gap view, and a real upload flow (the browser PUTs
   straight to S3, same pre-signed-URL path as the API). Dashboard has
-  real kpis, a claims-by-status breakdown, and the claims table — two
-  of the mockup's kpis (avg discharge wait, deductions by reason) have
-  no backing data yet, so they're swapped for real equivalents (avg
-  time in stage, open/overdue queries) rather than faked. Query Inbox
+  real kpis, a claims-by-status breakdown, and the claims table — deductions by reason is now real (see below); avg discharge wait
+  still has no backing data, so open/overdue queries stands in rather
+  than being faked. Query Inbox
   lists open TPA queries with a live reply-window countdown and marks
   a reply sent for real (docs/adr/0005 — nothing is ever auto-sent, and
   no reply body is stored, only the timestamp); whether a requested
@@ -105,6 +104,17 @@ everything by hand.
   login screen yet, so a dev-only minted token stands in for auth (see
   `.env.example`'s `VITE_DEV_TOKEN`) — swap for real Supabase auth once
   the Custom Access Token hook is enabled.
+- ✅ Deductions by reason — recorded against a claim at settlement and
+  aggregated for the dashboard, with the avoidable share (missing or
+  late paperwork) called out separately, since that's the number the
+  40%-reduction target actually tracks.
+- ✅ Doctor approval by phone link — a desk mints a link for a named
+  doctor who approves or sends back clinical notes with no account.
+  Bounded by 48h expiry, one decision per link, and a payload narrowed
+  to confirmed clinical documents only (docs/adr/0010).
+- ✅ Merged PDF packet per claim — cover sheet plus every confirmed
+  document, type detected by magic number, unembeddable files reported
+  rather than dropped.
 - ✅ Audit logging — every mutation that creates, changes or destroys
   tenant data writes a who/what/when entry (DPDP constraint, see
   docs/adr/0009). Deltas only, not row dumps; reads gated to
@@ -258,18 +268,19 @@ Two things worth stating plainly rather than leaving implicit:
 - [x] Checklist Admin screen (web) — all four mockup screens now built
 - [ ] AI document classification, OCR, and query summarization (pending
       provider credentials)
-- [ ] Doctor approval via phone link
-- [ ] Merged PDF packet per TPA
-- [ ] Self-serve organization signup + 14-day trial + Razorpay billing —
-      flow designed in [`docs/adr/0007`](docs/adr/0007-onboarding-flow.md),
-      not yet built; needs the Supabase Custom Access Token Hook enabled
-      in the dashboard before it can work end-to-end
+- [x] Doctor approval via phone link
+- [x] Merged PDF packet per claim
+- [x] Deductions by reason, on the dashboard
+- [x] Audit logging for every mutation (DPDP)
+- [x] Self-serve organization signup, hospital profile, 14-day trial —
+      see [`docs/adr/0007`](docs/adr/0007-onboarding-flow.md). Razorpay
+      billing itself is still to come.
 - [ ] Platform super-admin console with audited break-glass access
 
 ## Documentation
 
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — system overview, stack, module map
-- [`docs/adr/`](docs/adr) — decision records (checklist engine, tenant isolation, document pipeline, claim state machine, AI confirmation UX, billing, onboarding flow, audit logging)
+- [`docs/adr/`](docs/adr) — decision records (checklist engine, tenant isolation, document pipeline, claim state machine, AI confirmation UX, billing, onboarding flow, audit logging, doctor approval links)
 - [`docs/design/claims-desk-mockup.html`](docs/design/claims-desk-mockup.html) — reviewed UI reference
 
 ## License

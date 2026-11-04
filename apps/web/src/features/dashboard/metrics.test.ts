@@ -99,15 +99,4 @@ describe("computeDashboardMetrics", () => {
         .avgTimeInStageHours,
     ).toBeNull();
   });
-
-  it("groups claims by status, sorted by count descending", () => {
-    const claims = [
-      claim({ status: "QUERY_RAISED" }),
-      claim({ status: "QUERY_RAISED" }),
-      claim({ status: "APPROVED" }),
-    ];
-    const byStatus = computeDashboardMetrics(claims, [], NOW).byStatus;
-    expect(byStatus[0]).toMatchObject({ status: "QUERY_RAISED", count: 2 });
-    expect(byStatus[1]).toMatchObject({ status: "APPROVED", count: 1 });
-  });
 });

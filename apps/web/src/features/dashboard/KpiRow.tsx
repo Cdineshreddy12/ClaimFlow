@@ -1,6 +1,14 @@
+import { formatAmount } from "@/lib/format";
+import type { DeductionsSummary } from "../deductions/api";
 import type { DashboardMetrics } from "./metrics";
 
-export function KpiRow({ metrics }: { metrics: DashboardMetrics }) {
+export function KpiRow({
+  metrics,
+  deductions,
+}: {
+  metrics: DashboardMetrics;
+  deductions: DeductionsSummary | undefined;
+}) {
   return (
     <div className="kpi-row">
       <div className="kpi">
@@ -20,17 +28,14 @@ export function KpiRow({ metrics }: { metrics: DashboardMetrics }) {
       </div>
 
       <div className="kpi">
-        <div className="kpi-label">Avg. Time in Stage</div>
+        <div className="kpi-label">Deductions, This Month</div>
         <div className="kpi-value mono">
-          {metrics.avgTimeInStageHours === null
-            ? "—"
-            : metrics.avgTimeInStageHours.toFixed(1)}
-          {metrics.avgTimeInStageHours !== null ? (
-            <span style={{ fontSize: 15, fontWeight: 500 }}> hrs</span>
-          ) : null}
+          {deductions ? formatAmount(deductions.total) : "—"}
         </div>
         <div className="kpi-trend">
-          Since each open claim's last status change
+          {deductions && deductions.avoidableTotal > 0
+            ? `${formatAmount(deductions.avoidableTotal)} avoidable`
+            : "Nothing recorded yet"}
         </div>
       </div>
 

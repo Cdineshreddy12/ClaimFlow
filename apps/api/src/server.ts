@@ -18,6 +18,10 @@ import { registerReferenceRoutes } from "./modules/reference/reference.routes.js
 import { registerAuditRoutes } from "./modules/audit/audit.routes.js";
 import { registerPacketRoutes } from "./modules/packet/packet.routes.js";
 import {
+  registerClaimDeductionRoutes,
+  registerDeductionSummaryRoutes,
+} from "./modules/deductions/deductions.routes.js";
+import {
   registerClaimDoctorApprovalRoutes,
   registerPublicDoctorApprovalRoutes,
 } from "./modules/doctor-approval/doctor-approval.routes.js";
@@ -73,6 +77,10 @@ await app.register(registerClaimDoctorApprovalRoutes, {
 await app.register(registerPublicDoctorApprovalRoutes, {
   prefix: "/doctor-approval",
 });
+await app.register(registerClaimDeductionRoutes, {
+  prefix: "/claims/:claimId/deductions",
+});
+await app.register(registerDeductionSummaryRoutes, { prefix: "/deductions" });
 
 app
   .listen({ port: env.PORT, host: "0.0.0.0" })

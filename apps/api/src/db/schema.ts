@@ -336,6 +336,32 @@ export const doctorApprovals = pgTable(
   (table) => [index("doctor_approvals_claim_id_idx").on(table.claimId)],
 );
 
+/**
+ * Money an insurer withheld against what was billed, with the reason.
+ * Recorded by the desk at settlement — this is the number the client is
+ * trying to cut by 40%, so it has to be attributable to a cause rather
+ * than a single lump figure.
+ *
+ * Scoped through its claim, like documents and queries.
+ */
+export const deductions = pgTable(
+  "deductions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    claimId: uuid("claim_id")
+      .notNull()
+      .references(() => claims.id, { onDelete: "cascade" }),
+    reason: text("reason").notNull(),
+    amount: numeric("amount", { precision: 12, scale: 2 }).notNull(),
+    note: text("note"),
+    recordedBy: uuid("recorded_by").references(() => orgMembers.id),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [index("deductions_claim_id_idx").on(table.claimId)],
+);
+
 export const auditLog = pgTable(
   "audit_log",
   {

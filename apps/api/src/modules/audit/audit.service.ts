@@ -38,7 +38,8 @@ export type AuditAction =
   | "doctor_approval.requested"
   | "doctor_approval.viewed"
   | "doctor_approval.approved"
-  | "doctor_approval.declined";
+  | "doctor_approval.declined"
+  | "deduction.recorded";
 
 interface AuditContext {
   userId: string;
