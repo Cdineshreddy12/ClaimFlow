@@ -1,4 +1,4 @@
-import { and, count, eq, notInArray } from "drizzle-orm";
+import { and, count, eq, notInArray, sql } from "drizzle-orm";
 import { db } from "../../db/client.js";
 import { checklistRules, claims } from "../../db/schema.js";
 import type {
@@ -67,6 +67,67 @@ export async function deleteRule(id: string) {
  * affects claims opened after the edit, so this is informational, not a
  * block on saving.
  */
+/**
+ * Every insurer × procedure pair the desk has actually opened a claim
+ * on, with how many rules that pair has.
+ *
+ * Driven from `claims`, not from the cartesian product of insurers and
+ * procedures: most of that grid is combinations nobody will ever use,
+ * and a coverage report padded with them hides the handful that matter.
+ *
+ * A pair with claims and zero rules is the case this exists for — the
+ * claim gets an empty checklist snapshot, the gap view has nothing to
+ * report, and nothing is ever missing. That is worse than a wrong
+ * checklist, because it looks fine.
+ */
+export interface CoverageRow {
+  insurerId: string;
+  insurerName: string;
+  procedureId: string;
+  procedureName: string;
+  rules: number;
+  claims: number;
+  activeClaims: number;
+  lastClaimAt: Date | null;
+}
+
+export async function listCoverage(): Promise<CoverageRow[]> {
+  const rows = await db.execute<Record<string, unknown>>(sql`
+    select
+      i.id   as insurer_id,
+      i.name as insurer_name,
+      p.id   as procedure_id,
+      p.name as procedure_name,
+      count(c.id) as claims,
+      count(c.id) filter (
+        where c.status not in ('SETTLED', 'REJECTED')
+      ) as active_claims,
+      max(c.created_at) as last_claim_at,
+      (
+        select count(*)
+        from checklist_rules r
+        where r.insurer_id = i.id and r.procedure_id = p.id
+      ) as rules
+    from claims c
+    join insurers i on i.id = c.insurer_id
+    join procedures p on p.id = c.procedure_id
+    group by i.id, i.name, p.id, p.name
+  `);
+
+  return (rows as unknown as Record<string, unknown>[]).map((row) => ({
+    insurerId: row.insurer_id as string,
+    insurerName: row.insurer_name as string,
+    procedureId: row.procedure_id as string,
+    procedureName: row.procedure_name as string,
+    rules: Number(row.rules),
+    claims: Number(row.claims),
+    activeClaims: Number(row.active_claims),
+    lastClaimAt: row.last_claim_at
+      ? new Date(row.last_claim_at as string)
+      : null,
+  }));
+}
+
 export async function countActiveClaimsFor(
   insurerId: string,
   procedureId: string,
@@ -82,4 +143,85 @@ export async function countActiveClaimsFor(
       ),
     );
   return result?.value ?? 0;
+}
+
+/**
+ * Every rule, for the proposal pass.
+ *
+ * One read rather than one per (insurer, procedure) pair: the proposal
+ * list spans every pair the desk has queries for, and looking rules up
+ * pair by pair would be a query per row of the output. The whole rule
+ * set for one hospital is small — a few insurers times a few dozen
+ * procedures.
+ */
+export async function listAllRules() {
+  return db.select().from(checklistRules);
+}
+
+/**
+ * What TPAs have actually asked for, per (insurer, procedure), against
+ * how many claims were submitted to them.
+ *
+ * `jsonb_array_elements_text` to unnest the requested items the query
+ * summariser stored, and `count(distinct claim_id)` because one claim
+ * asking twice for the same document is one claim, not two. DRAFT
+ * claims are excluded from both halves: a claim never sent could not
+ * have been queried, and counting it would deflate every rate.
+ */
+export interface RequestedItemRow {
+  insurerId: string;
+  insurerName: string;
+  procedureId: string;
+  procedureName: string;
+  requestedItem: string;
+  claimsRequested: number;
+  claimsSubmitted: number;
+}
+
+export async function requestedItemsByPair(): Promise<RequestedItemRow[]> {
+  const rows = await db.execute(sql`
+    with submitted as (
+      select c.insurer_id, c.procedure_id, count(*)::int as claims_submitted
+      from claims c
+      where c.status <> 'DRAFT'
+      group by c.insurer_id, c.procedure_id
+    ),
+    requested as (
+      select
+        c.insurer_id,
+        c.procedure_id,
+        item.value as requested_item,
+        count(distinct q.claim_id)::int as claims_requested
+      from queries q
+      join claims c on c.id = q.claim_id
+      cross join lateral jsonb_array_elements_text(q.requested_items) as item(value)
+      where c.status <> 'DRAFT'
+        and length(trim(item.value)) > 1
+      group by c.insurer_id, c.procedure_id, item.value
+    )
+    select
+      i.id as insurer_id,
+      i.name as insurer_name,
+      p.id as procedure_id,
+      p.name as procedure_name,
+      r.requested_item,
+      r.claims_requested,
+      s.claims_submitted
+    from requested r
+    join submitted s
+      on s.insurer_id = r.insurer_id and s.procedure_id = r.procedure_id
+    join insurers i on i.id = r.insurer_id
+    join procedures p on p.id = r.procedure_id
+    order by r.claims_requested desc
+  `);
+
+  return (rows as unknown as Record<string, unknown>[]).map((row) => ({
+    insurerId: row.insurer_id as string,
+    insurerName: row.insurer_name as string,
+    procedureId: row.procedure_id as string,
+    procedureName: row.procedure_name as string,
+    requestedItem: row.requested_item as string,
+    claimsRequested: Number(row.claims_requested),
+    claimsSubmitted: Number(row.claims_submitted),
+  }));
 }

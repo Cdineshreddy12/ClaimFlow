@@ -4,6 +4,7 @@ import * as queriesService from "./queries.service.js";
 import { ClaimNotFoundError, QueryNotFoundError } from "./queries.service.js";
 import {
   ClaimIdParams,
+  ConfirmDeadlineBody,
   CreateQueryBody,
   ListInboxQuery,
   QueryIdParams,
@@ -77,6 +78,24 @@ export async function registerQueryInboxRoutes(app: FastifyInstance) {
     const body = UpdateQueryBody.parse(request.body);
     try {
       const result = await queriesService.updateQuery(
+        request.authUser!,
+        id,
+        body,
+      );
+      return reply.send(result);
+    } catch (err) {
+      if (err instanceof QueryNotFoundError) {
+        return reply.code(404).send({ error: "query not found" });
+      }
+      throw err;
+    }
+  });
+
+  app.patch("/:id/deadline", async (request, reply) => {
+    const { id } = QueryIdParams.parse(request.params);
+    const body = ConfirmDeadlineBody.parse(request.body ?? {});
+    try {
+      const result = await queriesService.confirmDeadline(
         request.authUser!,
         id,
         body,

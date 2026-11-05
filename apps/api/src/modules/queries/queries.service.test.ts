@@ -188,6 +188,99 @@ describe("queries.service", () => {
       // The summary still landed.
       expect(data.summarisedBy).toBe("claude");
     });
+
+    it("leaves a derived deadline unconfirmed — it's the model's reading, not a human's", async () => {
+      summariserReturning({});
+
+      const { createQuery } = await import("./queries.service.js");
+      await createQuery(auth("desk_head"), CLAIM_ID, {
+        tpaRawEmail: "Please revert within 48 hours.",
+        requestedItems: [],
+      });
+
+      const data = inserted();
+      expect(data.deadline).toEqual(new Date("2026-11-06T09:15:00.000Z"));
+      expect(data.deadlineConfirmedAt).toBeUndefined();
+      expect(data.deadlineConfirmedBy).toBeUndefined();
+      expect(orgMembersRepository.getMemberId).not.toHaveBeenCalled();
+    });
+
+    it("counts a deadline the desk typed as confirmed by whoever typed it", async () => {
+      summariserReturning({});
+      vi.mocked(orgMembersRepository.getMemberId).mockResolvedValue(MEMBER_ID);
+
+      const { createQuery } = await import("./queries.service.js");
+      await createQuery(auth("desk_head"), CLAIM_ID, {
+        tpaRawEmail: "...",
+        requestedItems: [],
+        deadline: new Date("2026-11-10T00:00:00.000Z"),
+      });
+
+      const data = inserted();
+      expect(data.deadlineConfirmedBy).toBe(MEMBER_ID);
+      expect(data.deadlineConfirmedAt).toEqual(expect.any(Date));
+    });
+  });
+
+  /**
+   * The gate docs/adr/0005 asks for on the one summariser output that
+   * lands in a live column instead of a suggestion one.
+   */
+  describe("confirmDeadline", () => {
+    beforeEach(() => {
+      vi.mocked(orgMembersRepository.getMemberId).mockResolvedValue(MEMBER_ID);
+      vi.mocked(queriesRepository.getById).mockResolvedValue({
+        id: QUERY_ID,
+        deadline: new Date("2026-11-06T09:15:00.000Z"),
+        deadlineInferred: true,
+      } as never);
+      vi.mocked(queriesRepository.confirmDeadline).mockResolvedValue({
+        id: QUERY_ID,
+        deadline: new Date("2026-11-06T09:15:00.000Z"),
+        deadlineConfirmedAt: new Date(),
+      } as never);
+    });
+
+    it("stamps the member against the stored date when no override is sent", async () => {
+      const { confirmDeadline } = await import("./queries.service.js");
+      const result = await confirmDeadline(
+        auth("desk_executive"),
+        QUERY_ID,
+        {},
+      );
+
+      // undefined, not the echoed value: confirming as-is must not be
+      // able to rewrite a deadline that moved since the inbox loaded.
+      expect(queriesRepository.confirmDeadline).toHaveBeenCalledWith(
+        QUERY_ID,
+        undefined,
+        MEMBER_ID,
+      );
+      expect(result.deadlineConfirmedAt).not.toBeNull();
+    });
+
+    it("passes an override through, including the null that clears a wrong one", async () => {
+      const { confirmDeadline } = await import("./queries.service.js");
+      await confirmDeadline(auth("desk_head"), QUERY_ID, { deadline: null });
+
+      expect(queriesRepository.confirmDeadline).toHaveBeenCalledWith(
+        QUERY_ID,
+        null,
+        MEMBER_ID,
+      );
+    });
+
+    it("raises QueryNotFoundError rather than confirming a deadline on nothing", async () => {
+      vi.mocked(queriesRepository.getById).mockResolvedValue(undefined);
+
+      const { confirmDeadline, QueryNotFoundError } =
+        await import("./queries.service.js");
+
+      await expect(
+        confirmDeadline(auth("desk_head"), QUERY_ID, {}),
+      ).rejects.toThrow(QueryNotFoundError);
+      expect(queriesRepository.confirmDeadline).not.toHaveBeenCalled();
+    });
   });
 
   describe("getQuery / updateQuery / markReplied", () => {
@@ -199,6 +292,41 @@ describe("queries.service", () => {
 
       await expect(getQuery(auth("desk_head"), QUERY_ID)).rejects.toThrow(
         QueryNotFoundError,
+      );
+    });
+
+    it("updateQuery carries the editor through, so a hand-typed deadline lands confirmed", async () => {
+      vi.mocked(orgMembersRepository.getMemberId).mockResolvedValue(MEMBER_ID);
+      vi.mocked(queriesRepository.update).mockResolvedValue({
+        id: QUERY_ID,
+      } as never);
+      const deadline = new Date("2026-11-12T12:00:00.000Z");
+
+      const { updateQuery } = await import("./queries.service.js");
+      await updateQuery(auth("desk_head"), QUERY_ID, { deadline });
+
+      expect(queriesRepository.update).toHaveBeenCalledWith(
+        QUERY_ID,
+        { deadline },
+        MEMBER_ID,
+      );
+    });
+
+    it("updateQuery doesn't go looking up a member for an edit that isn't a deadline", async () => {
+      vi.mocked(queriesRepository.update).mockResolvedValue({
+        id: QUERY_ID,
+      } as never);
+
+      const { updateQuery } = await import("./queries.service.js");
+      await updateQuery(auth("desk_head"), QUERY_ID, {
+        aiSummary: "Rewritten.",
+      });
+
+      expect(orgMembersRepository.getMemberId).not.toHaveBeenCalled();
+      expect(queriesRepository.update).toHaveBeenCalledWith(
+        QUERY_ID,
+        { aiSummary: "Rewritten." },
+        null,
       );
     });
 

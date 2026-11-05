@@ -4,6 +4,7 @@ import * as auditService from "../audit/audit.service.js";
 import { getMemberId } from "../members/members.repository.js";
 import * as queriesRepository from "./queries.repository.js";
 import type {
+  ConfirmDeadlineBody,
   CreateQueryBody,
   CreateQueryInput,
   ListInboxQuery,
@@ -33,6 +34,14 @@ export async function createQuery(
   // summary has already read the email, and overwriting that would be
   // the model second-guessing a human who was there.
   const enriched = await summariseIfBlank(body);
+
+  // A deadline that came in on the body was typed by the person
+  // pasting the email, so it is confirmed on arrival. One the
+  // summariser derived is not, and waits for a click — docs/adr/0005.
+  if (body.deadline) {
+    enriched.deadlineConfirmedBy = await getMemberId(auth.userId);
+    enriched.deadlineConfirmedAt = new Date();
+  }
 
   const created = await queriesRepository.create(claimId, enriched);
   if (!created) throw new ClaimNotFoundError(claimId);
@@ -103,7 +112,13 @@ export async function updateQuery(
   id: string,
   body: UpdateQueryBody,
 ) {
-  const updated = await queriesRepository.update(id, body);
+  // Only looked up when a deadline is in play — every other edit here
+  // is attributed by the audit record alone, and a round trip to
+  // members for nothing is a round trip for nothing.
+  const editedBy =
+    body.deadline !== undefined ? await getMemberId(auth.userId) : null;
+
+  const updated = await queriesRepository.update(id, body, editedBy);
   if (!updated) throw new QueryNotFoundError(id);
 
   await auditService.record(auth, {
@@ -111,6 +126,53 @@ export async function updateQuery(
     entityType: "query",
     entityId: id,
     after: { fields: Object.keys(body) },
+  });
+
+  return updated;
+}
+
+/**
+ * The human-confirm step docs/adr/0005 requires on the reply deadline.
+ *
+ * The summariser writes `deadline` straight into the column the inbox
+ * sorts by and the dashboard counts overdue off — unlike a document's
+ * slot or a pre-auth value, which sit in suggestion columns until
+ * someone clicks. This is that click. Before it, the countdown renders
+ * as unconfirmed and says where the date came from; after it, a named
+ * member stands behind the date a claim is being chased against.
+ *
+ * `deadline` omitted confirms what's stored, a value overrides it, and
+ * null says the desk read the email and there is no deadline at all.
+ */
+export async function confirmDeadline(
+  auth: AuthContext,
+  id: string,
+  body: ConfirmDeadlineBody,
+) {
+  const existing = await queriesRepository.getById(id);
+  if (!existing) throw new QueryNotFoundError(id);
+
+  const memberId = await getMemberId(auth.userId);
+  const updated = await queriesRepository.confirmDeadline(
+    id,
+    body.deadline,
+    memberId,
+  );
+  if (!updated) throw new QueryNotFoundError(id);
+
+  await auditService.record(auth, {
+    action: "query.deadline_confirmed",
+    entityType: "query",
+    entityId: id,
+    // What the model proposed, next to what the desk accepted — the
+    // same before/after shape preauth.field_confirmed records, so an
+    // audit of "where was the AI wrong" reads the same for both.
+    before: {
+      deadline: existing.deadline,
+      deadlineInferred: existing.deadlineInferred,
+    },
+    after: { deadline: updated.deadline, changed: body.deadline !== undefined },
+    actorId: memberId,
   });
 
   return updated;

@@ -3,6 +3,8 @@ import type { ClaimStatus } from "@claimflow/contracts";
 export interface InboxQuery {
   id: string;
   claimId: string;
+  /** "CLM-0042" — the uuid is never shown to a desk. */
+  claimReference: string;
   tpaRawEmail: string | null;
   aiSummary: string | null;
   requestedItems: string[];
@@ -11,6 +13,12 @@ export interface InboxQuery {
   deadline: string | null;
   /** True when the deadline was calculated from a relative phrase, not read verbatim. */
   deadlineInferred: boolean;
+  /**
+   * When a human vouched for the deadline. Null means the summariser's
+   * date is still unconfirmed — the countdown shows, dashed, with a
+   * Confirm next to it (docs/adr/0005).
+   */
+  deadlineConfirmedAt: string | null;
   replySentAt: string | null;
   createdAt: string;
   claimPatientName: string;

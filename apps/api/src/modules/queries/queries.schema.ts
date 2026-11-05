@@ -35,6 +35,22 @@ export const UpdateQueryBody = z
   });
 export type UpdateQueryBody = z.infer<typeof UpdateQueryBody>;
 
+/**
+ * Confirming the reply deadline — the human-confirm step docs/adr/0005
+ * requires, for the one summariser output that lands in a live column.
+ *
+ * `deadline` is optional on purpose. Omitted means "I've read the email
+ * and the stored deadline is right", and confirming as-is can't then
+ * race a value the client fetched a minute ago. Present means the desk
+ * is correcting it, and `null` means they checked and there is no
+ * deadline — an inferred one that's simply wrong has to be clearable,
+ * or it sits in the inbox being counted as overdue forever.
+ */
+export const ConfirmDeadlineBody = z.object({
+  deadline: z.coerce.date().nullable().optional(),
+});
+export type ConfirmDeadlineBody = z.infer<typeof ConfirmDeadlineBody>;
+
 export const ListInboxQuery = z.object({
   status: z.enum(["open", "replied", "all"]).default("open"),
 });
@@ -49,4 +65,12 @@ export type ListInboxQuery = z.infer<typeof ListInboxQuery>;
 export interface CreateQueryInput extends CreateQueryBody {
   summarisedBy?: string | undefined;
   deadlineInferred?: boolean | undefined;
+  /**
+   * Set only when the deadline came from the body — a desk exec typing
+   * one has confirmed it by typing it, and making them click Confirm on
+   * their own keystrokes would be theatre. A summariser-derived
+   * deadline leaves this null and waits.
+   */
+  deadlineConfirmedBy?: string | null | undefined;
+  deadlineConfirmedAt?: Date | undefined;
 }

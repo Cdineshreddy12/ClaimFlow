@@ -1,8 +1,13 @@
 import { useEffect, useState } from "react";
 import { AppShell } from "@/app/AppShell";
+import { Tabs } from "@/components/ui/tabs";
+import { InsurersAdminCard } from "../insurers/InsurersAdminCard";
+import { LayoutEditor } from "../preauth/LayoutEditor";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Loader } from "@/components/ui/loader";
+import { CoverageCard } from "./CoverageCard";
+import { ProposalsCard } from "./ProposalsCard";
 import {
   Select,
   SelectContent,
@@ -27,6 +32,7 @@ export function ChecklistAdminPage() {
 
   const { data: insurers } = useInsurers();
   const { data: procedures } = useProcedures();
+  const [tab, setTab] = useState("rules");
   const [insurerId, setInsurerId] = useState("");
   const [procedureId, setProcedureId] = useState("");
 
@@ -61,67 +67,147 @@ export function ChecklistAdminPage() {
       title="Checklist Admin"
       subtitle="What each insurer requires, per procedure"
     >
-      <div className="mb-5 flex flex-wrap gap-3">
-        <div className="min-w-[220px] flex-1">
-          <div className="label-eyebrow mb-1.5">Insurer / TPA</div>
-          <Select value={insurerId || undefined} onValueChange={setInsurerId}>
-            <SelectTrigger>
-              <SelectValue placeholder="Select an insurer…" />
-            </SelectTrigger>
-            <SelectContent>
-              {insurers?.map((insurer) => (
-                <SelectItem key={insurer.id} value={insurer.id}>
-                  {insurer.name} · {insurer.type === "tpa" ? "TPA" : "Insurer"}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="min-w-[220px] flex-1">
-          <div className="label-eyebrow mb-1.5">Procedure</div>
-          <Select
-            value={procedureId || undefined}
-            onValueChange={setProcedureId}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Select a procedure…" />
-            </SelectTrigger>
-            <SelectContent>
-              {procedures?.map((procedure) => (
-                <SelectItem key={procedure.id} value={procedure.id}>
-                  {procedure.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
+      {/*
+        One tab, not two. They were always halves of the same job — the
+        master list of who you file with, and what each of them wants —
+        and splitting them meant picking an insurer from a dropdown on
+        one tab while the list of insurers sat on another. The list now
+        drives the picker, so clicking a name is how you get to its
+        rules.
+      */}
+      <Tabs
+        tabs={[
+          { id: "rules", label: "Insurers & rules" },
+          { id: "preauth", label: "Pre-auth form" },
+        ]}
+        active={tab}
+        onChange={setTab}
+      >
+        {tab === "preauth" ? (
+          // Same insurer the rules tab is on, so one selection drives
+          // both halves of what an insurer wants.
+          <LayoutEditor
+            insurerId={insurerId || undefined}
+            insurerName={
+              insurers?.find((i) => i.id === insurerId)?.name ?? undefined
+            }
+          />
+        ) : (
+          <>
+            <RulesTab />
+            <div className="mt-6">
+              <InsurersAdminCard
+                selectedId={insurerId}
+                onSelect={setInsurerId}
+              />
+            </div>
+          </>
+        )}
+      </Tabs>
+    </AppShell>
+  );
 
-      {isError ? (
-        <div className="inline-error">Couldn&apos;t load this checklist.</div>
-      ) : null}
+  function RulesTab() {
+    return (
+      <>
+        <div className="mb-5 flex flex-wrap gap-3">
+          <div className="min-w-[220px] flex-1">
+            <div className="text-2xs font-semibold uppercase tracking-[0.07em] text-ink-faint mb-1.5">
+              Insurer / TPA
+            </div>
+            <Select value={insurerId || undefined} onValueChange={setInsurerId}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select an insurer…" />
+              </SelectTrigger>
+              <SelectContent>
+                {insurers?.map((insurer) => (
+                  <SelectItem key={insurer.id} value={insurer.id}>
+                    {insurer.name} ·{" "}
+                    {insurer.type === "tpa" ? "TPA" : "Insurer"}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="min-w-[220px] flex-1">
+            <div className="text-2xs font-semibold uppercase tracking-[0.07em] text-ink-faint mb-1.5">
+              Procedure
+            </div>
+            <Select
+              value={procedureId || undefined}
+              onValueChange={setProcedureId}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select a procedure…" />
+              </SelectTrigger>
+              <SelectContent>
+                {procedures?.map((procedure) => (
+                  <SelectItem key={procedure.id} value={procedure.id}>
+                    {procedure.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
 
-      <div className="two-col two-col--dashboard">
-        <div className="card card-pad" style={{ order: 1 }}>
-          <div className="card-head">
-            <h2 className="label-eyebrow">Required documents</h2>
+        {isError ? (
+          <div className="mb-3 flex items-center justify-between gap-3 rounded-md border border-critical bg-critical-bg px-3.5 py-2.5 text-base font-medium text-critical">
+            Couldn&apos;t load this checklist.
+          </div>
+        ) : null}
+
+        {/* Above the rule editor, and outside the insurer/procedure
+          filters: a proposal is about a pair the desk head may not have
+          selected, and the whole point is to surface the pair they
+          weren't looking at. */}
+        <div className="mb-5">
+          <ProposalsCard />
+        </div>
+
+        {/* Same reasoning as the proposals above: this is about pairs
+            the desk head is not currently looking at, so it sits
+            outside the two filters. */}
+        <CoverageCard
+          onPick={(insurer, procedure) => {
+            setInsurerId(insurer);
+            setProcedureId(procedure);
+          }}
+        />
+
+        {/*
+          One column, no cards. The rules list is the work; wrapping it
+          in a card and standing a second card beside it to hold one
+          number was chrome competing with the only thing on the page.
+        */}
+        <section>
+          <div className="mb-2 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 border-b border-line pb-2">
+            <h2 className="m-0 text-md font-semibold text-ink">
+              Required documents
+            </h2>
+            {/* The count, what it affects, and the forward-only rule in
+                one sentence. They were a badge, a display numeral and a
+                callout saying overlapping things. */}
             {data ? (
-              <span className="chip chip--neutral">
-                {data.rules.length} rules
-              </span>
+              <p className="m-0 text-sm text-ink-faint">
+                {data.rules.length} document
+                {data.rules.length === 1 ? "" : "s"} · {data.activeClaims}{" "}
+                active claim{data.activeClaims === 1 ? "" : "s"} on this
+                checklist · changes apply to claims opened from now on
+              </p>
             ) : null}
           </div>
 
           {isLoading ? <Loader label="Loading rules…" /> : null}
 
           {data && data.rules.length === 0 ? (
-            <p className="empty-state">
-              No documents required yet for this pair. Add the first one below.
+            <p className="m-0 py-3 text-base text-ink-faint">
+              No documents required yet for this pair.
             </p>
           ) : null}
 
           {data && data.rules.length > 0 ? (
-            <div className="checklist">
+            <div className="flex flex-col gap-0.5">
               {data.rules.map((rule) => (
                 <RuleRow
                   key={rule.id}
@@ -138,10 +224,7 @@ export function ChecklistAdminPage() {
           ) : null}
 
           {canEdit && insurerId && procedureId ? (
-            <form
-              onSubmit={handleAdd}
-              className="mt-3 flex gap-2 border-t border-dashed border-line-strong pt-3"
-            >
+            <form onSubmit={handleAdd} className="mt-3 flex gap-2">
               <Input
                 aria-label="New document requirement"
                 placeholder="Add a document requirement…"
@@ -150,7 +233,7 @@ export function ChecklistAdminPage() {
               />
               <Button
                 type="submit"
-                variant="ghost"
+                variant="outline"
                 disabled={!newDocumentType.trim() || createRule.isPending}
               >
                 {createRule.isPending ? "Adding…" : "Add"}
@@ -158,39 +241,22 @@ export function ChecklistAdminPage() {
             </form>
           ) : null}
 
+          {!canEdit ? (
+            <p className="m-0 mt-3 text-sm text-ink-faint">
+              You can view these rules but not change them — ask a desk head or
+              an admin.
+            </p>
+          ) : null}
+
           {createRule.isError ? (
-            <div className="inline-error mt-3">
+            <div className="mt-3 rounded-md border border-critical bg-critical-bg px-3.5 py-2.5 text-base font-medium text-critical">
               {createRule.error instanceof Error
                 ? createRule.error.message
                 : "Couldn't add that requirement."}
             </div>
           ) : null}
-        </div>
-
-        <div className="card card-pad" style={{ order: 0 }}>
-          <div className="label-eyebrow mb-2.5">In use</div>
-          <div className="mono text-[28px] font-semibold">
-            {data?.activeClaims ?? "—"}
-          </div>
-          <div className="mt-0.5 text-[12.5px] text-ink-soft">
-            active claims on this checklist
-          </div>
-          <div className="notice">
-            <b>Changes apply going forward only.</b> A claim keeps the checklist
-            it was opened with, so editing this list never changes what&apos;s
-            required on a claim already in progress.
-          </div>
-          {!canEdit ? (
-            <div
-              className="notice"
-              style={{ borderLeftColor: "var(--pending)" }}
-            >
-              You can view these rules but not change them — ask a desk head or
-              admin.
-            </div>
-          ) : null}
-        </div>
-      </div>
-    </AppShell>
-  );
+        </section>
+      </>
+    );
+  }
 }

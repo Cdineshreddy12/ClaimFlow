@@ -29,6 +29,8 @@ export async function create(claimId: string, data: CreateQueryInput) {
       deadline: data.deadline ?? null,
       summarisedBy: data.summarisedBy ?? null,
       deadlineInferred: data.deadlineInferred ?? false,
+      deadlineConfirmedBy: data.deadlineConfirmedBy ?? null,
+      deadlineConfirmedAt: data.deadlineConfirmedAt ?? null,
     })
     .returning();
   return query;
@@ -39,7 +41,11 @@ export async function getById(id: string) {
   return row;
 }
 
-export async function update(id: string, data: UpdateQueryBody) {
+export async function update(
+  id: string,
+  data: UpdateQueryBody,
+  editedBy: string | null = null,
+) {
   const existing = await getById(id);
   if (!existing) return undefined;
 
@@ -47,7 +53,51 @@ export async function update(id: string, data: UpdateQueryBody) {
   if (data.aiSummary !== undefined) patch.aiSummary = data.aiSummary;
   if (data.requestedItems !== undefined)
     patch.requestedItems = data.requestedItems;
-  if (data.deadline !== undefined) patch.deadline = data.deadline;
+  if (data.deadline !== undefined) {
+    // A deadline arriving through an edit was typed by a human, so it
+    // is confirmed and no longer inferred by the same keystroke. The
+    // alternative — editing a deadline and then being asked to confirm
+    // the thing you just typed — is the kind of gate that teaches a
+    // desk to click Confirm without reading.
+    patch.deadline = data.deadline;
+    patch.deadlineInferred = false;
+    patch.deadlineConfirmedBy = editedBy;
+    patch.deadlineConfirmedAt = new Date();
+  }
+
+  const [updated] = await db
+    .update(queries)
+    .set(patch)
+    .where(eq(queries.id, id))
+    .returning();
+  return updated;
+}
+
+/**
+ * Stamps a human against the reply deadline, optionally replacing it.
+ *
+ * `deadline` undefined keeps what's stored and only records that
+ * someone vouched for it; `null` clears a deadline the email never
+ * actually set. An overridden value stops being inferred — a desk exec
+ * who types one has read the email, which is more than the flag was
+ * ever claiming.
+ */
+export async function confirmDeadline(
+  id: string,
+  deadline: Date | null | undefined,
+  confirmedBy: string | null,
+) {
+  const existing = await getById(id);
+  if (!existing) return undefined;
+
+  const patch: Partial<typeof queries.$inferInsert> = {
+    deadlineConfirmedBy: confirmedBy,
+    deadlineConfirmedAt: new Date(),
+  };
+  if (deadline !== undefined) {
+    patch.deadline = deadline;
+    patch.deadlineInferred = false;
+  }
 
   const [updated] = await db
     .update(queries)
@@ -89,12 +139,14 @@ export async function listInbox(filters: {
     .select({
       id: queries.id,
       claimId: queries.claimId,
+      claimReference: claims.reference,
       tpaRawEmail: queries.tpaRawEmail,
       aiSummary: queries.aiSummary,
       summarisedBy: queries.summarisedBy,
       requestedItems: queries.requestedItems,
       deadline: queries.deadline,
       deadlineInferred: queries.deadlineInferred,
+      deadlineConfirmedAt: queries.deadlineConfirmedAt,
       replySentAt: queries.replySentAt,
       createdAt: queries.createdAt,
       claimPatientName: claims.patientName,

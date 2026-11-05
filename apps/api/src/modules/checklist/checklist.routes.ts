@@ -3,6 +3,7 @@ import { authenticate, requireRole } from "../../middleware/authenticate.js";
 import * as checklistService from "./checklist.service.js";
 import { DuplicateRuleError, RuleNotFoundError } from "./checklist.service.js";
 import {
+  ApplyProposalBody,
   ChecklistRuleIdParams,
   CreateChecklistRuleBody,
   ListChecklistRulesQuery,
@@ -23,6 +24,43 @@ export async function registerChecklistRoutes(app: FastifyInstance) {
     );
     return reply.send(result);
   });
+
+  /**
+   * What the insurers' own queries say the checklist is missing.
+   * Readable by any desk user — seeing why a rule is proposed is useful
+   * to whoever gets queried; only applying one is a desk-head act.
+   */
+  /** Read-only, like the rules list itself — the actions are what's gated. */
+  app.get("/coverage", async (request, reply) =>
+    reply.send(await checklistService.getCoverage(request.authUser!)),
+  );
+
+  app.get("/proposals", async (request, reply) => {
+    return reply.send(await checklistService.proposeRules(request.authUser!));
+  });
+
+  app.post(
+    "/proposals/apply",
+    { preHandler: manageRules },
+    async (request, reply) => {
+      const body = ApplyProposalBody.parse(request.body);
+      try {
+        const rule = await checklistService.applyProposal(
+          request.authUser!,
+          body,
+        );
+        return reply.code(201).send(rule);
+      } catch (err) {
+        if (err instanceof DuplicateRuleError) {
+          return reply.code(409).send({ error: err.message });
+        }
+        if (err instanceof RuleNotFoundError) {
+          return reply.code(404).send({ error: "rule not found" });
+        }
+        throw err;
+      }
+    },
+  );
 
   app.post("/", { preHandler: manageRules }, async (request, reply) => {
     const body = CreateChecklistRuleBody.parse(request.body);

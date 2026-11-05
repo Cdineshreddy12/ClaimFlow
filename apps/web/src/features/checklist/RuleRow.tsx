@@ -1,3 +1,4 @@
+import { X } from "reicon-react";
 import { cn } from "@/lib/utils";
 import type { ChecklistRule } from "./api";
 
@@ -15,8 +16,8 @@ export function RuleRow({
   onRemove: () => void;
 }) {
   return (
-    <div className="doc-item">
-      <div className="doc-name">{rule.documentType}</div>
+    <div className="flex items-center gap-2.5 border-b border-line px-1 py-2.5 last:border-b-0">
+      <div className="flex-1 text-base font-medium">{rule.documentType}</div>
 
       {/* Two buttons rather than a checkbox: "Required" and "Optional" are
           both meaningful states a desk head picks between, and the label
@@ -57,20 +58,7 @@ export function RuleRow({
           aria-label={`Remove ${rule.documentType}`}
           className="rounded-sm p-1 text-ink-faint transition-colors hover:bg-critical-bg hover:text-critical disabled:opacity-50"
         >
-          <svg
-            width="13"
-            height="13"
-            viewBox="0 0 16 16"
-            fill="none"
-            aria-hidden
-          >
-            <path
-              d="M4.5 4.5l7 7M11.5 4.5l-7 7"
-              stroke="currentColor"
-              strokeWidth="1.8"
-              strokeLinecap="round"
-            />
-          </svg>
+          <X size={13} aria-hidden />
         </button>
       ) : null}
     </div>

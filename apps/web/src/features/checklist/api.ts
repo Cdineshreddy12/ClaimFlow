@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { ChecklistProposal } from "@claimflow/contracts";
 import { api } from "@/lib/api-client";
 
 export interface Insurer {
@@ -93,4 +94,51 @@ export function useDeleteRule(insurerId: string, procedureId: string) {
   return useRuleMutation(insurerId, procedureId, (id: string) =>
     api.delete(`/checklist-rules/${id}`),
   );
+}
+
+export function useChecklistProposals() {
+  return useQuery({
+    queryKey: ["checklist-rules", "proposals"],
+    queryFn: () => api.get<ChecklistProposal[]>("/checklist-rules/proposals"),
+  });
+}
+
+export function useApplyProposal() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: {
+      insurerId: string;
+      procedureId: string;
+      documentType: string;
+      action: "add_required" | "make_required";
+    }) => api.post("/checklist-rules/proposals/apply", body),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["checklist-rules"] });
+    },
+  });
+}
+
+export interface CoveragePair {
+  insurerId: string;
+  insurerName: string;
+  procedureId: string;
+  procedureName: string;
+  rules: number;
+  claims: number;
+  activeClaims: number;
+  lastClaimAt: string | null;
+}
+
+export interface ChecklistCoverage {
+  uncovered: CoveragePair[];
+  covered: CoveragePair[];
+  uncoveredClaims: number;
+}
+
+/** Which pairs the desk works on, and which of them have no checklist at all. */
+export function useChecklistCoverage() {
+  return useQuery({
+    queryKey: ["checklist-rules", "coverage"],
+    queryFn: () => api.get<ChecklistCoverage>("/checklist-rules/coverage"),
+  });
 }

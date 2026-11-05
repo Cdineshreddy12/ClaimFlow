@@ -11,6 +11,12 @@ import * as queriesRepository from "./queries.repository.js";
 describe.skipIf(!process.env.DATABASE_URL)(
   "queries.repository (integration)",
   () => {
+    // Unique per run: the suite's files run in parallel against one
+    // database, and insurer names are unique (migration 0020).
+    const INSURER_NAME = `Test Insurer ${Date.now()}-${Math.random()
+      .toString(36)
+      .slice(2, 7)}`;
+
     let insurerId: string;
     let procedureId: string;
     let claimId: string;
@@ -18,7 +24,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
     beforeAll(async () => {
       const [insurer] = await db
         .insert(insurers)
-        .values({ name: "Test Insurer", type: "tpa" })
+        .values({ name: INSURER_NAME, type: "tpa" })
         .returning();
       const [procedure] = await db
         .insert(procedures)
@@ -109,6 +115,99 @@ describe.skipIf(!process.env.DATABASE_URL)(
       });
       expect(updated?.aiSummary).toBe("corrected summary");
       expect(updated?.requestedItems).toEqual(["A"]);
+    });
+
+    /**
+     * The deadline is the one summariser output that lands in a live
+     * column rather than a suggestion one, so the confirm step on it is
+     * the thing worth pinning against real Postgres — docs/adr/0005.
+     */
+    describe("confirmDeadline", () => {
+      const DERIVED = new Date("2026-11-06T09:15:00.000Z");
+
+      async function summarisedQuery() {
+        return queriesRepository.create(claimId, {
+          tpaRawEmail: "Please revert within 48 hours.",
+          requestedItems: [],
+          deadline: DERIVED,
+          summarisedBy: "claude",
+          deadlineInferred: true,
+        });
+      }
+
+      it("leaves a summariser's deadline unconfirmed on the way in", async () => {
+        const created = await summarisedQuery();
+        expect(created?.deadline).toEqual(DERIVED);
+        expect(created?.deadlineConfirmedAt).toBeNull();
+        expect(created?.deadlineConfirmedBy).toBeNull();
+      });
+
+      it("stamps the date without touching it when no override is given", async () => {
+        const created = await summarisedQuery();
+
+        const confirmed = await queriesRepository.confirmDeadline(
+          created!.id,
+          undefined,
+          null,
+        );
+        expect(confirmed?.deadline).toEqual(DERIVED);
+        expect(confirmed?.deadlineConfirmedAt).toBeInstanceOf(Date);
+        // Still how the value was arrived at. Confirmation is the other
+        // axis, and overwriting the provenance would lose the only
+        // record that a model read it out of "within 48 hours".
+        expect(confirmed?.deadlineInferred).toBe(true);
+      });
+
+      it("takes an override, and stops calling it inferred", async () => {
+        const created = await summarisedQuery();
+        const corrected = new Date("2026-11-07T12:30:00.000Z");
+
+        const confirmed = await queriesRepository.confirmDeadline(
+          created!.id,
+          corrected,
+          null,
+        );
+        expect(confirmed?.deadline).toEqual(corrected);
+        expect(confirmed?.deadlineInferred).toBe(false);
+      });
+
+      it("clears a deadline the email never actually set", async () => {
+        const created = await summarisedQuery();
+
+        const confirmed = await queriesRepository.confirmDeadline(
+          created!.id,
+          null,
+          null,
+        );
+        expect(confirmed?.deadline).toBeNull();
+        // Confirmed, not merely blank: the desk read the email and
+        // there is no deadline, which is a different fact from nobody
+        // having looked.
+        expect(confirmed?.deadlineConfirmedAt).toBeInstanceOf(Date);
+      });
+
+      it("returns undefined for a query that doesn't exist", async () => {
+        const missing = await queriesRepository.confirmDeadline(
+          "00000000-0000-0000-0000-000000000000",
+          null,
+          null,
+        );
+        expect(missing).toBeUndefined();
+      });
+
+      it("counts a hand-typed deadline as confirmed by the edit that set it", async () => {
+        const created = await queriesRepository.create(claimId, {
+          tpaRawEmail: "...",
+          requestedItems: [],
+        });
+
+        const typed = new Date("2026-11-09T06:00:00.000Z");
+        const updated = await queriesRepository.update(created!.id, {
+          deadline: typed,
+        });
+        expect(updated?.deadline).toEqual(typed);
+        expect(updated?.deadlineConfirmedAt).toBeInstanceOf(Date);
+      });
     });
   },
 );
