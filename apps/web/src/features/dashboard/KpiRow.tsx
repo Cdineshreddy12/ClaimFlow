@@ -10,39 +10,83 @@ export function KpiRow({
   deductions: DeductionsSummary | undefined;
 }) {
   return (
-    <div className="kpi-row">
-      <div className="kpi">
-        <div className="kpi-label">Open Claims</div>
-        <div className="kpi-value">{metrics.openClaims}</div>
-        <div className="kpi-trend">
+    <div className="mb-6 grid grid-cols-1 gap-4 sm:[grid-template-columns:repeat(auto-fit,minmax(190px,1fr))]">
+      <div className="rounded-lg border border-line bg-surface-raised px-[18px] py-4 shadow-card">
+        <div className="text-xs font-semibold uppercase tracking-[0.05em] text-ink-faint">
+          Open Claims
+        </div>
+        <div className="mt-2 text-2xl font-[650] tracking-[-0.02em] tabular-nums">
+          {metrics.openClaims}
+        </div>
+        <div className="mt-1.5 text-sm text-ink-soft">
           Across pre-auth, query &amp; enhancement
         </div>
       </div>
 
-      <div className={`kpi${metrics.needsAttention > 0 ? " is-critical" : ""}`}>
-        <div className="kpi-label">Needs Attention</div>
-        <div className="kpi-value">{metrics.needsAttention}</div>
-        <div className={`kpi-trend${metrics.needsAttention > 0 ? " bad" : ""}`}>
+      <div
+        className={`rounded-lg border border-line bg-surface-raised px-[18px] py-4 shadow-card${metrics.needsAttention > 0 ? " border-t-2 border-t-critical pt-[15px]" : ""}`}
+      >
+        <div className="text-xs font-semibold uppercase tracking-[0.05em] text-ink-faint">
+          Needs Attention
+        </div>
+        <div className="mt-2 text-2xl font-[650] tracking-[-0.02em] tabular-nums">
+          {metrics.needsAttention}
+        </div>
+        <div
+          className={`mt-1.5 text-sm text-ink-soft${metrics.needsAttention > 0 ? " bad" : ""}`}
+        >
           Open query or enhancement
         </div>
       </div>
 
-      <div className="kpi">
-        <div className="kpi-label">Deductions, This Month</div>
-        <div className="kpi-value mono">
-          {deductions ? formatAmount(deductions.total) : "—"}
+      {/* The counterweight. Four cards all counting problems made the
+          desk look like it was only ever losing; this is the work that
+          actually finished. */}
+      <div className="rounded-lg border border-line bg-surface-raised px-[18px] py-4 shadow-card">
+        <div className="text-xs font-semibold uppercase tracking-[0.05em] text-ink-faint">
+          Settled, This Month
         </div>
-        <div className="kpi-trend">
-          {deductions && deductions.avoidableTotal > 0
-            ? `${formatAmount(deductions.avoidableTotal)} avoidable`
-            : "Nothing recorded yet"}
+        <div className="mt-2 text-2xl font-[650] tracking-[-0.02em] tabular-nums">
+          {metrics.completedThisMonth}
+        </div>
+        <div className="mt-1.5 text-sm text-ink-soft">
+          {metrics.settledValueThisMonth > 0
+            ? `${formatAmount(String(metrics.settledValueThisMonth))} received`
+            : "Nothing paid yet this month"}
         </div>
       </div>
 
-      <div className={`kpi${metrics.overdueQueries > 0 ? " is-critical" : ""}`}>
-        <div className="kpi-label">Open Queries</div>
-        <div className="kpi-value mono">{metrics.openQueries}</div>
-        <div className={`kpi-trend${metrics.overdueQueries > 0 ? " bad" : ""}`}>
+      <div className="rounded-lg border border-line bg-surface-raised px-[18px] py-4 shadow-card">
+        <div className="text-xs font-semibold uppercase tracking-[0.05em] text-ink-faint">
+          Deductions, This Month
+        </div>
+        <div className="mt-2 text-2xl font-[650] tracking-[-0.02em] tabular-nums font-mono tabular-nums">
+          {deductions ? formatAmount(deductions.total) : "—"}
+        </div>
+        <div className="mt-1.5 text-sm text-ink-soft">
+          {/* Recovered wins the slot when there is any: money clawed
+              back is the newer and better fact, and the avoidable share
+              is still on the breakdown card below. */}
+          {deductions && deductions.recoveredTotal > 0
+            ? `${formatAmount(deductions.recoveredTotal)} recovered on appeal`
+            : deductions && deductions.avoidableTotal > 0
+              ? `${formatAmount(deductions.avoidableTotal)} avoidable`
+              : "Nothing recorded yet"}
+        </div>
+      </div>
+
+      <div
+        className={`rounded-lg border border-line bg-surface-raised px-[18px] py-4 shadow-card${metrics.overdueQueries > 0 ? " border-t-2 border-t-critical pt-[15px]" : ""}`}
+      >
+        <div className="text-xs font-semibold uppercase tracking-[0.05em] text-ink-faint">
+          Open Queries
+        </div>
+        <div className="mt-2 text-2xl font-[650] tracking-[-0.02em] tabular-nums font-mono tabular-nums">
+          {metrics.openQueries}
+        </div>
+        <div
+          className={`mt-1.5 text-sm text-ink-soft${metrics.overdueQueries > 0 ? " bad" : ""}`}
+        >
           {metrics.overdueQueries > 0
             ? `${metrics.overdueQueries} overdue for reply`
             : "None overdue"}

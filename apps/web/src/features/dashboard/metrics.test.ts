@@ -8,6 +8,7 @@ const NOW = new Date("2026-11-04T12:00:00Z").getTime();
 function claim(overrides: Partial<Claim>): Claim {
   return {
     id: "c1",
+    reference: "CLM-0001",
     patientName: "Test Patient",
     insurerId: "i1",
     insurerName: "Insurer",
@@ -17,6 +18,10 @@ function claim(overrides: Partial<Claim>): Claim {
     assignedTo: null,
     checklistSnapshot: [],
     billedAmount: null,
+    sanctionedAmount: null,
+    settledAmount: null,
+    settledOn: null,
+    slaDeadline: null,
     admittedAt: null,
     createdAt: new Date(NOW).toISOString(),
     updatedAt: new Date(NOW).toISOString(),
@@ -28,12 +33,14 @@ function query(overrides: Partial<InboxQuery>): InboxQuery {
   return {
     id: "q1",
     claimId: "c1",
+    claimReference: "CLM-0001",
     tpaRawEmail: null,
     aiSummary: null,
     requestedItems: [],
     summarisedBy: null,
     deadline: null,
     deadlineInferred: false,
+    deadlineConfirmedAt: null,
     replySentAt: null,
     createdAt: new Date(NOW).toISOString(),
     claimPatientName: "Test Patient",
@@ -99,5 +106,52 @@ describe("computeDashboardMetrics", () => {
       computeDashboardMetrics([claim({ status: "SETTLED" })], [], NOW)
         .avgTimeInStageHours,
     ).toBeNull();
+  });
+});
+
+describe("completedThisMonth", () => {
+  const thisMonth = new Date(NOW);
+  thisMonth.setDate(2);
+  const lastMonth = new Date(NOW);
+  lastMonth.setMonth(lastMonth.getMonth() - 1);
+
+  const iso = (d: Date) => d.toISOString().slice(0, 10);
+
+  it("counts claims whose payment landed this month", () => {
+    const metrics = computeDashboardMetrics(
+      [
+        claim({ id: "a", settledOn: iso(thisMonth), settledAmount: "150000" }),
+        claim({ id: "b", settledOn: iso(lastMonth), settledAmount: "90000" }),
+        claim({ id: "c" }),
+      ],
+      [],
+      NOW,
+    );
+    expect(metrics.completedThisMonth).toBe(1);
+    expect(metrics.settledValueThisMonth).toBe(150000);
+  });
+
+  it("counts on the payment date, not the status", () => {
+    // A claim marked settled in October whose money arrived in November
+    // belongs to November — that's the month the desk gets credit for.
+    const metrics = computeDashboardMetrics(
+      [
+        claim({
+          id: "late",
+          status: "SETTLED",
+          settledOn: iso(lastMonth),
+          settledAmount: "50000",
+        }),
+      ],
+      [],
+      NOW,
+    );
+    expect(metrics.completedThisMonth).toBe(0);
+  });
+
+  it("is zero when nothing has been paid", () => {
+    const metrics = computeDashboardMetrics([claim({ id: "a" })], [], NOW);
+    expect(metrics.completedThisMonth).toBe(0);
+    expect(metrics.settledValueThisMonth).toBe(0);
   });
 });

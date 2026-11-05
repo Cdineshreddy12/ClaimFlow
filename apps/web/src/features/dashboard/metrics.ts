@@ -10,6 +10,10 @@ const NEEDS_ATTENTION: ClaimStatus[] = [
 
 export interface DashboardMetrics {
   openClaims: number;
+  /** Settled this calendar month — the counterweight to the gap counts. */
+  completedThisMonth: number;
+  /** What the insurers actually paid on those, in rupees. */
+  settledValueThisMonth: number;
   needsAttention: number;
   openQueries: number;
   overdueQueries: number;
@@ -32,8 +36,27 @@ export function computeDashboardMetrics(
       ? stageHours.reduce((a, b) => a + b, 0) / stageHours.length
       : null;
 
+  const monthStart = new Date(now);
+  monthStart.setDate(1);
+  monthStart.setHours(0, 0, 0, 0);
+
+  // Counted on the payment date, not the status change: a claim marked
+  // settled in October whose money landed in November belongs to
+  // November, which is the month the desk gets credit for.
+  const settledThisMonth = claims.filter((c) => {
+    if (!c.settledOn) return false;
+    return (
+      new Date(`${c.settledOn}T00:00:00`).getTime() >= monthStart.getTime()
+    );
+  });
+
   return {
     openClaims: open.length,
+    completedThisMonth: settledThisMonth.length,
+    settledValueThisMonth: settledThisMonth.reduce(
+      (sum, c) => sum + Number(c.settledAmount ?? 0),
+      0,
+    ),
     needsAttention: claims.filter((c) => NEEDS_ATTENTION.includes(c.status))
       .length,
     openQueries: openQueries.length,
