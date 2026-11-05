@@ -139,6 +139,15 @@ everything by hand.
   Shows how many in-flight claims the pair has, and states plainly that
   edits apply going forward only (verified: adding a live rule leaves an
   open claim's frozen snapshot untouched).
+- ✅ Monthly period report — the one screen built for the person who
+  signs the deal but never logs in. A desk head picks a closed calendar
+  month and gets claim volume, settled value, average turnaround,
+  deductions by reason, and insurer turnaround, assembled from the same
+  summaries the dashboard and Turnaround page already compute (nothing
+  new is calculated), downloadable as a one-page PDF to forward on
+  (docs/adr/0018). Gated to org_admin/desk_head, same as Checklist
+  Admin — a desk executive's nav doesn't show it and the API 403s a
+  direct link.
 
 All of the above is covered by both unit tests and integration tests
 against the real Supabase database and the real S3 bucket — not mocked.
@@ -243,6 +252,13 @@ pnpm db:studio     # browse the database
 | `pnpm typecheck` | Typecheck all workspaces    |
 | `pnpm test`      | Run all test suites         |
 
+The API's suites are unit tests plus integration tests that run against
+a real Postgres — they skip themselves when `DATABASE_URL` is unset, so
+a clone with no database still runs green. The web app's are a mix of
+pure-logic tests and component tests (Testing Library on happy-dom,
+configured in `apps/web/vitest.config.ts`); components that call the API
+mock `lib/api-client` rather than the network.
+
 ## Environment variables
 
 See [`.env.example`](.env.example) for the full list with explanations.
@@ -254,7 +270,7 @@ Summary:
 | `SUPABASE_URL` / `SUPABASE_ANON_KEY` | apps/web, apps/api | Auth                                                          |
 | `SUPABASE_SERVICE_ROLE_KEY`          | apps/api           | Admin tooling only — also bypasses RLS                        |
 | `AWS_*`                              | apps/api           | S3 storage, Textract OCR                                      |
-| `ANTHROPIC_API_KEY`                  | apps/api           | Claude — classification, extraction, summarization            |
+| `ANTHROPIC_API_KEY`                  | apps/api           | Claude — classification, extraction, summarization, assistant |
 
 ## Security model
 
@@ -283,8 +299,15 @@ Two things worth stating plainly rather than leaving implicit:
 - [x] Document classification — Claude when `ANTHROPIC_API_KEY` is set,
       filename heuristic otherwise ([`adr 0003`](docs/adr/0003-document-processing-pipeline.md))
 - [x] Query summarisation — Claude reads a pasted TPA email for the
-      summary, requested items and deadline
+      summary, requested items and deadline. The deadline waits for a
+      human's Confirm before it counts as the desk's own
+      ([`adr 0005`](docs/adr/0005-ai-human-confirmation.md))
 - [x] OCR for handwritten notes (Textract, feeding the classifier)
+- [x] Desk assistant — a floating panel on every screen that takes files
+      with no claim attached, works out which claim and slot each
+      belongs to, and answers questions about the desk. It proposes;
+      every write waits on a human's click
+      ([`adr 0017`](docs/adr/0017-desk-assistant.md))
 - [x] Doctor approval via phone link
 - [x] Merged PDF packet per claim
 - [x] Deductions by reason, on the dashboard
