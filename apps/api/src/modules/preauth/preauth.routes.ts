@@ -1,6 +1,7 @@
 import { ConfirmPreauthFieldBody } from "@claimflow/contracts";
 import type { FastifyInstance } from "fastify";
 import { authenticate } from "../../middleware/authenticate.js";
+import * as preauthLayoutsService from "../preauth-layouts/preauth-layouts.service.js";
 import * as preauthService from "./preauth.service.js";
 import {
   ClaimNotFoundError,
@@ -18,6 +19,25 @@ export async function registerPreauthRoutes(app: FastifyInstance) {
     try {
       return reply.send(
         await preauthService.listFields(request.authUser!, claimId),
+      );
+    } catch (err) {
+      if (err instanceof ClaimNotFoundError) {
+        return reply.code(404).send({ error: "claim not found" });
+      }
+      throw err;
+    }
+  });
+
+  /**
+   * The pre-submission review. A POST because the clinical half costs a
+   * model call, so it runs when the desk asks rather than on every
+   * render of the claim file.
+   */
+  app.post("/review", async (request, reply) => {
+    const { claimId } = ClaimIdParams.parse(request.params);
+    try {
+      return reply.send(
+        await preauthService.reviewClaimForm(request.authUser!, claimId),
       );
     } catch (err) {
       if (err instanceof ClaimNotFoundError) {
@@ -91,6 +111,40 @@ export async function registerPreauthRoutes(app: FastifyInstance) {
         return reply.code(404).send({ error: "no such pre-auth field" });
       }
       throw err;
+    }
+  });
+
+  /** The claim form itself, printable. The packet route next door merges the attachments. */
+  app.get("/form.pdf", async (request, reply) => {
+    const { claimId } = ClaimIdParams.parse(request.params);
+    try {
+      const { bytes, fileName } = await preauthService.renderPreauthForm(
+        request.authUser!,
+        claimId,
+      );
+      return reply
+        .header("content-type", "application/pdf")
+        .header("content-disposition", `inline; filename="${fileName}"`)
+        .send(Buffer.from(bytes));
+    } catch (err) {
+      if (err instanceof ClaimNotFoundError) {
+        return reply.code(404).send({ error: "claim not found" });
+      }
+      throw err;
+    }
+  });
+
+  /**
+   * The form this claim was opened under — its frozen snapshot, not the
+   * live layout. Editing the form must never change what an in-flight
+   * claim asked for (docs/adr/0001).
+   */
+  app.get("/layout", async (request, reply) => {
+    const { claimId } = ClaimIdParams.parse(request.params);
+    try {
+      return reply.send(await preauthLayoutsService.layoutForClaim(claimId));
+    } catch {
+      return reply.code(404).send({ error: "claim not found" });
     }
   });
 }

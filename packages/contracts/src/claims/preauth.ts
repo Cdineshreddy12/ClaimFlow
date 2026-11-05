@@ -280,8 +280,20 @@ function stripNumericNoise(value: string): string {
  * that is an empty field the desk fills in, not a confident 1.8 on a
  * form a TPA will authorise against.
  */
+/**
+ * The parts of a field that decide how a value is validated.
+ *
+ * Structural rather than the catalogue type: the form is configurable
+ * now, so a value may belong to a field the hospital invented, and that
+ * has to go through exactly the same gate as a standard one.
+ */
+export interface ValidatableField {
+  type: string;
+  options?: { value: string; label: string }[] | null | undefined;
+}
+
 export function parsePreauthValue(
-  field: PreauthFieldDef,
+  field: ValidatableField,
   raw: string,
 ): string | null {
   const value = raw.trim();
@@ -313,6 +325,24 @@ export function parsePreauthValue(
     }
     case "enum":
       return field.options?.some((o) => o.value === value) ? value : null;
+    case "file": {
+      // JSON holding {s3Key, fileName, mimeType, sizeBytes}. Validated
+      // on its shape, so a half-written upload can't be saved as a file
+      // that isn't one.
+      try {
+        const parsed = JSON.parse(value) as Record<string, unknown>;
+        const ok =
+          typeof parsed["s3Key"] === "string" &&
+          typeof parsed["fileName"] === "string" &&
+          typeof parsed["mimeType"] === "string" &&
+          typeof parsed["sizeBytes"] === "number";
+        return ok ? JSON.stringify(parsed) : null;
+      } catch {
+        return null;
+      }
+    }
+    default:
+      return null;
   }
 }
 

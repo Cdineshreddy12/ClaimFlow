@@ -1,19 +1,17 @@
-import { useState } from "react";
-import {
-  PREAUTH_FIELDS,
-  PREAUTH_GROUP_LABEL,
-  PreauthFieldGroup,
-  isFieldApplicable,
-} from "@claimflow/contracts";
+import { placementLabel, type PreauthPlacement } from "@claimflow/contracts";
 import { Button } from "@/components/ui/button";
+import { Loader } from "@/components/ui/loader";
 import {
   useClearPreauthField,
   useConfirmPreauthField,
   useExtractPreauthFields,
   usePreauthFields,
 } from "../preauth/api";
+import { useClaimLayout } from "../preauth/layout-api";
 import { PreauthField } from "./PreauthField";
 import type { Claim } from "./types";
+import { Card, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 
 /**
  * The hospital's half of the IRDAI pre-auth form, filled from the
@@ -24,14 +22,18 @@ import type { Claim } from "./types";
  * hand, per admission. Reading them is one click; none of them land
  * until a human confirms (docs/adr/0005).
  *
- * Collapsed by default once there's nothing waiting on a decision. The
- * claim file has to show what's missing and overdue without scrolling,
- * and two dozen settled fields sitting open would push the gap view off
- * the screen — but anything needing confirmation opens the section
- * itself, so it can't hide.
+ * It lives behind its own tab on the claim file: twenty-four fields
+ * underneath the checklist pushed the gap view — the thing the brief
+ * says must be readable without scrolling — off the screen. The tab
+ * carries the outstanding count so moving it out of sight doesn't move
+ * it out of mind.
  */
 export function PreauthFieldsCard({ claim }: { claim: Claim }) {
   const { data, isLoading } = usePreauthFields(claim.id);
+  // The claim's frozen layout, never the live one — editing the form
+  // must not change what an in-flight claim appears to have asked for
+  // (docs/adr/0001).
+  const { data: layout, isLoading: layoutLoading } = useClaimLayout(claim.id);
   const extract = useExtractPreauthFields(claim.id);
   const confirm = useConfirmPreauthField(claim.id);
   const clear = useClearPreauthField(claim.id);
@@ -40,73 +42,78 @@ export function PreauthFieldsCard({ claim }: { claim: Claim }) {
   const byKey = new Map(rows.map((r) => [r.fieldKey, r]));
   const values = Object.fromEntries(rows.map((r) => [r.fieldKey, r.value]));
 
-  const applicable = PREAUTH_FIELDS.filter((f) => isFieldApplicable(f, values));
+  // Conditional fields key off the raw stored value, never the rendered
+  // label: "Surgical management" is not "surgical_management".
+  function applies(placement: PreauthPlacement): boolean {
+    const condition = placement.definition.conditionalOn;
+    if (!condition) return true;
+    const current = values[condition.fieldKey];
+    if (!current) return true;
+    return current === condition.equals;
+  }
+
+  const sections = (layout?.sections ?? [])
+    .map((section) => ({
+      ...section,
+      placements: section.placements.filter(applies),
+    }))
+    .filter((section) => section.placements.length > 0);
+
+  const applicable = sections.flatMap((section) => section.placements);
   const confirmedCount = applicable.filter(
-    (f) => byKey.get(f.key)?.confirmedAt,
+    (p) => byKey.get(p.definition.fieldKey)?.confirmedAt,
   ).length;
-  const awaiting = applicable.filter((f) => {
-    const row = byKey.get(f.key);
+  const awaiting = applicable.filter((p) => {
+    const row = byKey.get(p.definition.fieldKey);
     return row?.aiValue && !row.confirmedAt;
   }).length;
-
-  // Opens itself when something needs a decision; otherwise stays shut.
-  const [manuallyOpen, setManuallyOpen] = useState<boolean | null>(null);
-  const open = manuallyOpen ?? awaiting > 0;
 
   const isBusy = confirm.isPending || clear.isPending || extract.isPending;
 
   return (
-    <div className="card card-pad preauth-card">
-      <div className="card-head">
-        <div className="preauth-head-left">
-          <button
-            type="button"
-            className="preauth-toggle"
-            aria-expanded={open}
-            onClick={() => setManuallyOpen(!open)}
-          >
-            <span className={`preauth-caret${open ? " is-open" : ""}`}>›</span>
-            <h2 className="label-eyebrow">Pre-auth form</h2>
-          </button>
-          {!isLoading ? (
-            <span className="preauth-count">
+    <Card className="mt-[22px]">
+      <CardHeader>
+        <div className="flex min-w-0 items-center gap-2.5">
+          <CardTitle>Pre-auth form</CardTitle>
+          {!isLoading && !layoutLoading ? (
+            <span className="text-sm text-ink-faint">
               {confirmedCount} of {applicable.length} confirmed
             </span>
           ) : null}
         </div>
-        <div className="preauth-head-right">
+        <div className="flex min-w-0 shrink-0 items-center gap-2.5">
           {awaiting > 0 ? (
-            <span className="chip chip--pending">{awaiting} to check</span>
+            <Badge variant="pending">{awaiting} to check</Badge>
           ) : null}
           <Button
             type="button"
             size="sm"
-            variant="ghost"
+            variant="outline"
             disabled={isBusy || data?.extractionAvailable === false}
             onClick={() => extract.mutate()}
           >
             {extract.isPending ? "Reading…" : "Read from documents"}
           </Button>
         </div>
-      </div>
+      </CardHeader>
 
       {data?.extractionAvailable === false ? (
         // Honest about why, rather than a button that runs and finds
         // nothing — which reads as the feature being broken.
-        <div className="field-source" style={{ marginTop: 4 }}>
+        <div className="text-xs text-ink-faint" style={{ marginTop: 4 }}>
           Reading documents needs an AI key configured. Fields can still be
           filled in by hand.
         </div>
       ) : null}
 
       {extract.isError ? (
-        <div className="inline-error mt-3">
+        <div className="mb-3 flex items-center justify-between gap-3 rounded-md border border-critical bg-critical-bg px-3.5 py-2.5 text-base font-medium text-critical mt-3">
           Couldn&apos;t read the documents.
         </div>
       ) : null}
 
       {confirm.isError ? (
-        <div className="inline-error mt-3">
+        <div className="mb-3 flex items-center justify-between gap-3 rounded-md border border-critical bg-critical-bg px-3.5 py-2.5 text-base font-medium text-critical mt-3">
           {confirm.error instanceof Error
             ? confirm.error.message
             : "Couldn't save that."}
@@ -114,7 +121,7 @@ export function PreauthFieldsCard({ claim }: { claim: Claim }) {
       ) : null}
 
       {extract.isSuccess && !extract.isPending ? (
-        <div className="sent-confirm mt-3 flex-wrap">
+        <div className="flex items-center gap-[9px] rounded-md border border-approved bg-approved-bg px-3.5 py-3 text-base text-ink mt-3 flex-wrap">
           <span>
             {extract.data.documentsRead === 0
               ? "No confirmed documents to read yet — sort the uploads first."
@@ -125,35 +132,77 @@ export function PreauthFieldsCard({ claim }: { claim: Claim }) {
         </div>
       ) : null}
 
-      {open ? (
-        <div className="preauth-groups">
-          {PreauthFieldGroup.options.map((group) => {
-            const fields = applicable.filter((f) => f.group === group);
-            if (fields.length === 0) return null;
-            return (
-              <div key={group} className="preauth-group">
-                <div className="preauth-group-label">
-                  {PREAUTH_GROUP_LABEL[group]}
-                </div>
-                <div className="field-row">
-                  {fields.map((field) => (
-                    <PreauthField
-                      key={field.key}
-                      field={field}
-                      row={byKey.get(field.key)}
-                      isBusy={isBusy}
-                      onConfirm={(value) =>
-                        confirm.mutate({ fieldKey: field.key, value })
-                      }
-                      onClear={() => clear.mutate(field.key)}
-                    />
-                  ))}
-                </div>
+      <div className="mt-[18px]">
+        {layoutLoading ? <Loader label="Loading the form…" /> : null}
+        {!layoutLoading && sections.length === 0 ? (
+          <p className="px-1 py-2.5 text-base text-ink-faint">
+            This claim&apos;s form has no fields on it. Add some under Checklist
+            Admin → Pre-auth form.
+          </p>
+        ) : null}
+        {sections.map((section) => {
+          // Two columns when the layout says so, one list otherwise.
+          // Each column keeps its own ordered list rather than one
+          // row-major grid, so a field's bottom rule still disappears
+          // at the end of its own column — and so a narrow screen
+          // stacks into two readable lists instead of interleaving
+          // them.
+          const columns =
+            section.columnCount === 2
+              ? [
+                  section.placements.filter((p) => p.columnPosition !== 1),
+                  section.placements.filter((p) => p.columnPosition === 1),
+                ].filter((column) => column.length > 0)
+              : [section.placements];
+
+          return (
+            <div key={section.id} className="[&+&]:mt-1.5">
+              <div className="mb-[9px] text-sm font-semibold text-ink-soft">
+                {section.name}
               </div>
-            );
-          })}
-        </div>
-      ) : null}
-    </div>
+              <div
+                className={`mb-5 grid items-start gap-4 ${
+                  columns.length === 2 ? "lg:grid-cols-2" : "grid-cols-1"
+                }`}
+              >
+                {columns.map((column, index) => (
+                  <div
+                    key={index}
+                    className="flex min-w-0 flex-col overflow-hidden rounded-lg border border-line"
+                  >
+                    {column.map((placement) => (
+                      <PreauthField
+                        key={placement.id}
+                        claimId={claim.id}
+                        field={{
+                          key: placement.definition.fieldKey,
+                          label: placementLabel(placement),
+                          type: placement.definition.fieldType,
+                          hint: placement.definition.hint,
+                          options: placement.definition.options,
+                          required: placement.required,
+                        }}
+                        row={byKey.get(placement.definition.fieldKey)}
+                        isBusy={isBusy}
+                        layout={columns.length === 2 ? "stacked" : "row"}
+                        onConfirm={(value) =>
+                          confirm.mutate({
+                            fieldKey: placement.definition.fieldKey,
+                            value,
+                          })
+                        }
+                        onClear={() =>
+                          clear.mutate(placement.definition.fieldKey)
+                        }
+                      />
+                    ))}
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </Card>
   );
 }

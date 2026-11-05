@@ -11,6 +11,12 @@ import * as preauthRepository from "./preauth.repository.js";
 describe.skipIf(!process.env.DATABASE_URL)(
   "preauth.repository (integration)",
   () => {
+    // Unique per run: the suite's files run in parallel against one
+    // database, and insurer names are unique (migration 0020).
+    const INSURER_NAME = `Preauth Test Insurer ${Date.now()}-${Math.random()
+      .toString(36)
+      .slice(2, 7)}`;
+
     let insurerId: string;
     let procedureId: string;
     let claimId: string;
@@ -18,7 +24,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
     beforeAll(async () => {
       const [insurer] = await db
         .insert(insurers)
-        .values({ name: "Preauth Test Insurer", type: "tpa" })
+        .values({ name: INSURER_NAME, type: "tpa" })
         .returning();
       const [procedure] = await db
         .insert(procedures)

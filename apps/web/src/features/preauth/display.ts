@@ -1,5 +1,17 @@
-import type { PreauthFieldDef } from "@claimflow/contracts";
+import { parseFileValue } from "@claimflow/contracts";
 import { formatAmount } from "../../lib/format";
+
+/**
+ * Only the parts of a field that affect how a value reads.
+ *
+ * Structural rather than the catalogue type, because the form is
+ * configurable now: a field may be one the hospital invented, and the
+ * same helpers have to serve both.
+ */
+export interface Formattable {
+  type: string;
+  options?: { value: string; label: string }[] | null | undefined;
+}
 
 /**
  * Turns a stored canonical value into what a desk executive reads.
@@ -10,12 +22,15 @@ import { formatAmount } from "../../lib/format";
  * this is the single place the translation happens.
  */
 export function formatPreauthValue(
-  field: PreauthFieldDef,
+  field: Formattable,
   value: string | null,
 ): string {
   if (value === null || value === "") return "—";
 
   switch (field.type) {
+    case "file":
+      // The stored text is JSON; a person wants the filename.
+      return parseFileValue(value)?.fileName ?? "—";
     case "currency":
       return formatAmount(value);
     case "date": {
@@ -51,7 +66,7 @@ export function editableValue(value: string | null): string {
 }
 
 /** Which HTML input type suits the field, for the inline editor. */
-export function inputTypeFor(field: PreauthFieldDef): string {
+export function inputTypeFor(field: Formattable): string {
   switch (field.type) {
     case "date":
       return "date";

@@ -2,7 +2,12 @@ import {
   PREAUTH_FIELDS,
   PREAUTH_FIELD_BY_KEY,
   parsePreauthValue,
+  reviewPreauthForm,
+  sortFindings,
+  layoutPlacements,
+  type PreauthReview,
 } from "@claimflow/contracts";
+import { getFormAuditor } from "../../integrations/auditor/claude.js";
 import {
   getPreauthExtractor,
   hasPreauthExtractor,
@@ -14,6 +19,9 @@ import * as auditService from "../audit/audit.service.js";
 import * as claimsRepository from "../claims/claims.repository.js";
 import * as documentsRepository from "../documents/documents.repository.js";
 import { getMemberId } from "../members/members.repository.js";
+import * as hospitalRepository from "../hospital/hospital.repository.js";
+import { buildPreauthForm } from "./preauth-form.builder.js";
+import * as preauthLayoutsService from "../preauth-layouts/preauth-layouts.service.js";
 import * as preauthRepository from "./preauth.repository.js";
 
 export class ClaimNotFoundError extends Error {}
@@ -204,13 +212,50 @@ export async function extractFields(auth: AuthContext, claimId: string) {
  * executive correcting a figure by hand goes through exactly the same
  * gate the model's answer did.
  */
+/**
+ * Finds a field by key on the claim's own form.
+ *
+ * Resolved from the claim's layout, not the standard catalogue: a
+ * hospital's own field is as real as an IRDAI one, and looking only at
+ * the fixed 24 made every custom field impossible to confirm — the
+ * builder appeared to work and then the field silently 404'd on save.
+ */
+async function fieldOnClaim(
+  claimId: string,
+  fieldKey: string,
+): Promise<
+  | {
+      type: string;
+      options?: { value: string; label: string }[] | null | undefined;
+    }
+  | undefined
+> {
+  const layout = await preauthLayoutsService.layoutForClaim(claimId);
+  const placement = layoutPlacements(layout).find(
+    (p) => p.definition.fieldKey === fieldKey,
+  );
+  if (placement) {
+    return {
+      type: placement.definition.fieldType,
+      options: placement.definition.options,
+    };
+  }
+  // A value recorded before the field was taken off the form is still
+  // editable — removing a field from a layout isn't meant to strand
+  // what it already held.
+  const standard = PREAUTH_FIELD_BY_KEY[fieldKey];
+  return standard
+    ? { type: standard.type, options: standard.options }
+    : undefined;
+}
+
 export async function confirmField(
   auth: AuthContext,
   claimId: string,
   fieldKey: string,
   rawValue: string,
 ) {
-  const field = PREAUTH_FIELD_BY_KEY[fieldKey];
+  const field = await fieldOnClaim(claimId, fieldKey);
   if (!field) throw new UnknownFieldError(fieldKey);
 
   const value = parsePreauthValue(field, rawValue);
@@ -240,14 +285,19 @@ export async function confirmField(
 }
 
 /**
- * Two of these fields are facts the rest of the app already reads off
- * `claims` — the header's admission date and the dashboard's billed
- * amount. Confirming them here updates those columns so there's one
- * answer rather than two.
+ * Admission date and time are facts the rest of the app reads off
+ * `claims`, so confirming them here updates that column and there is
+ * one answer rather than two. The form asks for date and time
+ * separately; a confirmed date with no time lands at midnight, which is
+ * what the desk would write anyway.
  *
- * Admission date and time are separate fields because the form asks for
- * them separately; a confirmed date with no time lands at midnight,
- * which is what the desk would write anyway.
+ * `totalExpectedCost` used to write through to `claims.billed_amount`,
+ * and that was wrong. Expected cost is what the hospital asked the
+ * insurer to cover; billed amount is what it charged at discharge. They
+ * differ by exactly the thing the money model is for — docs/adr/0012 —
+ * and conflating them made every shortfall read as zero. The expected
+ * cost now stays on the pre-auth field it belongs to, and the billed
+ * amount is recorded explicitly through PATCH /claims/:id/financials.
  */
 async function writeThroughToClaim(
   auth: AuthContext,
@@ -255,13 +305,6 @@ async function writeThroughToClaim(
   fieldKey: string,
   value: string,
 ) {
-  if (fieldKey === "totalExpectedCost") {
-    await claimsRepository.updateConfirmedFacts(claimId, {
-      billedAmount: value,
-    });
-    return;
-  }
-
   if (fieldKey !== "admissionDate" && fieldKey !== "admissionTime") return;
 
   const rows = (await preauthRepository.listForClaim(claimId)) ?? [];
@@ -286,7 +329,9 @@ export async function clearField(
   claimId: string,
   fieldKey: string,
 ) {
-  if (!PREAUTH_FIELD_BY_KEY[fieldKey]) throw new UnknownFieldError(fieldKey);
+  if (!(await fieldOnClaim(claimId, fieldKey))) {
+    throw new UnknownFieldError(fieldKey);
+  }
   const row = await preauthRepository.clearValue(claimId, fieldKey);
   if (!row) throw new ClaimNotFoundError(claimId);
 
@@ -298,4 +343,191 @@ export async function clearField(
   });
 
   return row;
+}
+
+/**
+ * Reads the form against itself before it goes to an insurer.
+ *
+ * Two halves, deliberately separated. The deterministic rules in
+ * @claimflow/contracts check the dates, the arithmetic and the form's
+ * own branches; the model reads only the clinical coherence the rules
+ * can't see. Every finding carries which half produced it, so a desk
+ * exec is never left guessing whether a number was computed or
+ * believed.
+ *
+ * The model half is optional in both directions: no key configured and
+ * it doesn't run, a failed call and it doesn't run either. The rules
+ * still produce the findings that catch most insurer queries, and the
+ * response says plainly that the clinical read was skipped rather than
+ * implying a clean bill of health.
+ */
+export async function reviewClaimForm(
+  auth: AuthContext,
+  claimId: string,
+): Promise<PreauthReview> {
+  const claim = await claimsRepository.getClaimById(claimId);
+  if (!claim) throw new ClaimNotFoundError(claimId);
+
+  const rows = (await preauthRepository.listForClaim(claimId)) ?? [];
+
+  // Confirmed values only. Reviewing an unconfirmed suggestion would be
+  // the product arguing with its own guess in front of the user, and
+  // adr 0005 is clear that a suggestion isn't a value until a human says
+  // so.
+  const confirmed = rows.filter((row) => row.confirmedAt && row.value);
+  const values: Record<string, string | null> = {};
+  for (const row of confirmed) values[row.fieldKey] = row.value;
+
+  const findings = [...reviewPreauthForm(values)];
+
+  const auditor = getFormAuditor();
+  let clinicalReviewRan = false;
+  if (auditor && confirmed.length > 0) {
+    try {
+      const clinical = await auditor.audit({
+        fields: confirmed.map((row) => ({
+          key: row.fieldKey,
+          label: PREAUTH_FIELD_BY_KEY[row.fieldKey]?.label ?? row.fieldKey,
+          value: row.value!,
+        })),
+        procedureName: claim.procedureName,
+      });
+      findings.push(...clinical);
+      clinicalReviewRan = true;
+    } catch (err) {
+      console.error("form clinical review failed", {
+        claimId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  const sorted = sortFindings(findings);
+  return {
+    findings: sorted,
+    blockers: sorted.filter((f) => f.severity === "blocker").length,
+    warnings: sorted.filter((f) => f.severity === "warning").length,
+    clinicalReviewRan,
+  };
+}
+
+/**
+ * Renders the filled form as a printable PDF.
+ *
+ * Only confirmed values are printed. A suggestion isn't a value until a
+ * human says so (docs/adr/0005), and a document leaving the hospital is
+ * the least reversible place for an unchecked figure to turn up —
+ * unconfirmed fields print as a rule to complete by hand instead.
+ */
+/**
+ * The upload endpoint only ever accepts these two (see
+ * hospital.schema.ts's RequestLogoUploadUrlBody), and buildHospitalLogoKey
+ * keeps the original extension — so the key alone says which one a given
+ * logo is without a content-type column to keep in sync.
+ */
+function logoContentTypeFromKey(key: string): "image/png" | "image/jpeg" {
+  return key.toLowerCase().endsWith(".png") ? "image/png" : "image/jpeg";
+}
+
+export async function renderPreauthForm(auth: AuthContext, claimId: string) {
+  const claim = await claimsRepository.getClaimById(claimId);
+  if (!claim) throw new ClaimNotFoundError(claimId);
+
+  const hospital = await hospitalRepository.get();
+  if (!hospital) throw new ClaimNotFoundError(claimId);
+
+  // Never fatal: a logo that's briefly unreachable in S3 must not stop a
+  // desk from printing a form they need right now — it just prints
+  // without the mark that time.
+  const logo = hospital.logoFileKey
+    ? await getObjectBytes(hospital.logoFileKey)
+        .then((bytes) => ({
+          bytes,
+          contentType: logoContentTypeFromKey(hospital.logoFileKey!),
+        }))
+        .catch(() => null)
+    : null;
+
+  const rows = (await preauthRepository.listForClaim(claimId)) ?? [];
+  // The claim's own frozen layout, not the live one: a printed form has
+  // to match the form that was filled in (docs/adr/0001).
+  const layout = await preauthLayoutsService.layoutForClaim(claimId);
+
+  const address = [
+    hospital.addressLine1,
+    hospital.addressLine2,
+    hospital.city,
+    hospital.state,
+    hospital.pincode,
+  ]
+    .filter(Boolean)
+    .join(", ");
+
+  const values = layoutPlacements(layout).map((placement) => {
+    const def = placement.definition;
+    const row = rows.find((r) => r.fieldKey === def.fieldKey);
+    const confirmed = Boolean(row?.confirmedAt && row.value);
+    return {
+      fieldKey: def.fieldKey,
+      display: confirmed ? formatForPrint(def, row!.value!) : null,
+      raw: confirmed ? row!.value! : null,
+      confirmed,
+    };
+  });
+
+  const bytes = await buildPreauthForm(
+    {
+      name: hospital.name,
+      address,
+      rohiniId: hospital.rohiniId,
+      registrationNumber: hospital.registrationNumber,
+      deskContactName: hospital.deskContactName,
+      deskContactPhone: hospital.deskContactPhone,
+      tagline: hospital.tagline,
+      footerNote: hospital.documentFooterNote,
+      accentColorHex: hospital.brandAccentColor,
+      logo,
+    },
+    {
+      reference: claim.reference,
+      patientName: claim.patientName,
+      insurerName: claim.insurerName,
+      procedureName: claim.procedureName,
+    },
+    layout,
+    values,
+    new Date(),
+  );
+
+  await auditService.record(auth, {
+    action: "preauth.form_printed",
+    entityType: "claim",
+    entityId: claimId,
+    after: { confirmedFields: values.filter((v) => v.confirmed).length },
+  });
+
+  return { bytes, fileName: `preauth-${claim.reference}.pdf` };
+}
+
+/**
+ * Print form of a stored value. Enums print their label, currency gets
+ * grouped digits — a TPA reads "surgical_management" as a bug.
+ */
+function formatForPrint(
+  field: {
+    fieldType: string;
+    options: { value: string; label: string }[] | null;
+  },
+  value: string,
+): string {
+  if (field.fieldType === "enum") {
+    return field.options?.find((o) => o.value === value)?.label ?? value;
+  }
+  if (field.fieldType === "currency") {
+    return Number(value).toLocaleString("en-IN", {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 2,
+    });
+  }
+  return value;
 }
