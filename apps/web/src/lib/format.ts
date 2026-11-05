@@ -14,3 +14,16 @@ export function formatAmount(value: string | number | null): string {
   if (value === null) return "—";
   return `₹${Number(value).toLocaleString("en-IN")}`;
 }
+
+/** "₹1.5L", "₹2Cr" — Indian lakh/crore notation for chart labels, where
+ * a full comma-grouped amount would overrun the mark it's labeling. */
+export function formatCompactAmount(value: number): string {
+  const sign = value < 0 ? "-" : "";
+  const abs = Math.abs(value);
+  const trim = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(1));
+
+  if (abs >= 1e7) return `${sign}₹${trim(abs / 1e7)}Cr`;
+  if (abs >= 1e5) return `${sign}₹${trim(abs / 1e5)}L`;
+  if (abs >= 1e3) return `${sign}₹${trim(abs / 1e3)}K`;
+  return `${sign}₹${abs}`;
+}

@@ -7,6 +7,7 @@ import { refreshSessionClaims } from "../auth/api";
 import { useAuth } from "../auth/AuthProvider";
 import { acceptInvite, previewInvite } from "./api";
 import { ROLE_LABEL } from "../../lib/roles";
+import { Button } from "../../components/ui/button";
 
 export function AcceptInvitePage() {
   const { token = "" } = useParams();
@@ -52,7 +53,7 @@ export function AcceptInvitePage() {
   if (isError || !preview) {
     return (
       <AuthLayout heading="Invite not found">
-        <p className="empty-state">
+        <p className="px-1 py-2.5 text-base text-ink-faint">
           This invite link is invalid, expired, or has already been used. Ask
           whoever sent it for a new one.
         </p>
@@ -65,10 +66,14 @@ export function AcceptInvitePage() {
       heading={`Join ${preview.hospitalName}`}
       subheading={`You've been invited as ${ROLE_LABEL[preview.role] ?? preview.role}.`}
     >
-      {error ? <div className="inline-error">{error}</div> : null}
+      {error ? (
+        <div className="mb-3 flex items-center justify-between gap-3 rounded-md border border-critical bg-critical-bg px-3.5 py-2.5 text-base font-medium text-critical">
+          {error}
+        </div>
+      ) : null}
 
       {!session ? (
-        <p className="empty-state">
+        <p className="px-1 py-2.5 text-base text-ink-faint">
           <Link to="/signup" style={{ color: "var(--accent-ink)" }}>
             Create an account
           </Link>{" "}
@@ -79,19 +84,19 @@ export function AcceptInvitePage() {
           first, then come back to this link to join.
         </p>
       ) : role ? (
-        <p className="empty-state">
+        <p className="px-1 py-2.5 text-base text-ink-faint">
           You already have an account on this ClaimFlow. Invite links are for
           people joining for the first time.
         </p>
       ) : (
-        <button
+        <Button
           type="button"
-          className="btn btn--primary btn--full"
+          className="w-full"
           disabled={isAccepting}
           onClick={handleAccept}
         >
           {isAccepting ? "Joining…" : `Join ${preview.hospitalName}`}
-        </button>
+        </Button>
       )}
     </AuthLayout>
   );

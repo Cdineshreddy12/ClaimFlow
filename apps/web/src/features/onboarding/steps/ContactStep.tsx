@@ -205,7 +205,7 @@ export function ContactStep({
       </div>
 
       <div className="mt-2 flex items-center justify-between gap-3 border-t border-line pt-5">
-        <Button type="button" variant="ghost" onClick={onBack}>
+        <Button type="button" variant="outline" onClick={onBack}>
           Back
         </Button>
         <Button type="submit" disabled={isSaving}>

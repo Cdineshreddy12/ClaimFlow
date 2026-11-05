@@ -7,8 +7,11 @@ import {
   type ReactNode,
 } from "react";
 import { supabase } from "../../lib/supabase-client";
+import { useMe } from "./me";
 
-const DEV_TOKEN = import.meta.env.VITE_DEV_TOKEN;
+/** Empty in any production build — injected by vite.config.ts, see the note there. */
+const DEV_TOKEN =
+  (typeof __DEV_TOKEN__ === "string" ? __DEV_TOKEN__ : "") || undefined;
 
 interface AuthState {
   session: Session | null;
@@ -20,7 +23,7 @@ interface AuthState {
    * row yet, which is what routes them into onboarding.
    */
   role: string | null;
-  /** True when running on the VITE_DEV_TOKEN bridge rather than a real Supabase session. */
+  /** True when running on the local dev-token bridge rather than a real Supabase session. */
   isDevSession: boolean;
 }
 
@@ -42,7 +45,7 @@ function decodeDevSession(token: string): Session | null {
       refresh_token: "",
       user: {
         id: payload.sub,
-        email: payload.email ?? "dev@localhost",
+        email: payload.email ?? "dev session (no sign-in)",
         app_metadata: payload.app_metadata ?? {},
         user_metadata: {},
         aud: "authenticated",
@@ -80,7 +83,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => subscription.subscription.unsubscribe();
   }, []);
 
-  const role = (session?.user.app_metadata.role as string | undefined) ?? null;
+  const claimedRole =
+    (session?.user.app_metadata.role as string | undefined) ?? null;
+
+  /**
+   * The claim is the fast path, not the only one.
+   *
+   * `app_metadata.role` is stamped when a token is minted, so a session
+   * predating a membership — or an install where the Custom Access
+   * Token hook was never enabled — carries no role at all. The app was
+   * already coping with that at the door: RequireMembership asks /me
+   * and lets you in. It just threw the answer away, so every
+   * role-gated control in the app then read the empty claim and hid
+   * itself from people who were, in fact, admins.
+   *
+   * Only fetched when the claim missed, so a normal session still
+   * costs nothing.
+   */
+  const { data: me } = useMe(Boolean(session) && !claimedRole);
+  const role = claimedRole ?? me?.role ?? null;
 
   return (
     <AuthContext.Provider

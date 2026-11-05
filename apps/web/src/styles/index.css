@@ -1,28 +1,67 @@
-@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap");
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* Design tokens + component classes ported from the approved mockup at
-   docs/design/claims-desk-mockup.html — every screen draws from this one
-   sheet so they stay visually consistent as they're built out one by one.
-   Only the pieces needed so far (shell chrome + Claim File) are ported;
-   add the rest (dashboard, query inbox, checklist admin) as those land. */
+/* Design tokens and element defaults. Nothing else.
+   -------------------------------------------------------------------
+   Every component class that used to live here is now Tailwind at the
+   call site, or a primitive in components/ui. What stays is the part
+   utilities can't own: the token values themselves, which the Tailwind
+   theme reads through var(), and the handful of element-level defaults
+   below (box-sizing, body type, focus ring, heading reset).
+
+   Resist adding a class here. If a pattern repeats, it wants a
+   component in components/ui, not a selector — that is what kept this
+   file at 3,700 lines and let two screens drift apart while both
+   looked right in isolation.
+
+   The ground is pure white at the client's request — the mockup's pale
+   sage "ledger paper" is gone. With no tonal difference between the
+   page, the chrome and the cards, borders carry all the structure, so
+   --border is doing real work here and is not decoration.
+
+   Neutrals are the b2b-crm's, which are faintly blue rather than the
+   warm greys this inherited from the sage mockup. That one swap is what
+   makes the deep blue accent look native: a blue link on a warm-grey
+   page reads as borrowed, and no amount of tuning the blue fixes it. */
 
 :root {
-  --paper: #eff2ec;
-  --surface: #fafaf8;
+  --paper: #ffffff;
+  --surface: #ffffff;
   --surface-raised: #ffffff;
-  --ink: #1c1b17;
-  --ink-soft: #5e5d55;
-  --ink-faint: #908f86;
-  --border: rgba(28, 27, 23, 0.13);
-  --border-strong: rgba(28, 27, 23, 0.22);
-  --accent: #2b3a52;
-  --accent-ink: #1e2a3d;
-  --accent-soft: rgba(43, 58, 82, 0.09);
-  --focus: #2b3a52;
+  /* A tinted step above the page, for table headers and inset strips. */
+  --surface-sunken: oklch(0.985 0.003 260);
+  --hover: oklch(0.968 0.005 260);
+  --active: oklch(0.945 0.009 260);
+  --ink: oklch(0.22 0.015 260);
+  --ink-soft: oklch(0.42 0.012 260);
+  --ink-faint: oklch(0.58 0.01 260);
+  --border: oklch(0.92 0.006 260);
+  --border-strong: oklch(0.86 0.008 260);
+  --divider: oklch(0.94 0.005 260);
+  /* The CRM's accent, unchanged: a genuine deep blue rather than the
+     near-navy this used before, which read as grey against white. */
+  --accent: oklch(0.52 0.18 264);
+  --accent-hover: oklch(0.46 0.19 264);
+  --accent-ink: oklch(0.4 0.18 264);
+  --accent-soft: oklch(0.96 0.03 264);
+  --accent-soft-2: oklch(0.92 0.05 264);
+  --focus: oklch(0.52 0.18 264);
+
+  /* The CRM's button primary is a near-black navy, not the accent. The
+     accent stays where the CRM puts it — links, the active nav item,
+     chart bars, sort carets — so the one solid-filled control on a
+     screen is never competing with them for the eye. */
+  --primary: #141e34;
+  --primary-hover: #1c2b4a;
+
+  /* The CRM's radius scale, so a chip, a card and a dialog step through
+     the same values instead of each picking a number. */
+  --r-xs: 4px;
+  --r-sm: 6px;
+  --r-md: 8px;
+  --r-lg: 10px;
+  --r-xl: 14px;
 
   --approved: #3c7a52;
   --approved-bg: rgba(60, 122, 82, 0.13);
@@ -33,23 +72,99 @@
   --neutral: #6b6a61;
   --neutral-bg: rgba(107, 106, 97, 0.12);
 
+  /* Chart categorical series — eight hues in a fixed, validated order
+     (dataviz skill default: adjacent-pair CVD ΔE 9.1+, normal-vision
+     19.6+). A chart assigns slots by a fixed index — claim status,
+     deduction reason — never by sorted rank, so a color never jumps
+     series when a count changes. */
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --series-3: #1baf7a;
+  --series-4: #eda100;
+  --series-5: #e87ba4;
+  --series-6: #008300;
+  --series-7: #4a3aa7;
+  --series-8: #e34948;
+
+  /* Typography, matched to the b2b-crm: same two families and the same
+     eight-step scale, so a screen built here and a screen built there
+     set text at the same sizes instead of each drifting to whatever
+     looked right that day. Sizes are deliberately odd-numbered — a
+     half-pixel step is what keeps eight levels distinguishable inside
+     an 11–22px range. */
+  --font-sans: "Inter", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --text-2xs: 11px;
+  --text-2xs-lh: 16px;
+  --text-xs: 11.5px;
+  --text-xs-lh: 16px;
+  --text-sm: 12.5px;
+  --text-sm-lh: 18px;
+  --text-base: 13.5px;
+  --text-base-lh: 20px;
+  --text-md: 14px;
+  --text-md-lh: 20px;
+  --text-lg: 16px;
+  --text-lg-lh: 24px;
+  --text-xl: 18px;
+  --text-xl-lh: 28px;
+  --text-2xl: 22px;
+  --text-2xl-lh: 30px;
+
+  /* The CRM's shadow-xs: a single hairline under the card, not a drop
+     shadow. On a white ground the border does the structural work and
+     anything deeper starts to look like a floating panel. */
+  --card-shadow: 0 1px 0 rgba(15, 18, 32, 0.04);
+  --card-shadow-raised:
+    0 1px 2px rgba(15, 18, 32, 0.06), 0 1px 1px rgba(15, 18, 32, 0.03);
+
+  /* ---------- Sidebar ----------
+     A fixed dark rail, by request — it stays this palette regardless
+     of the app's own light/dark theme, the way the reference product's
+     nav does. Only the rail switches; content keeps reading from
+     --surface and the rest of the tokens above. */
+  /* The b2b-crm's rail, token for token: a blue-biased navy rather than
+     the neutral charcoal this had, which is what let the warm greys and
+     the blue accent sit next to each other without agreeing. */
+  --sidebar-bg: #0e1625;
+  --sidebar-border: #1c263b;
+  --sidebar-ink: #f1f2f4;
+  --sidebar-ink-soft: #adb4c2;
+  --sidebar-ink-faint: #6b7385;
+  --sidebar-hover-bg: #1c263b;
+  --sidebar-active-bg: #1c263b;
+  --sidebar-active-ink: #ffffff;
+  /* The CRM marks the active item with a ring in its sidebar-primary,
+     a lighter indigo than the page accent — the page accent is too dark
+     to register against #0e1625. */
+  --sidebar-active-ring: #696cd3;
+
   color-scheme: light;
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --paper: #15171a;
-    --surface: #1c1f22;
-    --surface-raised: #22262a;
-    --ink: #ecead2;
-    --ink-soft: #a6a49a;
-    --ink-faint: #96958a;
-    --border: rgba(236, 234, 226, 0.13);
-    --border-strong: rgba(236, 234, 226, 0.24);
-    --accent: #92a6c9;
-    --accent-ink: #c7d3e6;
-    --accent-soft: rgba(146, 166, 201, 0.14);
-    --focus: #92a6c9;
+    --paper: oklch(0.18 0.01 260);
+    --surface: oklch(0.22 0.008 260);
+    --surface-raised: oklch(0.24 0.008 260);
+    --surface-sunken: oklch(0.21 0.008 260);
+    --hover: oklch(0.27 0.01 260);
+    --active: oklch(0.31 0.012 260);
+    --ink: oklch(0.96 0.004 260);
+    --ink-soft: oklch(0.78 0.008 260);
+    --ink-faint: oklch(0.64 0.01 260);
+    --border: oklch(0.32 0.012 260);
+    --border-strong: oklch(0.4 0.015 260);
+    --divider: oklch(0.28 0.01 260);
+    --accent: oklch(0.68 0.18 264);
+    --accent-hover: oklch(0.74 0.17 264);
+    --accent-ink: oklch(0.8 0.12 264);
+    --accent-soft: oklch(0.3 0.07 264);
+    --accent-soft-2: oklch(0.34 0.09 264);
+    --primary: #696cd3;
+    --primary-hover: #7b7ddb;
+    --focus: oklch(0.68 0.18 264);
 
     --approved: #6fbe8c;
     --approved-bg: rgba(111, 190, 140, 0.15);
@@ -59,23 +174,42 @@
     --critical-bg: rgba(219, 120, 103, 0.15);
     --neutral: #a6a49a;
     --neutral-bg: rgba(166, 164, 154, 0.15);
+    --card-shadow: 0 1px 0 rgba(0, 0, 0, 0.3);
+    --card-shadow-raised: 0 1px 2px rgba(0, 0, 0, 0.3);
+
+    --series-1: #3987e5;
+    --series-2: #d95926;
+    --series-3: #199e70;
+    --series-4: #c98500;
+    --series-5: #d55181;
+    --series-6: #008300;
+    --series-7: #9085e9;
+    --series-8: #e66767;
     color-scheme: dark;
   }
 }
 
 :root[data-theme="dark"] {
-  --paper: #15171a;
-  --surface: #1c1f22;
-  --surface-raised: #22262a;
-  --ink: #ecead2;
-  --ink-soft: #a6a49a;
-  --ink-faint: #96958a;
-  --border: rgba(236, 234, 226, 0.13);
-  --border-strong: rgba(236, 234, 226, 0.24);
-  --accent: #92a6c9;
-  --accent-ink: #c7d3e6;
-  --accent-soft: rgba(146, 166, 201, 0.14);
-  --focus: #92a6c9;
+  --paper: oklch(0.18 0.01 260);
+  --surface: oklch(0.22 0.008 260);
+  --surface-raised: oklch(0.24 0.008 260);
+  --surface-sunken: oklch(0.21 0.008 260);
+  --hover: oklch(0.27 0.01 260);
+  --active: oklch(0.31 0.012 260);
+  --ink: oklch(0.96 0.004 260);
+  --ink-soft: oklch(0.78 0.008 260);
+  --ink-faint: oklch(0.64 0.01 260);
+  --border: oklch(0.32 0.012 260);
+  --border-strong: oklch(0.4 0.015 260);
+  --divider: oklch(0.28 0.01 260);
+  --accent: oklch(0.68 0.18 264);
+  --accent-hover: oklch(0.74 0.17 264);
+  --accent-ink: oklch(0.8 0.12 264);
+  --accent-soft: oklch(0.3 0.07 264);
+  --accent-soft-2: oklch(0.34 0.09 264);
+  --primary: #696cd3;
+  --primary-hover: #7b7ddb;
+  --focus: oklch(0.68 0.18 264);
 
   --approved: #6fbe8c;
   --approved-bg: rgba(111, 190, 140, 0.15);
@@ -85,6 +219,17 @@
   --critical-bg: rgba(219, 120, 103, 0.15);
   --neutral: #a6a49a;
   --neutral-bg: rgba(166, 164, 154, 0.15);
+  --card-shadow: 0 1px 0 rgba(0, 0, 0, 0.3);
+  --card-shadow-raised: 0 1px 2px rgba(0, 0, 0, 0.3);
+
+  --series-1: #3987e5;
+  --series-2: #d95926;
+  --series-3: #199e70;
+  --series-4: #c98500;
+  --series-5: #d55181;
+  --series-6: #008300;
+  --series-7: #9085e9;
+  --series-8: #e66767;
   color-scheme: dark;
 }
 
@@ -99,18 +244,14 @@ body {
 body {
   background: var(--paper);
   color: var(--ink);
-  font-family:
-    "IBM Plex Sans",
-    -apple-system,
-    "Segoe UI",
-    sans-serif;
-  font-size: 15px;
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
-}
-.mono {
-  font-family: "IBM Plex Mono", ui-monospace, monospace;
-  font-variant-numeric: tabular-nums;
+  -moz-osx-font-smoothing: grayscale;
+  /* Inter's stylistic sets: straight-sided a/g and a disambiguated 1,
+     which is what keeps a claim reference legible at 11px. */
+  font-feature-settings: "cv11", "ss01", "ss03";
 }
 a,
 button,
@@ -135,1248 +276,4 @@ h2,
 h3 {
   text-wrap: balance;
   margin: 0;
-}
-
-/* ---------- shell ---------- */
-.shell {
-  display: flex;
-  min-height: 100vh;
-}
-.sidebar {
-  width: 228px;
-  flex-shrink: 0;
-  background: var(--surface);
-  border-right: 1px solid var(--border);
-  display: flex;
-  flex-direction: column;
-  padding: 22px 14px;
-  gap: 28px;
-}
-.brand-block {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-.brand {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  padding: 0 10px;
-}
-.brand-mark {
-  width: 20px;
-  height: 20px;
-  border: 1.5px solid var(--ink);
-  border-radius: 3px;
-  position: relative;
-  flex-shrink: 0;
-}
-.brand-mark::after {
-  content: "";
-  position: absolute;
-  left: 3px;
-  right: 3px;
-  top: 6px;
-  height: 1.5px;
-  background: var(--ink);
-  box-shadow: 0 4px 0 var(--ink);
-}
-.brand-name {
-  font-weight: 600;
-  font-size: 15.5px;
-  letter-spacing: -0.01em;
-}
-.nav {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  margin-top: 4px;
-}
-.nav-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 9px 10px;
-  border-radius: 6px;
-  color: var(--ink-soft);
-  font-size: 14px;
-  font-weight: 500;
-  text-decoration: none;
-  transition:
-    background-color 0.12s ease,
-    color 0.12s ease;
-}
-.nav-item svg {
-  width: 16px;
-  height: 16px;
-  flex-shrink: 0;
-  opacity: 0.8;
-}
-.nav-item:hover {
-  background: var(--accent-soft);
-  color: var(--ink);
-}
-.nav-item.active {
-  background: var(--accent-soft);
-  color: var(--accent-ink);
-}
-.nav-item.active svg {
-  opacity: 1;
-}
-.sidebar-foot {
-  margin-top: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 0 10px;
-}
-.main {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-}
-.topbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 16px 32px;
-  border-bottom: 1px solid var(--border);
-  background: var(--surface);
-}
-.topbar-title {
-  font-size: 17px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-}
-.topbar-sub {
-  font-size: 12.5px;
-  color: var(--ink-faint);
-  margin-top: 2px;
-}
-.topbar-user {
-  text-align: right;
-  font-size: 12.5px;
-  color: var(--ink-soft);
-}
-.topbar-user strong {
-  color: var(--ink);
-  font-weight: 600;
-}
-.content {
-  padding: 28px 32px 60px;
-  max-width: 1180px;
-  width: 100%;
-  margin: 0 auto;
-}
-
-/* ---------- generic pieces ---------- */
-.label-eyebrow {
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.07em;
-  color: var(--ink-faint);
-}
-.card {
-  background: var(--surface-raised);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-}
-.card-pad {
-  padding: 20px 22px;
-}
-.card-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  margin-bottom: 14px;
-  gap: 10px;
-}
-.chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 3px 9px;
-  border-radius: 4px;
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.01em;
-  white-space: nowrap;
-}
-.chip::before {
-  content: "";
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-.chip--approved {
-  color: var(--approved);
-  background: var(--approved-bg);
-}
-.chip--approved::before {
-  background: var(--approved);
-}
-.chip--pending {
-  color: var(--pending);
-  background: var(--pending-bg);
-}
-.chip--pending::before {
-  background: var(--pending);
-}
-.chip--critical {
-  color: var(--critical);
-  background: var(--critical-bg);
-}
-.chip--critical::before {
-  background: var(--critical);
-}
-.chip--neutral {
-  color: var(--neutral);
-  background: var(--neutral-bg);
-}
-.chip--neutral::before {
-  background: var(--neutral);
-}
-.btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 14px;
-  border-radius: 6px;
-  font-size: 13.5px;
-  font-weight: 600;
-  cursor: pointer;
-  border: 1px solid transparent;
-}
-.btn--primary {
-  background: var(--accent);
-  color: var(--surface-raised);
-}
-.btn--primary:hover {
-  background: var(--accent-ink);
-}
-.btn--ghost {
-  background: transparent;
-  color: var(--ink);
-  border-color: var(--border-strong);
-}
-.btn--ghost:hover {
-  background: var(--accent-soft);
-}
-.btn--sm {
-  padding: 5px 10px;
-  font-size: 12.5px;
-}
-.btn[disabled] {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
-.inline-error {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  border: 1px solid var(--critical);
-  background: var(--critical-bg);
-  border-radius: 7px;
-  padding: 10px 14px;
-  margin-bottom: 12px;
-  font-size: 13px;
-  color: var(--critical);
-  font-weight: 500;
-}
-
-/* ---------- Claim file ---------- */
-.claim-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 22px;
-  gap: 16px;
-}
-.claim-id {
-  font-size: 12.5px;
-  color: var(--ink-faint);
-  margin-bottom: 4px;
-}
-.claim-title {
-  font-size: 21px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-}
-.claim-meta {
-  display: flex;
-  gap: 16px;
-  margin-top: 8px;
-  font-size: 13px;
-  color: var(--ink-soft);
-  flex-wrap: wrap;
-}
-.claim-meta b {
-  color: var(--ink);
-  font-weight: 600;
-}
-
-.stepper {
-  display: flex;
-  margin: 6px 0 28px;
-}
-.step {
-  position: relative;
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 10px;
-  text-align: center;
-}
-.step:not(:first-child)::before {
-  content: "";
-  position: absolute;
-  top: 15px;
-  right: 50%;
-  width: 100%;
-  height: 2px;
-  background: var(--border-strong);
-  z-index: 0;
-}
-.step.line-done:not(:first-child)::before {
-  background: var(--approved);
-}
-.step-node {
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: 2px solid var(--border-strong);
-  background: var(--surface-raised);
-  z-index: 1;
-  position: relative;
-}
-.step-node svg {
-  width: 14px;
-  height: 14px;
-}
-.step.done .step-node {
-  border-color: var(--approved);
-  background: var(--approved-bg);
-  color: var(--approved);
-}
-.step.current .step-node {
-  border-color: var(--pending);
-  background: var(--pending-bg);
-  color: var(--pending);
-}
-.step.current.critical .step-node {
-  border-color: var(--critical);
-  background: var(--critical-bg);
-  color: var(--critical);
-}
-.step.upcoming .step-node {
-  opacity: 0.55;
-  color: var(--ink-faint);
-}
-.step-name {
-  font-size: 12.5px;
-  font-weight: 600;
-}
-.step.upcoming .step-name {
-  color: var(--ink-faint);
-  font-weight: 500;
-}
-.step-time {
-  font-size: 12px;
-  color: var(--ink-faint);
-}
-.step.current.critical .step-time {
-  color: var(--critical);
-  font-weight: 600;
-}
-.step.current:not(.critical) .step-time {
-  color: var(--pending);
-  font-weight: 600;
-}
-
-.field-row {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 14px;
-  margin-bottom: 22px;
-}
-.field {
-  border: 1px solid var(--border);
-  border-radius: 7px;
-  padding: 12px 14px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  background: var(--surface-raised);
-}
-.field-label {
-  font-size: 11px;
-  color: var(--ink-faint);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  font-weight: 600;
-}
-.field-value {
-  font-size: 15px;
-  font-weight: 600;
-}
-
-/* ---------- Pre-auth fields ----------
-   An unconfirmed suggestion is dashed and tinted, a confirmed value is
-   an ordinary field. That difference is load-bearing, not decoration:
-   docs/adr/0005 turns on a desk executive being able to see at a glance
-   which figures on this form a human has actually stood behind. */
-.field--needs-confirm {
-  border-style: dashed;
-  border-color: var(--pending);
-  background: var(--pending-bg);
-}
-.field-source {
-  font-size: 12px;
-  color: var(--ink-faint);
-  font-style: italic;
-  line-height: 1.45;
-}
-.field-conf {
-  font-size: 12px;
-  color: var(--ink-faint);
-}
-.field-hint-low {
-  font-size: 12px;
-  color: var(--pending);
-  font-weight: 600;
-}
-.field-foot {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-  margin-top: auto;
-  padding-top: 2px;
-}
-.field-ok {
-  font-size: 12px;
-  color: var(--approved);
-  font-weight: 600;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-.field-edit {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.field-input {
-  width: 100%;
-  border: 1px solid var(--border-strong);
-  border-radius: 6px;
-  padding: 6px 8px;
-  font-size: 13.5px;
-  background: var(--surface-raised);
-  color: var(--ink);
-  font-family: inherit;
-}
-
-.preauth-card {
-  margin-top: 22px;
-}
-.preauth-head-left,
-.preauth-head-right {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-}
-.preauth-head-right {
-  flex-shrink: 0;
-}
-.preauth-toggle {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  background: none;
-  border: none;
-  padding: 0;
-  cursor: pointer;
-  color: inherit;
-}
-.preauth-caret {
-  display: inline-block;
-  font-size: 15px;
-  line-height: 1;
-  color: var(--ink-faint);
-  transition: transform 120ms ease;
-}
-.preauth-caret.is-open {
-  transform: rotate(90deg);
-}
-@media (prefers-reduced-motion: reduce) {
-  .preauth-caret {
-    transition: none;
-  }
-}
-.preauth-count {
-  font-size: 12px;
-  color: var(--ink-faint);
-}
-.preauth-groups {
-  margin-top: 18px;
-}
-.preauth-group + .preauth-group {
-  margin-top: 6px;
-}
-.preauth-group-label {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--ink-soft);
-  margin-bottom: 9px;
-}
-/* The grid's own margin handles the gap between groups. */
-.preauth-group .field-row {
-  margin-bottom: 18px;
-}
-
-.checklist {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-.doc-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 4px;
-  border-bottom: 1px solid var(--border);
-}
-.doc-item:last-child {
-  border-bottom: none;
-}
-.doc-status {
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.doc-status svg {
-  width: 11px;
-  height: 11px;
-}
-.doc-status.present {
-  background: var(--approved-bg);
-  color: var(--approved);
-}
-.doc-status.missing {
-  background: var(--critical-bg);
-  color: var(--critical);
-}
-.doc-status.optional {
-  background: var(--neutral-bg);
-  color: var(--neutral);
-}
-.doc-name {
-  font-size: 13.5px;
-  font-weight: 500;
-  flex: 1;
-}
-.doc-item.is-missing .doc-name {
-  color: var(--critical);
-  font-weight: 600;
-}
-.doc-req {
-  font-size: 12px;
-  color: var(--ink-faint);
-}
-
-.upload-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-.upload-row {
-  border: 1px solid var(--border);
-  border-radius: 7px;
-  padding: 11px 13px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  background: var(--surface-raised);
-}
-.upload-row.is-flagged {
-  border-color: var(--pending);
-  border-style: dashed;
-}
-.upload-top {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 10px;
-}
-.upload-file {
-  font-size: 12.5px;
-  font-weight: 600;
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.upload-file svg {
-  width: 14px;
-  height: 14px;
-  color: var(--ink-faint);
-  flex-shrink: 0;
-}
-.upload-conf {
-  font-size: 12px;
-  color: var(--ink-faint);
-  flex-shrink: 0;
-}
-.upload-slot {
-  font-size: 13px;
-}
-.upload-slot b {
-  font-weight: 600;
-}
-.upload-confirm-row {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-.upload-confirm-row select {
-  flex: 1;
-  border: 1px solid var(--border-strong);
-  border-radius: 6px;
-  padding: 6px 8px;
-  font-size: 12.5px;
-  background: var(--surface-raised);
-  color: var(--ink);
-}
-
-.empty-state {
-  font-size: 13px;
-  color: var(--ink-faint);
-  padding: 10px 4px;
-}
-
-/* ---------- Dashboard ---------- */
-.kpi-row {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 16px;
-  margin-bottom: 24px;
-}
-.kpi {
-  background: var(--surface-raised);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 16px 18px;
-  border-top: 3px solid var(--border-strong);
-}
-.kpi.is-critical {
-  border-top-color: var(--critical);
-}
-.kpi-label {
-  font-size: 12px;
-  color: var(--ink-faint);
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-.kpi-value {
-  font-size: 28px;
-  font-weight: 600;
-  margin-top: 8px;
-  letter-spacing: -0.02em;
-}
-.kpi-trend {
-  font-size: 12px;
-  margin-top: 6px;
-  color: var(--ink-soft);
-}
-.kpi-trend.bad {
-  color: var(--critical);
-}
-
-.bar-list {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-.bar-row {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-}
-.bar-row-top {
-  display: flex;
-  justify-content: space-between;
-  font-size: 13px;
-}
-.bar-row-top .amt {
-  font-weight: 600;
-}
-.bar-track {
-  height: 6px;
-  border-radius: 3px;
-  background: var(--accent-soft);
-  overflow: hidden;
-}
-.bar-fill {
-  height: 100%;
-  background: var(--accent);
-  border-radius: 3px;
-}
-.bar-total {
-  margin-top: 4px;
-  padding-top: 12px;
-  border-top: 1px solid var(--border);
-  display: flex;
-  justify-content: space-between;
-  font-size: 13.5px;
-  font-weight: 600;
-}
-
-.stage-time.is-critical {
-  color: var(--critical);
-  font-weight: 600;
-}
-.stage-time.is-pending {
-  color: var(--pending);
-  font-weight: 600;
-}
-
-.two-col {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 20px;
-  align-items: start;
-}
-
-/* A claims table has an irreducible minimum width — let it scroll inside
-   its own card rather than pushing the whole page sideways. */
-.table-scroll {
-  width: 100%;
-  overflow-x: auto;
-}
-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 13.5px;
-}
-.table-scroll table {
-  min-width: 440px;
-}
-thead th {
-  text-align: left;
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--ink-faint);
-  font-weight: 600;
-  padding: 0 10px 10px;
-  border-bottom: 1px solid var(--border);
-}
-tbody td {
-  padding: 11px 10px;
-  border-bottom: 1px solid var(--border);
-  vertical-align: middle;
-}
-tbody tr:last-child td {
-  border-bottom: none;
-}
-tbody tr:hover {
-  background: var(--accent-soft);
-}
-.patient-cell {
-  display: flex;
-  flex-direction: column;
-}
-.patient-cell .proc {
-  font-size: 12px;
-  color: var(--ink-faint);
-}
-
-.sent-confirm {
-  border: 1px solid var(--approved);
-  background: var(--approved-bg);
-  border-radius: 7px;
-  padding: 12px 14px;
-  font-size: 13.5px;
-  color: var(--ink);
-  display: flex;
-  align-items: center;
-  gap: 9px;
-}
-
-/* ---------- Query inbox ---------- */
-.query-shell {
-  display: grid;
-  grid-template-columns: 300px 1fr;
-  gap: 20px;
-  align-items: start;
-}
-.query-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.query-card {
-  all: unset;
-  box-sizing: border-box;
-  width: 100%;
-  border: 1px solid var(--border);
-  border-radius: 7px;
-  padding: 12px 13px;
-  cursor: pointer;
-  background: var(--surface-raised);
-  display: flex;
-  flex-direction: column;
-  gap: 7px;
-  text-align: left;
-}
-.query-card.selected {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 1px var(--accent);
-}
-.query-card-top {
-  display: flex;
-  justify-content: space-between;
-  font-size: 12px;
-  color: var(--ink-faint);
-}
-.query-card-claim {
-  font-size: 13.5px;
-  font-weight: 600;
-}
-.query-card-ins {
-  font-size: 12px;
-  color: var(--ink-soft);
-}
-
-.detail-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 16px;
-  gap: 16px;
-}
-.countdown {
-  text-align: right;
-  flex-shrink: 0;
-}
-.countdown-val {
-  font-size: 20px;
-  font-weight: 700;
-}
-.countdown-val.is-critical {
-  color: var(--critical);
-}
-.countdown-val.is-ok {
-  color: var(--approved);
-}
-.countdown-label {
-  font-size: 11px;
-  color: var(--ink-faint);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
-.ai-block {
-  background: var(--accent-soft);
-  border: 1px solid var(--border);
-  border-radius: 7px;
-  padding: 14px 16px;
-  margin-bottom: 14px;
-}
-.ai-block-label {
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--accent-ink);
-  margin-bottom: 8px;
-}
-.ai-block p {
-  margin: 0;
-  font-size: 14px;
-}
-
-.req-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-bottom: 16px;
-}
-.req-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  border: 1px solid var(--border);
-  border-radius: 7px;
-  padding: 10px 12px;
-  gap: 10px;
-}
-.req-item-name {
-  font-size: 13.5px;
-  font-weight: 500;
-}
-
-details.email-raw {
-  border: 1px solid var(--border);
-  border-radius: 7px;
-  margin-bottom: 16px;
-}
-details.email-raw > summary {
-  padding: 10px 13px;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--ink-faint);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  cursor: pointer;
-}
-details.email-raw[open] > summary {
-  border-bottom: 1px solid var(--border);
-}
-.email-body {
-  padding: 13px 16px;
-  font-size: 13.5px;
-  color: var(--ink-soft);
-  white-space: pre-wrap;
-  line-height: 1.6;
-}
-
-.reply-box {
-  border: 1px solid var(--border);
-  border-radius: 7px;
-  padding: 12px 14px;
-}
-.reply-foot {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-}
-.reply-note {
-  font-size: 12px;
-  color: var(--ink-faint);
-}
-
-/* ---------- Checklist admin ---------- */
-.notice {
-  border-left: 3px solid var(--accent);
-  background: var(--accent-soft);
-  border-radius: 0 7px 7px 0;
-  padding: 12px 14px;
-  font-size: 12.5px;
-  color: var(--ink-soft);
-  margin-top: 16px;
-}
-.notice b {
-  color: var(--ink);
-}
-
-/* ---------- Auth / onboarding ---------- */
-.auth-shell {
-  min-height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
-}
-.auth-card {
-  width: 100%;
-  max-width: 400px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.auth-brand {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  justify-content: center;
-  margin-bottom: 22px;
-}
-.auth-heading {
-  font-size: 19px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-  text-align: center;
-  margin-bottom: 4px;
-}
-.auth-subheading {
-  font-size: 13px;
-  color: var(--ink-faint);
-  text-align: center;
-  margin-bottom: 24px;
-}
-.form-field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin-bottom: 16px;
-}
-.form-field label {
-  font-size: 12.5px;
-  font-weight: 600;
-  color: var(--ink-soft);
-}
-.form-field input {
-  border: 1px solid var(--border-strong);
-  border-radius: 7px;
-  padding: 10px 12px;
-  font-size: 14px;
-  background: var(--surface-raised);
-  color: var(--ink);
-}
-.btn--full {
-  width: 100%;
-  justify-content: center;
-}
-.auth-switch {
-  margin-top: 18px;
-  text-align: center;
-  font-size: 13px;
-  color: var(--ink-soft);
-}
-.auth-switch a {
-  color: var(--accent-ink);
-  font-weight: 600;
-  text-decoration: none;
-}
-
-/* ---------- Form fields ---------- */
-.field-optional {
-  font-weight: 400;
-  color: var(--ink-faint);
-}
-.field-hint {
-  font-size: 12px;
-  color: var(--ink-faint);
-}
-.field-error {
-  font-size: 12px;
-  color: var(--critical);
-  font-weight: 500;
-}
-.form-field select,
-.form-field textarea {
-  border: 1px solid var(--border-strong);
-  border-radius: 7px;
-  padding: 10px 12px;
-  font-size: 14px;
-  background: var(--surface-raised);
-  color: var(--ink);
-}
-.form-field input[aria-invalid="true"],
-.form-field select[aria-invalid="true"] {
-  border-color: var(--critical);
-}
-.form-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0 16px;
-}
-.form-grid .span-2 {
-  grid-column: 1 / -1;
-}
-/* ---------- Onboarding wizard ---------- */
-.wizard-shell {
-  min-height: 100vh;
-  display: flex;
-  align-items: flex-start;
-  justify-content: center;
-  padding: 40px 24px 64px;
-}
-.wizard-card {
-  width: 100%;
-  max-width: 680px;
-}
-.wizard-steps {
-  display: flex;
-  gap: 8px;
-  margin: 24px 0 28px;
-}
-.wizard-step {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 7px;
-}
-.wizard-step-bar {
-  height: 3px;
-  border-radius: 2px;
-  background: var(--border-strong);
-}
-.wizard-step.done .wizard-step-bar {
-  background: var(--approved);
-}
-.wizard-step.current .wizard-step-bar {
-  background: var(--accent);
-}
-.wizard-step-name {
-  font-size: 11.5px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--ink-faint);
-}
-.wizard-step.current .wizard-step-name {
-  color: var(--accent-ink);
-}
-.wizard-step.done .wizard-step-name {
-  color: var(--approved);
-}
-.wizard-section-title {
-  font-size: 17px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-  margin-bottom: 4px;
-}
-.wizard-section-sub {
-  font-size: 13px;
-  color: var(--ink-faint);
-  margin-bottom: 22px;
-}
-.wizard-foot {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-  margin-top: 8px;
-  padding-top: 18px;
-  border-top: 1px solid var(--border);
-}
-
-/* ==========================================================================
-   Responsive overrides
-   --------------------------------------------------------------------------
-   Deliberately LAST in the file. These are single-class selectors with the
-   same specificity as the base rules they override, so source order is the
-   only thing deciding the winner — when this block sat above the Dashboard
-   and Query Inbox sections, the base grid-template-columns silently won and
-   the dashboard overflowed on a phone. Keep new breakpoint rules here.
-   ========================================================================== */
-
-.two-col--dashboard {
-  grid-template-columns: 1fr 1.5fr;
-}
-
-/* Grid items default to min-width:auto, so a wide child (the claims
-   table) pushes its track past 1fr and drags the sibling card with it.
-   min-width:0 lets the track shrink and the table scroll inside itself
-   instead — without this the dashboard overflowed on a phone even with
-   the columns correctly collapsed to one. */
-.two-col > *,
-.query-shell > * {
-  min-width: 0;
-}
-
-@media (max-width: 920px) {
-  .field-row,
-  .kpi-row {
-    grid-template-columns: repeat(2, 1fr);
-  }
-  .two-col,
-  .two-col--dashboard,
-  .query-shell {
-    grid-template-columns: 1fr;
-  }
-}
-
-@media (max-width: 720px) {
-  .shell {
-    flex-direction: column;
-  }
-  .sidebar {
-    width: 100%;
-    flex-direction: row;
-    align-items: center;
-    gap: 16px;
-    padding: 12px 16px;
-    border-right: none;
-    border-bottom: 1px solid var(--border);
-  }
-  .nav {
-    flex-direction: row;
-    margin-top: 0;
-    flex-wrap: wrap;
-  }
-  .sidebar-foot {
-    display: none;
-  }
-  .claim-head,
-  .detail-head {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-  .countdown {
-    text-align: left;
-  }
-}
-
-@media (max-width: 640px) {
-  .form-grid {
-    grid-template-columns: 1fr;
-  }
-  /* 5 stepper nodes don't fit a phone — stack them so each label is legible. */
-  .stepper {
-    flex-direction: column;
-    gap: 10px;
-    align-items: flex-start;
-  }
-  .step {
-    flex-direction: row;
-    align-items: center;
-    gap: 10px;
-    text-align: left;
-  }
-  .step:not(:first-child)::before {
-    display: none;
-  }
-  .wizard-steps {
-    gap: 6px;
-  }
-  .wizard-step-name {
-    font-size: 10.5px;
-  }
-}
-
-@media (max-width: 480px) {
-  .field-row,
-  .kpi-row {
-    grid-template-columns: 1fr;
-  }
-  .content {
-    padding: 20px 16px 48px;
-  }
-  .topbar {
-    padding: 14px 16px;
-    flex-wrap: wrap;
-    gap: 8px;
-  }
-  .topbar-user {
-    text-align: left;
-  }
-  .card-pad {
-    padding: 16px 14px;
-  }
-  .reply-foot {
-    flex-direction: column;
-    align-items: stretch;
-  }
 }

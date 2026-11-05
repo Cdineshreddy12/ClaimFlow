@@ -18,6 +18,26 @@ export default {
         surface: {
           DEFAULT: "var(--surface)",
           raised: "var(--surface-raised)",
+          sunken: "var(--surface-sunken)",
+        },
+        hover: "var(--hover)",
+        active: "var(--active)",
+        // The nav rail keeps its own ramp: it stays dark regardless of
+        // the app's light/dark theme, the way the reference product's
+        // nav does.
+        sidebar: {
+          DEFAULT: "var(--sidebar-bg)",
+          border: "var(--sidebar-border)",
+          ink: "var(--sidebar-ink)",
+          soft: "var(--sidebar-ink-soft)",
+          faint: "var(--sidebar-ink-faint)",
+          hover: "var(--sidebar-hover-bg)",
+          active: "var(--sidebar-active-bg)",
+          ring: "var(--sidebar-active-ring)",
+        },
+        primary: {
+          DEFAULT: "var(--primary)",
+          hover: "var(--primary-hover)",
         },
         ink: {
           DEFAULT: "var(--ink)",
@@ -27,9 +47,11 @@ export default {
         line: {
           DEFAULT: "var(--border)",
           strong: "var(--border-strong)",
+          divider: "var(--divider)",
         },
         accent: {
           DEFAULT: "var(--accent)",
+          hover: "var(--accent-hover)",
           ink: "var(--accent-ink)",
           soft: "var(--accent-soft)",
         },
@@ -50,15 +72,53 @@ export default {
           bg: "var(--neutral-bg)",
         },
       },
+      boxShadow: {
+        card: "var(--card-shadow)",
+        raised: "var(--card-shadow-raised)",
+      },
+      // The b2b-crm's radius scale, matching the --r-* variables.
       borderRadius: {
-        sm: "5px",
+        xs: "4px",
+        sm: "6px",
         DEFAULT: "6px",
-        md: "7px",
-        lg: "8px",
+        md: "8px",
+        lg: "10px",
+        xl: "14px",
       },
       fontFamily: {
-        sans: ['"IBM Plex Sans"', "-apple-system", '"Segoe UI"', "sans-serif"],
-        mono: ['"IBM Plex Mono"', "ui-monospace", "monospace"],
+        sans: [
+          '"Inter"',
+          '"Helvetica Neue"',
+          "Helvetica",
+          "Arial",
+          "sans-serif",
+        ],
+        mono: [
+          '"JetBrains Mono"',
+          "ui-monospace",
+          "SFMono-Regular",
+          "Menlo",
+          "monospace",
+        ],
+      },
+      /**
+       * The same eight steps the CSS variables define, so `text-sm` in a
+       * component and `var(--text-sm)` in the stylesheet are one size
+       * rather than two.
+       *
+       * Overlapping keys override Tailwind's rem-based defaults, so a
+       * `text-sm` can't quietly mean 14px in a component while the
+       * stylesheet next to it means 12.5px.
+       */
+      fontSize: {
+        "2xs": ["11px", "16px"],
+        xs: ["11.5px", "16px"],
+        sm: ["12.5px", "18px"],
+        base: ["13.5px", "20px"],
+        md: ["14px", "20px"],
+        lg: ["16px", "24px"],
+        xl: ["18px", "28px"],
+        "2xl": ["22px", "30px"],
       },
       keyframes: {
         "select-in": {

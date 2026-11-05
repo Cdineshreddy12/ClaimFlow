@@ -17,7 +17,7 @@ export const DialogContent = React.forwardRef<
       className={cn(
         "fixed left-1/2 top-1/2 z-50 w-[calc(100vw-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2",
         "max-h-[calc(100vh-4rem)] overflow-y-auto rounded-lg border border-line",
-        "bg-surface-raised p-6 shadow-[0_20px_50px_rgba(0,0,0,0.25)]",
+        "bg-surface-raised p-7 shadow-[0_20px_50px_rgba(0,0,0,0.25)]",
         "motion-safe:animate-in motion-safe:fade-in motion-safe:zoom-in-95",
         className,
       )}
@@ -37,12 +37,12 @@ export function DialogHeader({
   description?: string;
 }) {
   return (
-    <div className="mb-5">
-      <DialogPrimitive.Title className="text-[17px] font-semibold -tracking-[0.01em]">
+    <div className="mb-6">
+      <DialogPrimitive.Title className="text-[18px] font-semibold -tracking-[0.01em]">
         {title}
       </DialogPrimitive.Title>
       {description ? (
-        <DialogPrimitive.Description className="mt-1 text-[13px] text-ink-faint">
+        <DialogPrimitive.Description className="mt-1.5 text-[13px] leading-[1.5] text-ink-faint">
           {description}
         </DialogPrimitive.Description>
       ) : (

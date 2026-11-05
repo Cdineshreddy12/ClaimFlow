@@ -108,7 +108,7 @@ export function DoctorApprovalPage() {
       </div>
 
       {decide.isError ? (
-        <div className="inline-error mt-5">
+        <div className="mb-3 flex items-center justify-between gap-3 rounded-md border border-critical bg-critical-bg px-3.5 py-2.5 text-base font-medium text-critical mt-5">
           Couldn&apos;t record that — check your connection and try again.
         </div>
       ) : null}
@@ -126,7 +126,7 @@ export function DoctorApprovalPage() {
           </Button>
           <Button
             type="button"
-            variant="ghost"
+            variant="outline"
             className="w-full py-3 text-[15px]"
             disabled={decide.isPending}
             onClick={() => setDeclining(true)}
@@ -169,7 +169,7 @@ export function DoctorApprovalPage() {
             </Button>
             <Button
               type="button"
-              variant="ghost"
+              variant="outline"
               className="w-full py-3 text-[15px]"
               disabled={decide.isPending}
               onClick={() => setDeclining(false)}
