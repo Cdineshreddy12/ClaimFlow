@@ -1,13 +1,18 @@
 import { createBrowserRouter } from "react-router-dom";
 import { ClaimFilePage } from "../features/claims/ClaimFilePage";
+import { ClaimsListPage } from "../features/claims/ClaimsListPage";
+import { NewClaimPage } from "../features/claims/NewClaimPage";
 import { DashboardPage } from "../features/dashboard/DashboardPage";
 import { QueryInboxPage } from "../features/queries/QueryInboxPage";
+import { SlaPage } from "../features/sla/SlaPage";
+import { ReceivablesPage } from "../features/receivables/ReceivablesPage";
 import { ChecklistAdminPage } from "../features/checklist/ChecklistAdminPage";
+import { ReportsPage } from "../features/reports/ReportsPage";
+import { BrandingSettingsPage } from "../features/hospital/BrandingSettingsPage";
 import { DoctorApprovalPage } from "../features/doctor-approval/DoctorApprovalPage";
 import { LoginPage } from "../features/auth/LoginPage";
 import { SignupPage } from "../features/auth/SignupPage";
 import { AcceptInvitePage } from "../features/onboarding/AcceptInvitePage";
-import { SetUpHospitalPage } from "../features/onboarding/SetUpHospitalPage";
 import { ProfileWizardPage } from "../features/onboarding/ProfileWizardPage";
 import {
   RequireAuth,
@@ -26,10 +31,6 @@ export const router: ReturnType<typeof createBrowserRouter> =
       element: <RequireAuth />,
       children: [
         {
-          path: "/onboarding/hospital",
-          element: <SetUpHospitalPage />,
-        },
-        {
           element: <RequireMembership />,
           children: [
             { path: "/onboarding/profile", element: <ProfileWizardPage /> },
@@ -37,9 +38,21 @@ export const router: ReturnType<typeof createBrowserRouter> =
               element: <RequireCompleteProfile />,
               children: [
                 { path: "/", element: <DashboardPage /> },
+                { path: "/claims", element: <ClaimsListPage /> },
+                // Ahead of /claims/:id so the intent is obvious on
+                // reading, though React Router ranks the static
+                // segment higher either way.
+                { path: "/claims/new", element: <NewClaimPage /> },
                 { path: "/claims/:id", element: <ClaimFilePage /> },
                 { path: "/queries", element: <QueryInboxPage /> },
+                { path: "/sla", element: <SlaPage /> },
+                { path: "/receivables", element: <ReceivablesPage /> },
                 { path: "/checklist", element: <ChecklistAdminPage /> },
+                { path: "/reports", element: <ReportsPage /> },
+                {
+                  path: "/settings/branding",
+                  element: <BrandingSettingsPage />,
+                },
               ],
             },
           ],

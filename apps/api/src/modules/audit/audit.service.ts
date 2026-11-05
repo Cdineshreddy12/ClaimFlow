@@ -30,11 +30,22 @@ export type AuditAction =
   | "query.created"
   | "query.updated"
   | "query.replied"
+  | "query.deadline_confirmed"
+  | "insurer.created"
+  | "insurer.updated"
+  | "insurer.retired"
+  | "insurer.reactivated"
+  | "insurer.deleted"
+  | "claim.payment_recorded"
   | "hospital.created"
   | "hospital.profile_updated"
   | "invite.created"
   | "invite.accepted"
+  | "preauth_layout.updated"
+  | "preauth_field.created"
+  | "preauth_field.deleted"
   | "preauth.extracted"
+  | "preauth.form_printed"
   | "preauth.field_confirmed"
   | "preauth.field_cleared"
   | "packet.generated"
@@ -42,7 +53,23 @@ export type AuditAction =
   | "doctor_approval.viewed"
   | "doctor_approval.approved"
   | "doctor_approval.declined"
-  | "deduction.recorded";
+  | "deduction.recorded"
+  | "deduction.contested"
+  | "deduction.appeal_resolved"
+  | "claim.financials_updated"
+  | "claim.checklist_slot_added"
+  | "claim.checklist_slot_removed"
+  | "claim.opened_without_checklist"
+  | "enhancement.requested"
+  | "enhancement.decided"
+  | "checklist_rule.proposal_applied"
+  /**
+   * Provenance, not a separate write. The action itself is audited by
+   * whichever service performed it; this records that a human approved
+   * it from an assistant card rather than typing it — the only way to
+   * tell afterwards which decisions started as a model's suggestion.
+   */
+  | "assistant.proposal_approved";
 
 interface AuditContext {
   userId: string;

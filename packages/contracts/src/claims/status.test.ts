@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { canTransition } from "./status.js";
+import {
+  ClaimStatus,
+  canTransition,
+  isTerminal,
+  needsAttention,
+  TERMINAL_STATUSES,
+} from "./status.js";
 
 describe("canTransition", () => {
   it("allows pre-auth to move to a query", () => {
@@ -33,5 +39,26 @@ describe("canTransition", () => {
   it("treats terminal states as dead ends", () => {
     expect(canTransition("SETTLED", "APPROVED", "desk_head")).toBe(false);
     expect(canTransition("REJECTED", "PRE_AUTH_SENT", "desk_head")).toBe(false);
+  });
+});
+
+describe("terminal statuses", () => {
+  it("derives exactly the statuses with nowhere left to go", () => {
+    expect(TERMINAL_STATUSES.sort()).toEqual(["REJECTED", "SETTLED"]);
+  });
+
+  it("agrees with isTerminal for every status", () => {
+    for (const status of ClaimStatus.options) {
+      expect(isTerminal(status)).toBe(TERMINAL_STATUSES.includes(status));
+    }
+  });
+
+  it("treats a sent pre-auth as open but not needing attention", () => {
+    // It's waiting on the insurer, not on the desk — the distinction the
+    // dashboard's two counts rest on.
+    expect(isTerminal("PRE_AUTH_SENT")).toBe(false);
+    expect(needsAttention("PRE_AUTH_SENT")).toBe(false);
+    expect(needsAttention("QUERY_RAISED")).toBe(true);
+    expect(needsAttention("ENHANCEMENT_REQUESTED")).toBe(true);
   });
 });

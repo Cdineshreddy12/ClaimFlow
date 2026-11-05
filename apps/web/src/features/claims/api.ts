@@ -1,7 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { ClaimStatus } from "@claimflow/contracts";
+import type {
+  ClaimFinancials,
+  ClaimStatus,
+  PreauthReview,
+} from "@claimflow/contracts";
 import { api } from "../../lib/api-client";
-import type { Claim, ClaimGaps } from "./types";
+import type { Claim, ClaimGaps, Enhancement } from "./types";
 
 export function useClaims() {
   return useQuery({
@@ -127,6 +131,162 @@ export function useRecordDeduction(claimId: string) {
       api.post(`/claims/${claimId}/deductions`, body),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["deductions"] });
+      queryClient.invalidateQueries({ queryKey: ["claims", claimId] });
+    },
+  });
+}
+
+export function useClaimFinancials(id: string) {
+  return useQuery({
+    queryKey: ["claims", id, "financials"],
+    queryFn: () => api.get<ClaimFinancials>(`/claims/${id}/financials`),
+    enabled: Boolean(id),
+  });
+}
+
+/**
+ * Anything that moves money on a claim invalidates the financials, the
+ * enhancements and the deduction risk alongside the claim itself —
+ * they're four views of one set of facts.
+ */
+function useMoneyMutation<TArgs, TResult>(
+  claimId: string,
+  mutationFn: (args: TArgs) => Promise<TResult>,
+) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn,
+    onSuccess: () => {
+      for (const key of [
+        ["claims"],
+        ["claims", claimId],
+        ["claims", claimId, "financials"],
+        ["claims", claimId, "enhancements"],
+        ["claims", claimId, "deductions"],
+        ["claims", claimId, "deduction-risk"],
+        ["sla"],
+      ]) {
+        queryClient.invalidateQueries({ queryKey: key });
+      }
+    },
+  });
+}
+
+export function useUpdateFinancials(claimId: string) {
+  return useMoneyMutation(
+    claimId,
+    (body: { sanctionedAmount?: number; billedAmount?: number }) =>
+      api.patch<Claim>(`/claims/${claimId}/financials`, body),
+  );
+}
+
+export function useEnhancements(claimId: string) {
+  return useQuery({
+    queryKey: ["claims", claimId, "enhancements"],
+    queryFn: () => api.get<Enhancement[]>(`/claims/${claimId}/enhancements`),
+    enabled: Boolean(claimId),
+  });
+}
+
+export function useRequestEnhancement(claimId: string) {
+  return useMoneyMutation(
+    claimId,
+    (body: { requestedAmount: number; reason: string }) =>
+      api.post<Enhancement>(`/claims/${claimId}/enhancements`, body),
+  );
+}
+
+export function useDecideEnhancement(claimId: string) {
+  return useMoneyMutation(
+    claimId,
+    ({
+      enhancementId,
+      ...body
+    }: {
+      enhancementId: string;
+      outcome: "APPROVED" | "PARTIALLY_APPROVED" | "REJECTED" | "WITHDRAWN";
+      approvedAmount?: number;
+    }) =>
+      api.patch<Enhancement>(
+        `/claims/${claimId}/enhancements/${enhancementId}`,
+        body,
+      ),
+  );
+}
+
+/**
+ * A mutation rather than a query: the clinical half costs a model call,
+ * so it runs when the desk asks for it, not on every render.
+ */
+export function useReviewForm(claimId: string) {
+  return useMutation({
+    mutationFn: () =>
+      api.post<PreauthReview>(`/claims/${claimId}/preauth-fields/review`, {}),
+  });
+}
+
+export function useRecordPayment(claimId: string) {
+  return useClaimMutation(
+    claimId,
+    (body: { settledAmount: number; settledOn: string }) =>
+      api.patch<Claim>(`/claims/${claimId}/payment`, body),
+  );
+}
+
+/**
+ * The filled claim form as a PDF.
+ *
+ * Fetched as a blob rather than linked directly: the endpoint needs the
+ * Authorization header, which a plain <a href> can't send.
+ */
+export async function downloadPreauthForm(claimId: string, reference: string) {
+  const blob = await api.getBlob(`/claims/${claimId}/preauth-fields/form.pdf`);
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `preauth-${reference}.pdf`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  // Revoked on the next tick — Safari cancels the download if the URL
+  // disappears in the same frame as the click.
+  setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
+/**
+ * Gives a claim opened with no checklist the one it should have had.
+ *
+ * Only works while the claim has none — the server refuses otherwise,
+ * which is what stops this being a way to re-snapshot a claim whose
+ * requirements were already decided (docs/adr/0001).
+ */
+export function useApplyChecklistRules(claimId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      api.post<unknown>(`/claims/${claimId}/checklist-slots/apply-rules`, {}),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["claims", claimId] });
+      queryClient.invalidateQueries({ queryKey: ["claims"] });
+    },
+  });
+}
+
+/**
+ * Takes a hand-added slot back off a claim.
+ *
+ * Only ever one a person added, and only while nothing is filed in it
+ * — the server refuses both other cases, so this needs no guard of its
+ * own beyond showing the refusal.
+ */
+export function useRemoveChecklistSlot(claimId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (documentType: string) =>
+      api.delete<unknown>(
+        `/claims/${claimId}/checklist-slots?documentType=${encodeURIComponent(documentType)}`,
+      ),
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["claims", claimId] });
     },
   });

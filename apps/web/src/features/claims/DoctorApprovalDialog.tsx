@@ -69,7 +69,7 @@ export function DoctorApprovalDialog({
             </p>
             <div className="flex gap-2">
               <Input readOnly value={link} onFocus={(e) => e.target.select()} />
-              <Button type="button" variant="ghost" onClick={copy}>
+              <Button type="button" variant="outline" onClick={copy}>
                 {copied ? "Copied" : "Copy"}
               </Button>
             </div>
@@ -87,7 +87,9 @@ export function DoctorApprovalDialog({
             }}
           >
             {request.isError ? (
-              <div className="inline-error">Couldn&apos;t create the link.</div>
+              <div className="mb-3 flex items-center justify-between gap-3 rounded-md border border-critical bg-critical-bg px-3.5 py-2.5 text-base font-medium text-critical">
+                Couldn&apos;t create the link.
+              </div>
             ) : null}
             <FormField
               label="Doctor's name"
@@ -106,7 +108,9 @@ export function DoctorApprovalDialog({
 
         {decided.length > 0 ? (
           <div className="mt-5 border-t border-line pt-4">
-            <div className="label-eyebrow mb-2">Earlier responses</div>
+            <div className="text-2xs font-semibold uppercase tracking-[0.07em] text-ink-faint mb-2">
+              Earlier responses
+            </div>
             <ul className="flex flex-col gap-1.5">
               {decided.map((a) => (
                 <li key={a.id} className="text-[13px]">
@@ -126,7 +130,7 @@ export function DoctorApprovalDialog({
 
         <DialogFooter>
           <DialogClose asChild>
-            <Button type="button" variant="ghost">
+            <Button type="button" variant="outline">
               {link ? "Done" : "Cancel"}
             </Button>
           </DialogClose>

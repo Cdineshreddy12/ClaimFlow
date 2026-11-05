@@ -1,4 +1,4 @@
-import { and, eq, getTableColumns } from "drizzle-orm";
+import { and, eq, getTableColumns, sql } from "drizzle-orm";
 import type { ClaimStatus } from "@claimflow/contracts";
 import { db } from "../../db/client.js";
 import {
@@ -47,6 +47,19 @@ export async function getClaimById(id: string) {
       ...getTableColumns(claims),
       insurerName: insurers.name,
       procedureName: procedures.name,
+      /**
+       * The clock the claim is currently on, from its latest status
+       * event. A correlated subquery rather than a join so one claim
+       * stays one row — and it belongs here because every surface that
+       * renders a claim also has to say whether it's late (docs/adr/0014).
+       */
+      slaDeadline: sql<string | null>`(
+        select e.sla_deadline
+        from claim_status_events e
+        where e.claim_id = ${claims.id}
+        order by e.created_at desc
+        limit 1
+      )`,
     })
     .from(claims)
     .innerJoin(insurers, eq(claims.insurerId, insurers.id))
@@ -58,6 +71,7 @@ export async function getClaimById(id: string) {
 export async function createClaim(
   data: CreateClaimBody,
   checklistSnapshot: ChecklistSnapshotItem[],
+  preauthLayoutSnapshot?: unknown,
 ) {
   const [claim] = await db
     .insert(claims)
@@ -69,6 +83,7 @@ export async function createClaim(
         data.billedAmount !== undefined ? data.billedAmount.toString() : null,
       admittedAt: data.admittedAt ?? null,
       checklistSnapshot,
+      ...(preauthLayoutSnapshot !== undefined ? { preauthLayoutSnapshot } : {}),
     })
     .returning();
   // We just inserted exactly one row — this is never actually absent.
@@ -86,9 +101,18 @@ export async function createClaim(
  */
 export async function updateConfirmedFacts(
   claimId: string,
-  facts: { admittedAt?: Date; billedAmount?: string },
+  facts: {
+    admittedAt?: Date;
+    billedAmount?: string;
+    /** What the insurer authorised — see docs/adr/0012. */
+    sanctionedAmount?: string;
+  },
 ) {
-  if (facts.admittedAt === undefined && facts.billedAmount === undefined) {
+  if (
+    facts.admittedAt === undefined &&
+    facts.billedAmount === undefined &&
+    facts.sanctionedAmount === undefined
+  ) {
     return undefined;
   }
   const [updated] = await db
@@ -100,8 +124,80 @@ export async function updateConfirmedFacts(
       ...(facts.billedAmount !== undefined
         ? { billedAmount: facts.billedAmount }
         : {}),
+      ...(facts.sanctionedAmount !== undefined
+        ? { sanctionedAmount: facts.sanctionedAmount }
+        : {}),
       updatedAt: new Date(),
     })
+    .where(eq(claims.id, claimId))
+    .returning();
+  return updated;
+}
+
+/**
+ * Appends one slot to a single claim's checklist snapshot.
+ *
+ * Concatenated in SQL rather than read-modify-written: two documents
+ * being filed into new slots at the same moment would otherwise race,
+ * and one of them would be silently dropped.
+ */
+export async function addChecklistSlot(
+  claimId: string,
+  item: ChecklistSnapshotItem,
+) {
+  const [updated] = await db
+    .update(claims)
+    .set({
+      checklistSnapshot: sql`${claims.checklistSnapshot} || ${JSON.stringify([item])}::jsonb`,
+      updatedAt: new Date(),
+    })
+    .where(eq(claims.id, claimId))
+    .returning();
+  return updated;
+}
+
+/**
+ * Takes one slot back off a single claim's snapshot.
+ *
+ * Filtered in SQL for the same reason the append is concatenated
+ * there: a read-modify-write would lose a concurrent addition, and
+ * these are the two halves of the same edit.
+ */
+export async function removeChecklistSlot(
+  claimId: string,
+  documentType: string,
+) {
+  const [updated] = await db
+    .update(claims)
+    .set({
+      checklistSnapshot: sql`(
+        select coalesce(jsonb_agg(item), '[]'::jsonb)
+        from jsonb_array_elements(${claims.checklistSnapshot}) item
+        where item->>'documentType' <> ${documentType}
+      )`,
+      updatedAt: new Date(),
+    })
+    .where(eq(claims.id, claimId))
+    .returning();
+  return updated;
+}
+
+/**
+ * Records what the insurer actually paid, and when.
+ *
+ * Separate from `sanctionedAmount`: that is what they authorised, this
+ * is what arrived. The difference is the deduction the desk is trying
+ * to shrink, so inferring one from the other would make the deductions
+ * dashboard circular.
+ */
+export async function recordPayment(
+  claimId: string,
+  settledAmount: string,
+  settledOn: string,
+) {
+  const [updated] = await db
+    .update(claims)
+    .set({ settledAmount, settledOn, updatedAt: new Date() })
     .where(eq(claims.id, claimId))
     .returning();
   return updated;

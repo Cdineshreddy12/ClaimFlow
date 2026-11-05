@@ -22,6 +22,26 @@ export const ClaimStatus = z.enum([
 ]);
 export type ClaimStatus = z.infer<typeof ClaimStatus>;
 
+/**
+ * A claim's status as someone would say it out loud.
+ *
+ * Distinct from the web app's `STATUS_LABEL`, which is deliberately
+ * clipped to fit a table chip ("Final bill", "Query"). These read as
+ * part of a sentence, because they end up in one — the assistant was
+ * quoting `FINAL_BILL_SUBMITTED` at desk staff, which is the database
+ * talking rather than a colleague.
+ */
+export const CLAIM_STATUS_LABEL: Record<ClaimStatus, string> = {
+  DRAFT: "draft",
+  PRE_AUTH_SENT: "pre-auth sent",
+  QUERY_RAISED: "query raised",
+  ENHANCEMENT_REQUESTED: "enhancement requested",
+  APPROVED: "approved",
+  FINAL_BILL_SUBMITTED: "final bill submitted",
+  SETTLED: "settled",
+  REJECTED: "rejected",
+};
+
 interface Transition {
   to: ClaimStatus[];
   /** Roles allowed to perform this transition; omit to allow any authenticated role. */
@@ -56,4 +76,35 @@ export function canTransition(
   if (!transition.to.includes(to)) return false;
   if (transition.roles && !transition.roles.includes(role)) return false;
   return true;
+}
+
+/**
+ * A claim nothing more can happen to — derived from the transition
+ * table rather than listed again, so a status that gains an outgoing
+ * move stops being terminal automatically.
+ *
+ * Three places had their own copy of `["SETTLED", "REJECTED"]` before
+ * this existed: the dashboard's open-claim count, the checklist's
+ * active-claim guard, and the claims list. They are the same fact.
+ */
+export const TERMINAL_STATUSES: ClaimStatus[] = ClaimStatus.options.filter(
+  (status) => CLAIM_TRANSITIONS[status].to.length === 0,
+);
+
+export function isTerminal(status: ClaimStatus): boolean {
+  return CLAIM_TRANSITIONS[status].to.length === 0;
+}
+
+/**
+ * The claims a desk has to do something about today. Distinct from
+ * "open": a pre-auth that's been sent is open but waiting on the
+ * insurer, whereas a query or an enhancement is waiting on the desk.
+ */
+export const NEEDS_ATTENTION_STATUSES: ClaimStatus[] = [
+  "QUERY_RAISED",
+  "ENHANCEMENT_REQUESTED",
+];
+
+export function needsAttention(status: ClaimStatus): boolean {
+  return NEEDS_ATTENTION_STATUSES.includes(status);
 }

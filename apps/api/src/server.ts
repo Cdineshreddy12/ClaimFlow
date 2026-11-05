@@ -14,6 +14,9 @@ import {
   registerOnboardingRoutes,
 } from "./modules/onboarding/onboarding.routes.js";
 import { registerHospitalRoutes } from "./modules/hospital/hospital.routes.js";
+import { registerMeRoutes } from "./modules/members/members.routes.js";
+import { registerInsurersAdminRoutes } from "./modules/insurers/insurers.routes.js";
+import { registerPreauthLayoutRoutes } from "./modules/preauth-layouts/preauth-layouts.routes.js";
 import { registerReferenceRoutes } from "./modules/reference/reference.routes.js";
 import { registerAuditRoutes } from "./modules/audit/audit.routes.js";
 import { registerPacketRoutes } from "./modules/packet/packet.routes.js";
@@ -22,6 +25,11 @@ import {
   registerClaimDeductionRoutes,
   registerDeductionSummaryRoutes,
 } from "./modules/deductions/deductions.routes.js";
+import { registerEnhancementRoutes } from "./modules/enhancements/enhancements.routes.js";
+import { registerSlaRoutes } from "./modules/sla/sla.routes.js";
+import { registerAssistantRoutes } from "./modules/assistant/assistant.routes.js";
+import { registerReceivablesRoutes } from "./modules/receivables/receivables.routes.js";
+import { registerReportsRoutes } from "./modules/reports/reports.routes.js";
 import {
   registerClaimDoctorApprovalRoutes,
   registerPublicDoctorApprovalRoutes,
@@ -67,6 +75,9 @@ await app.register(registerQueryInboxRoutes, { prefix: "/queries" });
 await app.register(registerOnboardingRoutes, { prefix: "/onboarding" });
 await app.register(registerInvitesRoutes, { prefix: "/invites" });
 await app.register(registerHospitalRoutes, { prefix: "/hospital" });
+await app.register(registerMeRoutes, { prefix: "/me" });
+await app.register(registerInsurersAdminRoutes, { prefix: "/insurers" });
+await app.register(registerPreauthLayoutRoutes, { prefix: "/preauth-layout" });
 await app.register(registerReferenceRoutes);
 await app.register(registerAuditRoutes, { prefix: "/audit-log" });
 await app.register(registerPacketRoutes, {
@@ -85,6 +96,13 @@ await app.register(registerClaimDeductionRoutes, {
   prefix: "/claims/:claimId/deductions",
 });
 await app.register(registerDeductionSummaryRoutes, { prefix: "/deductions" });
+await app.register(registerEnhancementRoutes, {
+  prefix: "/claims/:claimId/enhancements",
+});
+await app.register(registerSlaRoutes, { prefix: "/sla" });
+await app.register(registerAssistantRoutes, { prefix: "/assistant" });
+await app.register(registerReceivablesRoutes, { prefix: "/receivables" });
+await app.register(registerReportsRoutes, { prefix: "/reports" });
 
 app
   .listen({ port: env.PORT, host: "0.0.0.0" })

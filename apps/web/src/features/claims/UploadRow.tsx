@@ -4,6 +4,7 @@ import {
   LOW_CONFIDENCE_THRESHOLD,
 } from "@claimflow/contracts";
 import { FileIcon } from "@/components/icons";
+import { FilePreview } from "@/components/FilePreview";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -44,17 +45,45 @@ export function UploadRow({
 
   // Start on the suggestion so the common case is one click.
   const [slot, setSlot] = useState(doc.checklistSlot ?? suggestion ?? "");
+  const [previewing, setPreviewing] = useState(false);
+  const fileName = displayFileName(doc.fileUrl);
+
+  /**
+   * The filename, as a way into the page itself.
+   *
+   * It mattered most on the unconfirmed row: the desk is asked to pick
+   * a slot for a document they could not see, with only the
+   * classifier's one-line reason to go on. Agreeing with a sentence
+   * about a page is not the same as reading it.
+   */
+  const name = (
+    <button
+      type="button"
+      onClick={() => setPreviewing(true)}
+      title="Look at this document"
+      className="flex min-w-0 cursor-pointer items-center gap-[7px] overflow-hidden text-ellipsis whitespace-nowrap border-0 bg-transparent p-0 text-left font-[inherit] text-sm font-semibold text-accent-ink underline decoration-dotted underline-offset-2 [&_svg]:size-3.5 [&_svg]:shrink-0 [&_svg]:text-ink-faint"
+    >
+      <FileIcon />
+      {fileName}
+    </button>
+  );
+
+  const preview = previewing ? (
+    <FilePreview
+      target={{
+        fileName,
+        downloadPath: `/claims/${claim.id}/documents/${doc.id}/download-url`,
+      }}
+      onClose={() => setPreviewing(false)}
+    />
+  ) : null;
 
   if (doc.confirmedAt) {
     return (
-      <div className="upload-row">
-        <div className="upload-top">
-          <div className="upload-file">
-            <FileIcon />
-            {displayFileName(doc.fileUrl)}
-          </div>
-        </div>
-        <div className="upload-slot">
+      <div className="flex flex-col gap-2 rounded-md border border-line bg-surface-raised px-[13px] py-[11px]">
+        {preview}
+        <div className="flex items-center justify-between gap-2.5">{name}</div>
+        <div className="text-base [&_b]:font-semibold">
           Sorted to · <b>{doc.checklistSlot}</b>
         </div>
       </div>
@@ -62,23 +91,21 @@ export function UploadRow({
   }
 
   return (
-    <div className="upload-row is-flagged">
-      <div className="upload-top">
-        <div className="upload-file">
-          <FileIcon />
-          {displayFileName(doc.fileUrl)}
-        </div>
+    <div className="flex flex-col gap-2 rounded-md border border-dashed border-pending bg-surface-raised px-[13px] py-[11px]">
+      {preview}
+      <div className="flex items-center justify-between gap-2.5">
+        {name}
         {suggestion && confidence !== null ? (
-          <span className="upload-conf">
+          <span className="shrink-0 text-sm text-ink-faint">
             {Math.round(confidence * 100)}% match
           </span>
         ) : (
-          <span className="upload-conf">Needs a slot</span>
+          <span className="shrink-0 text-sm text-ink-faint">Needs a slot</span>
         )}
       </div>
 
       {suggestion ? (
-        <div className="upload-slot">
+        <div className="text-base [&_b]:font-semibold">
           Suggested · <b>{suggestion}</b>
         </div>
       ) : null}
@@ -86,7 +113,9 @@ export function UploadRow({
       {doc.classificationReason ? (
         // The evidence, verbatim. A suggestion a human can't check is a
         // suggestion they either rubber-stamp or ignore.
-        <div className="upload-snippet">{doc.classificationReason}</div>
+        <div className="border-l-2 border-line-strong pl-2 text-sm italic text-ink-faint">
+          {doc.classificationReason}
+        </div>
       ) : null}
 
       {/* Only meaningful alongside a suggestion — "low confidence" with
@@ -99,7 +128,7 @@ export function UploadRow({
         </div>
       ) : null}
 
-      <div className="upload-confirm-row">
+      <div className="flex items-center gap-2 [&_select]:flex-1 [&_select]:rounded-sm [&_select]:border [&_select]:border-line-strong [&_select]:bg-surface-raised [&_select]:px-2 [&_select]:py-1.5 [&_select]:text-sm [&_select]:text-ink">
         <Select value={slot || undefined} onValueChange={setSlot}>
           <SelectTrigger aria-label="Checklist slot">
             <SelectValue placeholder="Pick a slot…" />
@@ -122,7 +151,7 @@ export function UploadRow({
         </Button>
         <Button
           type="button"
-          variant="ghost"
+          variant="outline"
           size="sm"
           disabled={isBusy}
           onClick={onDiscard}

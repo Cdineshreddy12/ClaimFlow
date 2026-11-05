@@ -7,6 +7,8 @@ import {
 } from "../documents/api";
 import type { Claim } from "./types";
 import { UploadRow } from "./UploadRow";
+import { Button } from "../../components/ui/button";
+import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 
 export function UploadedDocumentsCard({ claim }: { claim: Claim }) {
   const { data: documents } = useDocuments(claim.id);
@@ -16,17 +18,18 @@ export function UploadedDocumentsCard({ claim }: { claim: Claim }) {
   const fileInput = useRef<HTMLInputElement>(null);
 
   return (
-    <div className="card card-pad">
-      <div className="card-head">
-        <h2 className="label-eyebrow">Uploaded Documents</h2>
-        <button
+    <Card>
+      <CardHeader>
+        <CardTitle>Uploaded Documents</CardTitle>
+        <Button
           type="button"
-          className="btn btn--ghost btn--sm"
+          variant="outline"
+          size="sm"
           disabled={uploadDoc.isPending}
           onClick={() => fileInput.current?.click()}
         >
           {uploadDoc.isPending ? "Uploading…" : "Upload"}
-        </button>
+        </Button>
         <input
           ref={fileInput}
           type="file"
@@ -37,16 +40,20 @@ export function UploadedDocumentsCard({ claim }: { claim: Claim }) {
             e.target.value = "";
           }}
         />
-      </div>
+      </CardHeader>
 
       {uploadDoc.isError ? (
-        <div className="inline-error">Upload failed — try again.</div>
+        <div className="mb-3 flex items-center justify-between gap-3 rounded-md border border-critical bg-critical-bg px-3.5 py-2.5 text-base font-medium text-critical">
+          Upload failed — try again.
+        </div>
       ) : null}
 
       {!documents || documents.length === 0 ? (
-        <p className="empty-state">Nothing uploaded yet.</p>
+        <p className="px-1 py-2.5 text-base text-ink-faint">
+          Nothing uploaded yet.
+        </p>
       ) : (
-        <div className="upload-list">
+        <div className="flex flex-col gap-2.5">
           {documents.map((doc) => (
             <UploadRow
               key={doc.id}
@@ -61,6 +68,6 @@ export function UploadedDocumentsCard({ claim }: { claim: Claim }) {
           ))}
         </div>
       )}
-    </div>
+    </Card>
   );
 }

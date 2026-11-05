@@ -1,5 +1,6 @@
 import { config } from "dotenv";
 import {
+  CopyObjectCommand,
   DeleteObjectCommand,
   GetObjectCommand,
   PutObjectCommand,
@@ -39,6 +40,27 @@ function getClient(): { client: S3Client; bucket: string } {
 export function buildObjectKey(claimId: string, fileName: string): string {
   const safeName = fileName.replace(/[^a-zA-Z0-9.\-_]/g, "_");
   return `claims/${claimId}/${crypto.randomUUID()}-${safeName}`;
+}
+
+/**
+ * assistant/staging/{uuid}-{filename} — a file dropped into the
+ * assistant before anyone knows which claim it belongs to.
+ *
+ * Its own prefix rather than a claim's, because at upload time there is
+ * no claim to name: working that out is what the assistant is for. The
+ * object moves under `claims/{claimId}/` the moment a human approves a
+ * filing, so nothing that reads the claim prefix has to learn about
+ * this one.
+ */
+export function buildStagingKey(fileName: string): string {
+  const safeName = fileName.replace(/[^a-zA-Z0-9.\-_]/g, "_");
+  return `assistant/staging/${crypto.randomUUID()}-${safeName}`;
+}
+
+/** hospital/branding/{uuid}-{filename} — the one hospital's letterhead logo. */
+export function buildHospitalLogoKey(fileName: string): string {
+  const safeName = fileName.replace(/[^a-zA-Z0-9.\-_]/g, "_");
+  return `hospital/branding/${crypto.randomUUID()}-${safeName}`;
 }
 
 /** Pre-signed PUT URL the frontend uploads directly to — the API never streams file bytes through itself. */
@@ -96,6 +118,36 @@ export async function putObject(
       ContentType: contentType,
     }),
   );
+}
+
+/**
+ * Moves an object, for a staged attachment being filed onto a claim.
+ *
+ * Copy-then-delete rather than leaving it where it landed: `claims/
+ * {claimId}/` is how everything else in the bucket is organised, and a
+ * document whose bytes sit under an assistant prefix would be the one
+ * exception every lifecycle rule and every bucket audit has to know
+ * about. The delete is deliberately not fatal — a stray staged copy
+ * costs pennies, whereas failing here after the copy succeeded would
+ * lose the desk a filing that actually worked.
+ */
+export async function moveObject(from: string, to: string): Promise<void> {
+  const { client: s3, bucket: bucketName } = getClient();
+  await s3.send(
+    new CopyObjectCommand({
+      Bucket: bucketName,
+      CopySource: `${bucketName}/${from}`,
+      Key: to,
+    }),
+  );
+  try {
+    await deleteObject(from);
+  } catch (err) {
+    console.error("staged object copied but not cleaned up", {
+      from,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
 }
 
 export async function deleteObject(key: string): Promise<void> {

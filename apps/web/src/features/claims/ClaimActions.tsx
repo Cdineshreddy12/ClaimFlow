@@ -11,6 +11,8 @@ import { useGeneratePacket, useTransitionStatus } from "./api";
 import { DoctorApprovalDialog } from "./DoctorApprovalDialog";
 import { LogQueryDialog } from "./LogQueryDialog";
 import { RecordDeductionDialog } from "./RecordDeductionDialog";
+import { RecordFinancialsDialog } from "./RecordFinancialsDialog";
+import { RecordPaymentDialog } from "./RecordPaymentDialog";
 import type { Claim } from "./types";
 
 /**
@@ -33,6 +35,24 @@ const ACTION_LABEL: Record<ClaimStatus, string> = {
 /** Rejection is terminal and settlement is irreversible — neither should look like the obvious next click. */
 const DESTRUCTIVE: ClaimStatus[] = ["REJECTED"];
 
+/**
+ * The move that carries the claim forward from each state.
+ *
+ * Every legal transition still gets a button — this only decides which
+ * one is styled as *the* next step. A row of five equally-weighted
+ * buttons makes a desk read all five every time; one primary and the
+ * rest quiet makes the common case a glance.
+ */
+const FORWARD: Partial<Record<ClaimStatus, ClaimStatus>> = {
+  DRAFT: "PRE_AUTH_SENT",
+  PRE_AUTH_SENT: "APPROVED",
+  // Answering a query means sending the pre-auth again, not approving it.
+  QUERY_RAISED: "PRE_AUTH_SENT",
+  ENHANCEMENT_REQUESTED: "APPROVED",
+  APPROVED: "FINAL_BILL_SUBMITTED",
+  FINAL_BILL_SUBMITTED: "SETTLED",
+};
+
 export function ClaimActions({ claim }: { claim: Claim }) {
   const { role } = useAuth();
   const transition = useTransitionStatus(claim.id);
@@ -41,6 +61,13 @@ export function ClaimActions({ claim }: { claim: Claim }) {
   const [askDoctor, setAskDoctor] = useState(false);
   const [logQuery, setLogQuery] = useState(false);
   const [recordDeduction, setRecordDeduction] = useState(false);
+  const [recordAmounts, setRecordAmounts] = useState(false);
+  const [recordPayment, setRecordPayment] = useState(false);
+
+  // Every write behind these three is requireRole("org_admin",
+  // "desk_head") on the API, so offering them to a desk executive is
+  // offering a 403.
+  const canRecordMoney = role === "org_admin" || role === "desk_head";
 
   // A desk_executive can't settle, so don't offer them a button that
   // 403s — the state machine already knows, so ask it.
@@ -49,18 +76,29 @@ export function ClaimActions({ claim }: { claim: Claim }) {
   );
 
   const isSettled = claim.status === "SETTLED";
+  const forward = FORWARD[claim.status];
+
+  // Forward move first, then the rest, so the eye lands on the common
+  // case rather than scanning for it.
+  const ordered = [...nextStatuses].sort((a, b) => {
+    if (a === forward) return -1;
+    if (b === forward) return 1;
+    if (DESTRUCTIVE.includes(a)) return 1;
+    if (DESTRUCTIVE.includes(b)) return -1;
+    return 0;
+  });
 
   return (
-    <div className="mb-6">
-      <div className="flex flex-wrap items-center gap-2">
-        {nextStatuses.map((next) =>
+    <div className="flex flex-col gap-2.5 [&_a]:w-full [&_a]:justify-center [&_button]:w-full [&_button]:justify-center">
+      <div className="flex flex-col gap-1.5">
+        {ordered.map((next) =>
           // A query is logged with its email, not by flipping a status —
           // the dialog does both, so route that one button to it.
           next === "QUERY_RAISED" ? (
             <Button
               key={next}
               type="button"
-              variant="ghost"
+              variant="outline"
               onClick={() => setLogQuery(true)}
             >
               {ACTION_LABEL[next]}
@@ -69,7 +107,13 @@ export function ClaimActions({ claim }: { claim: Claim }) {
             <Button
               key={next}
               type="button"
-              variant={DESTRUCTIVE.includes(next) ? "danger" : "primary"}
+              variant={
+                DESTRUCTIVE.includes(next)
+                  ? "danger"
+                  : next === forward
+                    ? "primary"
+                    : "outline"
+              }
               disabled={transition.isPending}
               onClick={() => transition.mutate(next)}
             >
@@ -77,12 +121,12 @@ export function ClaimActions({ claim }: { claim: Claim }) {
             </Button>
           ),
         )}
+      </div>
 
-        <span className="mx-1 hidden h-5 w-px bg-line-strong sm:block" />
-
+      <div className="flex flex-col gap-1.5 border-t border-line pt-2.5">
         <Button
           type="button"
-          variant="ghost"
+          variant="outline"
           onClick={() => setAskDoctor(true)}
         >
           Ask a doctor
@@ -90,27 +134,55 @@ export function ClaimActions({ claim }: { claim: Claim }) {
 
         <Button
           type="button"
-          variant="ghost"
+          variant="outline"
           disabled={packet.isPending}
           onClick={() => packet.mutate()}
         >
-          {packet.isPending ? "Building…" : "Build packet"}
+          {packet.isPending ? "Compiling…" : "Compile documents"}
         </Button>
-
-        {isSettled || claim.status === "FINAL_BILL_SUBMITTED" ? (
-          // Only meaningful once an insurer has actually paid something.
-          <Button
-            type="button"
-            variant="ghost"
-            onClick={() => setRecordDeduction(true)}
-          >
-            Record a deduction
-          </Button>
-        ) : null}
       </div>
 
+      {/* The money actions, promoted out of the Money card's footer,
+          where they were two underlined links below the fold. They are
+          the only writes on this screen that change what the claim is
+          worth, and they were the quietest thing on it. */}
+      {canRecordMoney ? (
+        <div className="flex flex-col gap-1.5 border-t border-line pt-2.5">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setRecordAmounts(true)}
+          >
+            Record sanctioned or billed
+          </Button>
+
+          {/* Separate from the above: that is what the insurer agreed
+              to, this is what turned up. */}
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setRecordPayment(true)}
+          >
+            {claim.settledAmount === null
+              ? "Record payment received"
+              : "Update payment received"}
+          </Button>
+
+          {isSettled || claim.status === "FINAL_BILL_SUBMITTED" ? (
+            // Only meaningful once an insurer has actually paid something.
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setRecordDeduction(true)}
+            >
+              Record a deduction
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
+
       {transition.isError ? (
-        <div className="inline-error mt-3">
+        <div className="mb-3 flex items-center justify-between gap-3 rounded-md border border-critical bg-critical-bg px-3.5 py-2.5 text-base font-medium text-critical mt-3">
           {transition.error instanceof Error
             ? transition.error.message
             : "Couldn't update the claim."}
@@ -118,13 +190,15 @@ export function ClaimActions({ claim }: { claim: Claim }) {
       ) : null}
 
       {packet.isError ? (
-        <div className="inline-error mt-3">Couldn&apos;t build the packet.</div>
+        <div className="mb-3 flex items-center justify-between gap-3 rounded-md border border-critical bg-critical-bg px-3.5 py-2.5 text-base font-medium text-critical mt-3">
+          Couldn&apos;t compile the documents.
+        </div>
       ) : null}
 
       {packet.isSuccess ? (
-        <div className="sent-confirm mt-3 flex-wrap">
+        <div className="flex items-center gap-[9px] rounded-md border border-approved bg-approved-bg px-3.5 py-3 text-base text-ink mt-3 flex-wrap">
           <span>
-            Packet ready · {packet.data.documentCount} document
+            Documents ready · {packet.data.documentCount} document
             {packet.data.documentCount === 1 ? "" : "s"}
             {packet.data.skipped.length > 0
               ? ` · ${packet.data.skipped.length} couldn't be included`
@@ -167,6 +241,16 @@ export function ClaimActions({ claim }: { claim: Claim }) {
         claim={claim}
         open={recordDeduction}
         onOpenChange={setRecordDeduction}
+      />
+      <RecordFinancialsDialog
+        claim={claim}
+        open={recordAmounts}
+        onOpenChange={setRecordAmounts}
+      />
+      <RecordPaymentDialog
+        claim={claim}
+        open={recordPayment}
+        onOpenChange={setRecordPayment}
       />
     </div>
   );

@@ -5,6 +5,7 @@ import {
   getObjectBytes,
   getUploadUrl,
 } from "../../integrations/storage/s3.js";
+import type { DocumentClassification } from "@claimflow/contracts";
 import { getClassifier } from "../../integrations/classifier/index.js";
 import { canOcr, detectText } from "../../integrations/ocr/textract.js";
 import * as auditService from "../audit/audit.service.js";
@@ -47,6 +48,17 @@ export async function registerDocument(
   claimId: string,
   key: string,
   contentType: string,
+  /**
+   * A classification that has already been paid for.
+   *
+   * The assistant reads a file to work out which claim it belongs to
+   * before anyone has picked one, and that reading answers the slot
+   * question too. Passing it in rather than classifying again is one
+   * call saved per filing, and — more to the point — stops the desk
+   * being shown a second, differently-worded opinion about a document
+   * they have already approved.
+   */
+  presetClassification?: DocumentClassification,
 ) {
   const created = await documentsRepository.create(claimId, { fileUrl: key });
   if (!created) throw new ClaimNotFoundError(claimId);
@@ -57,6 +69,15 @@ export async function registerDocument(
     entityId: created.id,
     after: { claimId },
   });
+
+  if (presetClassification) {
+    return (
+      (await documentsRepository.saveClassification(
+        created.id,
+        presetClassification,
+      )) ?? created
+    );
+  }
 
   // Inline rather than queued: a desk exec is watching this upload and
   // wants the suggestion now, and one classification is a single call,

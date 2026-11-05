@@ -66,7 +66,9 @@ export function LogQueryDialog({
 
         <form id="log-query" onSubmit={submit}>
           {logQuery.isError ? (
-            <div className="inline-error">Couldn&apos;t save the query.</div>
+            <div className="mb-3 flex items-center justify-between gap-3 rounded-md border border-critical bg-critical-bg px-3.5 py-2.5 text-base font-medium text-critical">
+              Couldn&apos;t save the query.
+            </div>
           ) : null}
 
           <label
@@ -92,7 +94,7 @@ export function LogQueryDialog({
 
         <DialogFooter>
           <DialogClose asChild>
-            <Button type="button" variant="ghost">
+            <Button type="button" variant="outline">
               Cancel
             </Button>
           </DialogClose>

@@ -17,13 +17,19 @@ import * as claimsRepository from "./claims.repository.js";
 describe.skipIf(!process.env.DATABASE_URL)(
   "claims.repository (integration)",
   () => {
+    // Unique per run: the suite's files run in parallel against one
+    // database, and insurer names are unique (migration 0020).
+    const INSURER_NAME = `Test Insurer ${Date.now()}-${Math.random()
+      .toString(36)
+      .slice(2, 7)}`;
+
     let insurerId: string;
     let procedureId: string;
 
     beforeAll(async () => {
       const [insurer] = await db
         .insert(insurers)
-        .values({ name: "Test Insurer", type: "tpa" })
+        .values({ name: INSURER_NAME, type: "tpa" })
         .returning();
       const [procedure] = await db
         .insert(procedures)
