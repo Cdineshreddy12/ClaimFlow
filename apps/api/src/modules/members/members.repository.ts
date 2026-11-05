@@ -17,3 +17,12 @@ export async function getMemberId(userId: string): Promise<string | null> {
     .where(eq(members.userId, userId));
   return member?.id ?? null;
 }
+
+/** The caller's own membership row, or undefined if they have none yet. */
+export async function getMemberByUserId(userId: string) {
+  const [member] = await db
+    .select()
+    .from(members)
+    .where(eq(members.userId, userId));
+  return member;
+}

@@ -98,3 +98,27 @@ export const HospitalProfile = HospitalIdentityStep.merge(
   HospitalContactStep,
 ).and(HospitalComplianceStep);
 export type HospitalProfile = z.infer<typeof HospitalProfile>;
+
+/**
+ * What the printed pre-auth form looks like, as opposed to what it says.
+ *
+ * Unlike the three steps above, this is never required — it has no entry
+ * in hospital.service.ts's REQUIRED_BY_STEP, so a desk can print and fax
+ * a form with none of this set, the way it always could. A logo is set
+ * separately: `logoFileKey` here is the S3 key the upload endpoint
+ * handed back, not a file.
+ */
+export const HospitalBrandingStep = z.object({
+  logoFileKey: z.string().trim().max(1024).optional().or(z.literal("")),
+  /** Colors the form's title on the printed PDF. */
+  brandAccentColor: z
+    .string()
+    .trim()
+    .regex(/^#[0-9a-fA-F]{6}$/, "Enter a hex color like #1A73E8")
+    .optional()
+    .or(z.literal("")),
+  tagline: z.string().trim().max(300).optional().or(z.literal("")),
+  /** Free text printed under the declaration — bank details, a closing note. */
+  documentFooterNote: z.string().trim().max(2000).optional().or(z.literal("")),
+});
+export type HospitalBrandingStep = z.infer<typeof HospitalBrandingStep>;
