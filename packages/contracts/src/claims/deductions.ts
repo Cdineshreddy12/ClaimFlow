@@ -48,3 +48,64 @@ export const RecordDeductionBody = z
     path: ["note"],
   });
 export type RecordDeductionBody = z.infer<typeof RecordDeductionBody>;
+
+/**
+ * Appealing a deduction.
+ *
+ * Deductions were write-once: the desk recorded what an insurer cut,
+ * the dashboard totalled it, and that was the end of the money. Most
+ * hospitals never contest one, which is exactly the habit this is for
+ * — docs/adr/0013.
+ */
+export const DeductionAppealStatus = z.enum([
+  "NOT_CONTESTED",
+  "CONTESTED",
+  "RECOVERED",
+  "PARTIALLY_RECOVERED",
+  "UPHELD",
+]);
+export type DeductionAppealStatus = z.infer<typeof DeductionAppealStatus>;
+
+export const DEDUCTION_APPEAL_LABEL: Record<DeductionAppealStatus, string> = {
+  NOT_CONTESTED: "Not contested",
+  CONTESTED: "Appeal with insurer",
+  RECOVERED: "Recovered in full",
+  PARTIALLY_RECOVERED: "Partly recovered",
+  UPHELD: "Appeal lost",
+};
+
+export const ContestDeductionBody = z.object({
+  /** How the appeal is being argued. Optional — the act of contesting is the fact being recorded. */
+  note: z.string().trim().max(1000).optional().or(z.literal("")),
+});
+export type ContestDeductionBody = z.infer<typeof ContestDeductionBody>;
+
+export const ResolveAppealBody = z.object({
+  /**
+   * What came back. Zero is a real answer — it means the appeal was
+   * fought and lost, which is what stops a desk appealing the same
+   * reason to the same insurer forever.
+   */
+  recoveredAmount: z.coerce.number().min(0).max(100_000_000),
+  note: z.string().trim().max(1000).optional().or(z.literal("")),
+});
+export type ResolveAppealBody = z.infer<typeof ResolveAppealBody>;
+
+/**
+ * The outcome follows from the money, so it is derived rather than
+ * asked for: a desk that could pick "recovered in full" while entering
+ * a partial amount would eventually do it.
+ */
+export function appealOutcomeFor(
+  deductedAmount: number,
+  recoveredAmount: number,
+): DeductionAppealStatus {
+  if (recoveredAmount <= 0) return "UPHELD";
+  if (recoveredAmount >= deductedAmount) return "RECOVERED";
+  return "PARTIALLY_RECOVERED";
+}
+
+/** Whether this one is still worth the desk's time. */
+export function isAppealOpen(status: DeductionAppealStatus): boolean {
+  return status === "NOT_CONTESTED" || status === "CONTESTED";
+}

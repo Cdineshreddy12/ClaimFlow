@@ -72,7 +72,7 @@ export function RecordDeductionDialog({
 
         <form id="record-deduction" onSubmit={submit}>
           {record.isError ? (
-            <div className="inline-error">
+            <div className="mb-3 flex items-center justify-between gap-3 rounded-md border border-critical bg-critical-bg px-3.5 py-2.5 text-base font-medium text-critical">
               Couldn&apos;t record that deduction.
             </div>
           ) : null}
@@ -126,7 +126,7 @@ export function RecordDeductionDialog({
 
         <DialogFooter>
           <DialogClose asChild>
-            <Button type="button" variant="ghost">
+            <Button type="button" variant="outline">
               Cancel
             </Button>
           </DialogClose>
