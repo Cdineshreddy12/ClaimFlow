@@ -26,6 +26,33 @@ should become a plain-language band ("likely correct" / "check this one")
 for non-technical staff is an open question — noted in the design critique,
 not yet decided.
 
+### Amendment — the reply deadline (2026-11-05)
+
+Rule 3 covered the summary and left the deadline behind. In practice the
+summariser wrote `queries.deadline` straight into the column the inbox
+sorts by and the dashboard counts overdue off, with only
+`deadline_inferred` to hint that a model had resolved "within 48 hours"
+against a received date. Every other AI output in the product waits in a
+suggestion column — `documents.checklist_slot` beside `confirmed_at`,
+`claim_preauth_fields.ai_value` beside `value` — so this one was the
+exception, and the asymmetry wasn't deliberate.
+
+- **A summariser-derived deadline is unconfirmed until someone clicks.**
+  `deadline_confirmed_at` / `_by` are a second axis, not a replacement
+  for `deadline_inferred`: the flag records _how_ the date was arrived
+  at and never changes, the stamp records _that a human vouched for it_.
+  A desk exec who types a deadline gets both in one keystroke; the
+  summariser only ever gets the first.
+- **The countdown still shows while unconfirmed**, dashed, captioned
+  with where the date came from, and with Confirm beside it. Hiding it
+  would have been the stricter reading of rule 1 and the wrong call — a
+  desk that doesn't know a deadline exists is worse off than one holding
+  an unvouched date, and the overdue count stays honest either way.
+- **Clearing is part of confirming.** An inferred deadline that's simply
+  wrong has to be removable, or it sits in the inbox being counted
+  overdue forever; an empty field saves as "no deadline", which is a
+  different fact from nobody having looked.
+
 ## Consequences
 
 - The frontend needs one reusable `<AiSuggestion>`-style component (value,
