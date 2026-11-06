@@ -8,6 +8,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { useAuth } from "../auth/AuthProvider";
 import { useGeneratePacket, useTransitionStatus } from "./api";
+import { displayFileName } from "../documents/api";
 import { DoctorApprovalDialog } from "./DoctorApprovalDialog";
 import { LogQueryDialog } from "./LogQueryDialog";
 import { RecordDeductionDialog } from "./RecordDeductionDialog";
@@ -221,7 +222,11 @@ export function ClaimActions({ claim }: { claim: Claim }) {
         <ul className="mt-2 flex flex-col gap-1">
           {packet.data.skipped.map((s) => (
             <li key={s.fileName} className="text-[12px] text-ink-faint">
-              {s.fileName} — {s.reason}
+              {/* The storage key, not the name anyone uploaded. Every
+                  other filename on the desk goes through this; here it
+                  leaked "9fdef106-a20b-…-ultrasound_report.txt" into a
+                  message meant to tell someone which file to fix. */}
+              {displayFileName(s.fileName)} — {s.reason}
             </li>
           ))}
         </ul>

@@ -62,3 +62,31 @@ describe("terminal statuses", () => {
     expect(needsAttention("ENHANCEMENT_REQUESTED")).toBe(true);
   });
 });
+
+/**
+ * Who may settle.
+ *
+ * The transition table is the only authorization in the product that
+ * is not a `requireRole(...)` on a route, and it drifted: it named
+ * `desk_head` alone, so an org_admin — more privileged on every other
+ * surface — could not take a claim to SETTLED. A hospital with one
+ * admin could never finish a claim.
+ */
+describe("settling", () => {
+  it("is open to both roles that administer the desk", () => {
+    expect(canTransition("FINAL_BILL_SUBMITTED", "SETTLED", "org_admin")).toBe(
+      true,
+    );
+    expect(canTransition("FINAL_BILL_SUBMITTED", "SETTLED", "desk_head")).toBe(
+      true,
+    );
+  });
+
+  it("is still closed to a desk executive", () => {
+    // The point of the restriction: settling is irreversible and is
+    // where the money stops moving.
+    expect(
+      canTransition("FINAL_BILL_SUBMITTED", "SETTLED", "desk_executive"),
+    ).toBe(false);
+  });
+});

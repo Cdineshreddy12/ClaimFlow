@@ -62,7 +62,19 @@ export const CLAIM_TRANSITIONS: Record<ClaimStatus, Transition> = {
   QUERY_RAISED: { to: ["PRE_AUTH_SENT"] },
   ENHANCEMENT_REQUESTED: { to: ["PRE_AUTH_SENT", "APPROVED", "REJECTED"] },
   APPROVED: { to: ["FINAL_BILL_SUBMITTED"] },
-  FINAL_BILL_SUBMITTED: { to: ["SETTLED"], roles: ["desk_head"] },
+  /*
+    Settling is the one irreversible money transition, so it is held
+    back from a desk executive. It listed only `desk_head`, which
+    locked out `org_admin` as well — the role that is strictly more
+    privileged everywhere else in the product (insurers, rules,
+    branding, reports, receivables are all
+    requireRole("org_admin", "desk_head")).
+
+    A hospital whose only admin is an org_admin could not settle a
+    claim at all, which is the last step of every claim that goes
+    right.
+  */
+  FINAL_BILL_SUBMITTED: { to: ["SETTLED"], roles: ["org_admin", "desk_head"] },
   SETTLED: { to: [] },
   REJECTED: { to: [] },
 };
