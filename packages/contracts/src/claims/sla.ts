@@ -61,6 +61,59 @@ export function slaWindowFor(status: ClaimStatus): SlaWindow | null {
 }
 
 /**
+ * Who is sitting on a claim in each state.
+ *
+ * Deliberately separate from `SLA_WINDOWS`. A window is a *deadline*
+ * and only three statuses carry one, all of them the insurer's. This
+ * says who holds the ball, which every open status answers — and the
+ * brief asks for it directly: IRDAI gives insurers an hour, "so the
+ * hospital's own delays must be timed".
+ *
+ * Without this, turnaround reporting could only ever describe the other
+ * side of the table. A desk that takes six hours to send a pre-auth has
+ * spent six hours of a patient's admission, and no amount of insurer
+ * statistics will show it.
+ *
+ * `SETTLED` and `REJECTED` are absent on purpose: they are terminal, so
+ * nobody is holding anything and there is no duration left to measure.
+ */
+export const STATUS_HELD_BY: Partial<Record<ClaimStatus, SlaOwner>> = {
+  // Admitted, and not yet asked for. The clearest hospital-side delay
+  // in the product, and the one nothing measured.
+  DRAFT: "desk",
+  PRE_AUTH_SENT: "insurer",
+  // The TPA has asked something; replying is ours. The reply deadline
+  // itself still comes from the TPA's own email, never from here.
+  QUERY_RAISED: "desk",
+  ENHANCEMENT_REQUESTED: "insurer",
+  // Authorised, waiting on us to bill it.
+  APPROVED: "desk",
+  FINAL_BILL_SUBMITTED: "insurer",
+};
+
+export function heldBy(status: ClaimStatus): SlaOwner | null {
+  return STATUS_HELD_BY[status] ?? null;
+}
+
+/** The statuses one side is accountable for, for grouping a report. */
+export function statusesHeldBy(owner: SlaOwner): ClaimStatus[] {
+  return (Object.keys(STATUS_HELD_BY) as ClaimStatus[]).filter(
+    (status) => STATUS_HELD_BY[status] === owner,
+  );
+}
+
+/**
+ * What the desk is doing while it holds a claim, phrased as the work
+ * rather than the state. "Draft" is a database value; "Admitted →
+ * pre-auth sent" is the gap a desk head can actually shorten.
+ */
+export const DESK_HOLD_LABEL: Partial<Record<ClaimStatus, string>> = {
+  DRAFT: "Opened → pre-auth sent",
+  QUERY_RAISED: "Query received → replied",
+  APPROVED: "Approved → final bill sent",
+};
+
+/**
  * The deadline for entering a status, or null for the statuses that
  * don't carry one.
  *

@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import type { ClaimStatus } from "@claimflow/contracts";
+import { statusesHeldBy, type ClaimStatus } from "@claimflow/contracts";
 import { db } from "../../db/client.js";
 
 /**
@@ -77,6 +77,75 @@ export interface TurnaroundRow {
   avgHours: number;
   worstHours: number;
   breaches: number;
+}
+
+/**
+ * How long the desk itself held each claim, over a window.
+ *
+ * The other half of `insurerTurnaround`, and the half the brief
+ * actually asks for: IRDAI gives insurers an hour to decide, "so the
+ * hospital's own delays must be timed". A desk that takes five hours to
+ * send a pre-auth has spent five hours of a patient's admission, and
+ * every number on the Turnaround page was previously about somebody
+ * else.
+ *
+ * Grouped by status rather than by insurer. How long we sit on a draft
+ * is our habit, not the insurer's doing, and splitting it per insurer
+ * would invite reading our own lag as their fault.
+ *
+ * Same exclusions as the insurer side: a claim still sitting in a desk
+ * state has no duration yet, and counting it as zero would flatter
+ * exactly the queue that needs looking at.
+ */
+export interface DeskTurnaroundRow {
+  fromStatus: ClaimStatus;
+  /** How many times the desk completed this step in the window. */
+  handovers: number;
+  avgHours: number;
+  worstHours: number;
+}
+
+export async function deskTurnaround(
+  since: Date,
+  until?: Date,
+): Promise<DeskTurnaroundRow[]> {
+  // Built from the contract rather than written out, so a status
+  // changing hands in STATUS_HELD_BY moves this report with it.
+  const held = sql.join(
+    statusesHeldBy("desk").map((status) => sql`${status}`),
+    sql`, `,
+  );
+  const rows = await db.execute(sql`
+    with ordered as (
+      select
+        e.claim_id,
+        e.status,
+        e.created_at,
+        lead(e.created_at) over (
+          partition by e.claim_id order by e.created_at
+        ) as moved_at
+      from claim_status_events e
+      where e.created_at >= ${since.toISOString()}::timestamptz
+      ${until ? sql`and e.created_at <= ${until.toISOString()}::timestamptz` : sql``}
+    )
+    select
+      o.status as from_status,
+      count(*)::int as handovers,
+      avg(extract(epoch from (o.moved_at - o.created_at)) / 3600) as avg_hours,
+      max(extract(epoch from (o.moved_at - o.created_at)) / 3600) as worst_hours
+    from ordered o
+    where o.moved_at is not null
+      and o.status in (${held})
+    group by o.status
+    order by avg_hours desc
+  `);
+
+  return (rows as unknown as Record<string, unknown>[]).map((row) => ({
+    fromStatus: row.from_status as ClaimStatus,
+    handovers: Number(row.handovers),
+    avgHours: Number(row.avg_hours),
+    worstHours: Number(row.worst_hours),
+  }));
 }
 
 export async function insurerTurnaround(

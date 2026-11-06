@@ -93,6 +93,58 @@ export function SlaPage() {
         )}
       </Card>
 
+      {/* Us before them. IRDAI binds the insurer to an hour, so the
+          hospital's lag is the part a desk head can actually shorten —
+          and until this existed every number on the page was about
+          somebody else's performance. */}
+      <Card className="mb-5">
+        <CardHeader>
+          <CardTitle>How long we hold a claim · last 30 days</CardTitle>
+        </CardHeader>
+
+        {!turnaround || turnaround.desk.length === 0 ? (
+          <p className="px-1 py-2.5 text-base text-ink-faint">
+            Nothing has passed through a desk step in the window yet.
+          </p>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Step</TableHead>
+                <TableHead className="text-right">Average</TableHead>
+                <TableHead className="text-right">Worst</TableHead>
+                <TableHead className="text-right">Times</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {turnaround.desk.map((row) => (
+                <TableRow key={row.fromStatus}>
+                  <TableCell>{row.label}</TableCell>
+                  <TableCell className="text-right font-mono tabular-nums">
+                    {formatHours(row.avgHours)}
+                  </TableCell>
+                  <TableCell className="text-right font-mono tabular-nums">
+                    {formatHours(row.worstHours)}
+                  </TableCell>
+                  <TableCell className="text-right font-mono tabular-nums">
+                    {row.handovers}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+
+        {/* No target column, because no regulation sets one for us.
+            Inventing a number and printing it beside IRDAI's would
+            make our own invention look like a mandate. */}
+        <p className="mt-3 text-sm text-ink-faint">
+          No regulator sets these — IRDAI binds the insurer, not the hospital.
+          They are here because an hour of ours costs a patient the same as an
+          hour of theirs.
+        </p>
+      </Card>
+
       <Card>
         <CardHeader>
           <CardTitle>Insurer turnaround · last 30 days</CardTitle>

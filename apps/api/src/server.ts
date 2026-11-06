@@ -1,6 +1,7 @@
 import Fastify from "fastify";
 import cors from "@fastify/cors";
 import { ZodError } from "zod";
+import { assertDataResidency } from "./lib/data-residency.js";
 import { loadEnv } from "./config/env.js";
 import { registerClaimsRoutes } from "./modules/claims/claims.routes.js";
 import { registerChecklistRoutes } from "./modules/checklist/checklist.routes.js";
@@ -103,6 +104,11 @@ await app.register(registerSlaRoutes, { prefix: "/sla" });
 await app.register(registerAssistantRoutes, { prefix: "/assistant" });
 await app.register(registerReceivablesRoutes, { prefix: "/receivables" });
 await app.register(registerReportsRoutes, { prefix: "/reports" });
+
+// Before the port opens, not after. A server that accepts a patient
+// record and then discovers it is storing it in Ohio has already done
+// the thing the DPDP Act forbids.
+assertDataResidency(process.env, (message) => app.log.warn(message));
 
 app
   .listen({ port: env.PORT, host: "0.0.0.0" })

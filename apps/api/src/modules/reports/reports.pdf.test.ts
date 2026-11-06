@@ -16,7 +16,7 @@ const EMPTY_REPORT: PeriodReport = {
   to: new Date("2026-11-01T00:00:00Z"),
   claims: { opened: 0, settled: 0, settledValue: 0, avgTatDays: null },
   deductions: { total: 0, avoidableTotal: 0, recoveredTotal: 0, byReason: [] },
-  turnaround: { since: new Date("2026-10-01T00:00:00Z"), rows: [] },
+  turnaround: { since: new Date("2026-10-01T00:00:00Z"), rows: [], desk: [] },
 };
 
 describe("buildPeriodReportPdf", () => {
@@ -31,6 +31,7 @@ describe("buildPeriodReportPdf", () => {
       ...EMPTY_REPORT,
       turnaround: {
         since: EMPTY_REPORT.from,
+        desk: [],
         rows: Array.from({ length: 60 }, (_, i) => ({
           insurerName: `Insurer ${i}`,
           fromStatus: "PRE_AUTH_SENT" as const,

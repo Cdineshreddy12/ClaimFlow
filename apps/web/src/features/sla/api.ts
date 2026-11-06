@@ -34,9 +34,20 @@ export interface TurnaroundRow {
   breachRate: number;
 }
 
+export interface DeskTurnaroundRow {
+  fromStatus: string;
+  /** The work, not the state — "Opened → pre-auth sent". */
+  label: string;
+  handovers: number;
+  avgHours: number;
+  worstHours: number;
+}
+
 export interface TurnaroundReport {
   since: string;
   rows: TurnaroundRow[];
+  /** The same question asked about us. */
+  desk: DeskTurnaroundRow[];
 }
 
 /**

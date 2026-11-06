@@ -1,4 +1,5 @@
 import {
+  DESK_HOLD_LABEL,
   slaState,
   slaWindowFor,
   type ClaimStatus,
@@ -96,6 +97,14 @@ export interface TurnaroundReport {
     /** Breaches as a share of decisions, 0–1. */
     breachRate: number;
   })[];
+  /**
+   * The same question asked about us.
+   *
+   * IRDAI gives insurers an hour, so the hospital's own lag is the part
+   * it can actually do something about — and every number above this
+   * line is about somebody else's performance.
+   */
+  desk: (repo.DeskTurnaroundRow & { label: string })[];
 }
 
 /**
@@ -115,10 +124,20 @@ export async function getTurnaroundReport(
   since: Date,
   until?: Date,
 ): Promise<TurnaroundReport> {
-  const rows = await repo.insurerTurnaround(since, until);
+  const [rows, desk] = await Promise.all([
+    repo.insurerTurnaround(since, until),
+    repo.deskTurnaround(since, until),
+  ]);
 
   return {
     since,
+    desk: desk.map((row) => ({
+      ...row,
+      // Phrased as the work, not the state: "Draft" is a database
+      // value, "Opened → pre-auth sent" is a gap a desk head can
+      // actually shorten.
+      label: DESK_HOLD_LABEL[row.fromStatus] ?? row.fromStatus,
+    })),
     rows: rows.map((row) => ({
       ...row,
       targetHours: slaWindowFor(row.fromStatus)?.hours ?? null,

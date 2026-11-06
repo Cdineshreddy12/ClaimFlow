@@ -22,6 +22,9 @@ function clock(over: Partial<repo.SlaWatchRow> = {}): repo.SlaWatchRow {
 describe("sla.service.getSlaWatch", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // The report now asks both halves — the insurer's time and our
+    // own. Tests about the insurer side still need this one answered.
+    vi.mocked(repo.deskTurnaround).mockResolvedValue([]);
   });
 
   it("puts the most overdue claim first", async () => {

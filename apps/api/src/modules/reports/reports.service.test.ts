@@ -32,6 +32,7 @@ describe("reports.service.getPeriodReport", () => {
     vi.mocked(slaService.getTurnaroundReport).mockResolvedValue({
       since: FROM,
       rows: [],
+      desk: [],
     });
 
     const { getPeriodReport } = await import("./reports.service.js");
