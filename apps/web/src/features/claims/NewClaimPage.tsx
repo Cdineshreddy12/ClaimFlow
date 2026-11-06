@@ -1,4 +1,9 @@
 import { useState } from "react";
+import {
+  INSURER_TYPE_LABEL,
+  isSchemePayer,
+  type InsurerType,
+} from "@claimflow/contracts";
 import { useNavigate } from "react-router-dom";
 import { AppShell } from "../../app/AppShell";
 import { Button } from "@/components/ui/button";
@@ -34,8 +39,29 @@ export function NewClaimPage() {
   const [insurerId, setInsurerId] = useState("");
   const [procedureId, setProcedureId] = useState("");
   const [billedAmount, setBilledAmount] = useState("");
+  const [packageCode, setPackageCode] = useState("");
+  const [packageRate, setPackageRate] = useState("");
 
-  const valid = Boolean(patientName.trim() && insurerId && procedureId);
+  /*
+    A government scheme pays a package rate, not an estimate.
+
+    PM-JAY and the state schemes fix what a procedure is worth before
+    anyone asks: the desk picks a code from the rate master and that
+    is what will be paid. So the estimate field has nothing to do on
+    a scheme claim, and the package has nothing to do on any other.
+    The payer decides which pair of fields the form shows.
+  */
+  const payer = insurers?.find((i) => i.id === insurerId);
+  const scheme = isSchemePayer(payer?.type);
+
+  // Both or neither: a code with no rate leaves the claim worth
+  // nothing on every money view, and a rate with no code is an
+  // amount nobody can trace back to the scheme's master.
+  const packageComplete =
+    Boolean(packageCode.trim()) === Number(packageRate) > 0;
+  const valid = Boolean(
+    patientName.trim() && insurerId && procedureId && packageComplete,
+  );
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -44,7 +70,13 @@ export function NewClaimPage() {
       patientName: patientName.trim(),
       insurerId,
       procedureId,
-      ...(Number(billedAmount) > 0
+      ...(scheme && packageCode.trim() && Number(packageRate) > 0
+        ? {
+            packageCode: packageCode.trim(),
+            packageRate: Number(packageRate),
+          }
+        : {}),
+      ...(!scheme && Number(billedAmount) > 0
         ? { billedAmount: Number(billedAmount) }
         : {}),
     });
@@ -80,7 +112,7 @@ export function NewClaimPage() {
           </FormField>
 
           <div className="grid grid-cols-1 gap-x-4 sm:grid-cols-2">
-            <FormField label="Insurer / TPA" htmlFor="insurerId">
+            <FormField label="Payer" htmlFor="insurerId">
               <Select
                 value={insurerId || undefined}
                 onValueChange={setInsurerId}
@@ -91,7 +123,7 @@ export function NewClaimPage() {
                 <SelectContent>
                   {insurers?.map((i) => (
                     <SelectItem key={i.id} value={i.id}>
-                      {i.name} · {i.type === "tpa" ? "TPA" : "Insurer"}
+                      {i.name} · {INSURER_TYPE_LABEL[i.type as InsurerType]}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -117,22 +149,56 @@ export function NewClaimPage() {
             </FormField>
           </div>
 
-          <FormField
-            label="Estimated amount"
-            htmlFor="billedAmount"
-            optional
-            hint="In rupees — can be set later"
-            className="mb-0"
-          >
-            <Input
-              id="billedAmount"
-              type="number"
-              min={1}
-              inputMode="numeric"
-              value={billedAmount}
-              onChange={(e) => setBilledAmount(e.target.value)}
-            />
-          </FormField>
+          {scheme ? (
+            <div className="grid grid-cols-1 gap-x-4 sm:grid-cols-2">
+              <FormField
+                label="Package code"
+                htmlFor="packageCode"
+                optional
+                hint="From the scheme's rate master, e.g. HBP-SG-012"
+              >
+                <Input
+                  id="packageCode"
+                  value={packageCode}
+                  onChange={(e) => setPackageCode(e.target.value)}
+                />
+              </FormField>
+
+              <FormField
+                label="Package rate"
+                htmlFor="packageRate"
+                optional
+                hint="Fixed by the scheme — this is what it pays"
+                className="mb-0"
+              >
+                <Input
+                  id="packageRate"
+                  type="number"
+                  min={1}
+                  inputMode="numeric"
+                  value={packageRate}
+                  onChange={(e) => setPackageRate(e.target.value)}
+                />
+              </FormField>
+            </div>
+          ) : (
+            <FormField
+              label="Estimated amount"
+              htmlFor="billedAmount"
+              optional
+              hint="In rupees — can be set later"
+              className="mb-0"
+            >
+              <Input
+                id="billedAmount"
+                type="number"
+                min={1}
+                inputMode="numeric"
+                value={billedAmount}
+                onChange={(e) => setBilledAmount(e.target.value)}
+              />
+            </FormField>
+          )}
         </div>
 
         <div className="mt-4 flex justify-end gap-2.5">

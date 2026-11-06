@@ -305,6 +305,17 @@ export const claims = pgTable(
      */
     sanctionedAmount: numeric("sanctioned_amount", { precision: 12, scale: 2 }),
     /**
+     * Government scheme claims only: the package picked from the
+     * scheme's rate master, and what that package pays.
+     *
+     * Both or neither, enforced by a check constraint. The rate is
+     * fixed by the scheme rather than negotiated, which is why it also
+     * lands in `sanctionedAmount` at creation — see
+     * contracts/claims/scheme-package.
+     */
+    packageCode: text("package_code"),
+    packageRate: numeric("package_rate", { precision: 12, scale: 2 }),
+    /**
      * What the insurer actually paid, and when it arrived — not what
      * they authorised. The gap between this and sanctionedAmount is
      * the deduction the desk is trying to shrink.

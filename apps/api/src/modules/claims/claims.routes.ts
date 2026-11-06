@@ -20,6 +20,7 @@ import {
   NoRulesToApplyError,
   ChecklistAlreadySetError,
   InvalidTransitionError,
+  PackageOnNonSchemeClaimError,
 } from "./claims.service.js";
 
 export async function registerClaimsRoutes(app: FastifyInstance) {
@@ -46,8 +47,17 @@ export async function registerClaimsRoutes(app: FastifyInstance) {
 
   app.post("/", async (request, reply) => {
     const body = CreateClaimBody.parse(request.body);
-    const claim = await claimsService.createClaim(request.authUser!, body);
-    return reply.code(201).send(claim);
+    try {
+      const claim = await claimsService.createClaim(request.authUser!, body);
+      return reply.code(201).send(claim);
+    } catch (err) {
+      if (err instanceof PackageOnNonSchemeClaimError) {
+        return reply.code(422).send({
+          error: "a package rate belongs to a government scheme claim",
+        });
+      }
+      throw err;
+    }
   });
 
   /**

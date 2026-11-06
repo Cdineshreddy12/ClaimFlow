@@ -7,6 +7,7 @@ import * as orgMembersRepository from "../members/members.repository.js";
 import * as deductionsRepository from "../deductions/deductions.repository.js";
 import * as enhancementsRepository from "../enhancements/enhancements.repository.js";
 import * as preauthRepository from "../preauth/preauth.repository.js";
+import * as insurersRepository from "../insurers/insurers.repository.js";
 
 vi.mock("./claims.repository.js");
 vi.mock("../checklist/checklist.service.js");
@@ -16,6 +17,7 @@ vi.mock("../members/members.repository.js");
 vi.mock("../deductions/deductions.repository.js");
 vi.mock("../enhancements/enhancements.repository.js");
 vi.mock("../preauth/preauth.repository.js");
+vi.mock("../insurers/insurers.repository.js");
 vi.mock("../audit/audit.service.js");
 
 const MEMBER_ID = "22222222-2222-2222-2222-222222222222";
@@ -627,5 +629,99 @@ describe("claims.service.getClaimFinancials", () => {
         removeChecklistSlot(auth("desk_head"), CLAIM_ID, "Nothing"),
       ).rejects.toThrow(SlotNotOnClaimError);
     });
+  });
+});
+
+/**
+ * Government scheme claims.
+ *
+ * PM-JAY and the state schemes pay a package rate, fixed by the code
+ * the desk picks, not an estimate anyone negotiates. That inverts the
+ * private model this product was built around — and the inversion is
+ * the only part that genuinely differs, because a scheme lives on the
+ * existing payer master and inherits its checklist rules and form
+ * layout like any insurer.
+ */
+describe("createClaim · government schemes", () => {
+  const BASE = {
+    patientName: "Rajendra Pawar",
+    insurerId: "11111111-1111-1111-1111-111111111111",
+    procedureId: "22222222-2222-2222-2222-222222222222",
+  };
+
+  function payer(type: string) {
+    vi.mocked(insurersRepository.getById).mockResolvedValue({
+      id: BASE.insurerId,
+      name: type === "scheme" ? "PM-JAY" : "Company B",
+      type,
+    } as never);
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(claimsRepository.createClaim).mockResolvedValue({
+      id: "claim-1",
+      patientName: BASE.patientName,
+      status: "DRAFT",
+    } as never);
+  });
+
+  it("writes the package rate as the sanctioned amount", async () => {
+    payer("scheme");
+
+    const { createClaim } = await import("./claims.service.js");
+    await createClaim(auth("desk_head"), {
+      ...BASE,
+      packageCode: "HBP-SG-012",
+      packageRate: 28_500,
+    } as never);
+
+    // A scheme answers before it is asked. Leaving this null would
+    // show "Sanctioned: —" on a claim whose worth was never in doubt.
+    expect(claimsRepository.createClaim).toHaveBeenCalledWith(
+      expect.objectContaining({
+        packageCode: "HBP-SG-012",
+        packageRate: 28_500,
+        sanctionedAmount: 28_500,
+      }),
+      expect.anything(),
+      expect.anything(),
+    );
+  });
+
+  it("refuses a package on a claim that isn't against a scheme", async () => {
+    payer("insurer");
+
+    const { createClaim, PackageOnNonSchemeClaimError } =
+      await import("./claims.service.js");
+
+    // Accepting it would put a number in `sanctionedAmount` that no
+    // insurer ever sanctioned — the field docs/adr/0012's whole
+    // shortfall model is measured against.
+    await expect(
+      createClaim(auth("desk_head"), {
+        ...BASE,
+        packageCode: "HBP-SG-012",
+        packageRate: 28_500,
+      } as never),
+    ).rejects.toThrow(PackageOnNonSchemeClaimError);
+    expect(claimsRepository.createClaim).not.toHaveBeenCalled();
+  });
+
+  it("leaves a private claim's sanctioned amount alone", async () => {
+    payer("insurer");
+
+    const { createClaim } = await import("./claims.service.js");
+    await createClaim(auth("desk_head"), {
+      ...BASE,
+      billedAmount: 185_000,
+    } as never);
+
+    // Nothing has been sanctioned yet; the insurer has not answered.
+    expect(claimsRepository.createClaim).toHaveBeenCalledWith(
+      expect.not.objectContaining({ sanctionedAmount: expect.anything() }),
+      expect.anything(),
+      expect.anything(),
+    );
   });
 });

@@ -87,12 +87,30 @@ export function ClaimSummaryRail({
           <CardTitle>At a glance</CardTitle>
         </CardHeader>
         <dl className="m-0 flex flex-col gap-3 [&>div]:flex [&>div]:items-baseline [&>div]:justify-between [&>div]:gap-2.5 [&_dd]:m-0 [&_dd]:text-right [&_dd]:text-base [&_dd]:font-semibold [&_dt]:text-sm [&_dt]:text-ink-faint">
-          <div>
-            <dt>Billed amount</dt>
-            <dd className="font-mono tabular-nums">
-              {formatAmount(claim.billedAmount)}
-            </dd>
-          </div>
+          {/* A scheme claim is worth what its package pays, fixed
+              before anyone asked. "Billed amount" is the private
+              question and has no answer here. */}
+          {claim.packageCode ? (
+            <>
+              <div>
+                <dt>Package</dt>
+                <dd className="font-mono">{claim.packageCode}</dd>
+              </div>
+              <div>
+                <dt>Package rate</dt>
+                <dd className="font-mono tabular-nums">
+                  {formatAmount(claim.packageRate ?? null)}
+                </dd>
+              </div>
+            </>
+          ) : (
+            <div>
+              <dt>Billed amount</dt>
+              <dd className="font-mono tabular-nums">
+                {formatAmount(claim.billedAmount)}
+              </dd>
+            </div>
+          )}
           <div>
             <dt>Received</dt>
             <dd className="font-mono tabular-nums">

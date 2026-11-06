@@ -69,7 +69,7 @@ export async function getClaimById(id: string) {
 }
 
 export async function createClaim(
-  data: CreateClaimBody,
+  data: CreateClaimBody & { sanctionedAmount?: number },
   checklistSnapshot: ChecklistSnapshotItem[],
   preauthLayoutSnapshot?: unknown,
 ) {
@@ -82,6 +82,15 @@ export async function createClaim(
       billedAmount:
         data.billedAmount !== undefined ? data.billedAmount.toString() : null,
       admittedAt: data.admittedAt ?? null,
+      // Government scheme claims only — the service refuses these on
+      // any other payer. Both or neither, enforced in the database too.
+      packageCode: data.packageCode ?? null,
+      packageRate:
+        data.packageRate !== undefined ? data.packageRate.toString() : null,
+      sanctionedAmount:
+        data.sanctionedAmount !== undefined
+          ? data.sanctionedAmount.toString()
+          : null,
       checklistSnapshot,
       ...(preauthLayoutSnapshot !== undefined ? { preauthLayoutSnapshot } : {}),
     })

@@ -1,6 +1,7 @@
 import {
   adviseEnhancement,
   canTransition,
+  isSchemePayer,
   isTerminal,
   slaDeadlineFor,
   type ClaimFinancials,
@@ -8,6 +9,7 @@ import {
   type RecordPaymentBody,
   type Role,
 } from "@claimflow/contracts";
+import * as insurersRepository from "../insurers/insurers.repository.js";
 import * as deductionsRepository from "../deductions/deductions.repository.js";
 import * as enhancementsRepository from "../enhancements/enhancements.repository.js";
 import * as preauthLayoutsService from "../preauth-layouts/preauth-layouts.service.js";
@@ -73,7 +75,24 @@ export async function getClaim(auth: AuthContext, id: string) {
  * at the moment it's opened — see docs/adr/0001. Whatever the checklist
  * admin edits afterward never reaches back into claims already in flight.
  */
+export class PackageOnNonSchemeClaimError extends Error {}
+
 export async function createClaim(auth: AuthContext, body: CreateClaimBody) {
+  /*
+    A package belongs to a government scheme and to nothing else.
+
+    The schema can see that both fields arrived together; only here is
+    the payer known. Accepting a package rate on a private claim would
+    put a number in `sanctionedAmount` that no insurer ever sanctioned
+    — the one field docs/adr/0012's whole shortfall model is measured
+    against.
+  */
+  const payer = await insurersRepository.getById(body.insurerId);
+  const scheme = isSchemePayer(payer?.type);
+  if (body.packageCode && !scheme) {
+    throw new PackageOnNonSchemeClaimError(body.insurerId);
+  }
+
   const checklistSnapshot = await getRequirementsSnapshot(
     body.insurerId,
     body.procedureId,
@@ -86,7 +105,23 @@ export async function createClaim(auth: AuthContext, body: CreateClaimBody) {
     body.insurerId,
   );
   const claim = await claimsRepository.createClaim(
-    body,
+    {
+      ...body,
+      /*
+        The rate IS the sanctioned amount, written now rather than left
+        waiting on a decision the scheme has no reason to send.
+
+        On a private claim the hospital states a cost and the insurer
+        answers with a sanctioned amount, and the gap between them is
+        the subject of docs/adr/0012. A scheme answers before it is
+        asked: the package says what it pays. Leaving the field null
+        would show "Sanctioned: —" on a claim whose worth was never in
+        doubt, and send a desk looking for an answer that never comes.
+      */
+      ...(body.packageRate !== undefined
+        ? { sanctionedAmount: body.packageRate }
+        : {}),
+    },
     checklistSnapshot,
     preauthLayoutSnapshot,
   );

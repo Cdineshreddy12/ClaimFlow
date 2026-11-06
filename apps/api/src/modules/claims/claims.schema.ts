@@ -1,13 +1,29 @@
 import { z } from "zod";
-import { ClaimStatus } from "@claimflow/contracts";
+import { PackageCode, ClaimStatus } from "@claimflow/contracts";
 
-export const CreateClaimBody = z.object({
-  patientName: z.string().min(1),
-  insurerId: z.string().uuid(),
-  procedureId: z.string().uuid(),
-  billedAmount: z.coerce.number().positive().optional(),
-  admittedAt: z.coerce.date().optional(),
-});
+export const CreateClaimBody = z
+  .object({
+    patientName: z.string().min(1),
+    insurerId: z.string().uuid(),
+    procedureId: z.string().uuid(),
+    billedAmount: z.coerce.number().positive().optional(),
+    admittedAt: z.coerce.date().optional(),
+    /**
+     * Government scheme claims only. The payer's type decides whether
+     * these are allowed at all, which the service checks — the schema
+     * can see the shape but not which payer this id points at.
+     */
+    packageCode: PackageCode.optional(),
+    packageRate: z.coerce.number().positive().max(100_000_000).optional(),
+  })
+  .refine(
+    (value) =>
+      (value.packageCode === undefined) === (value.packageRate === undefined),
+    {
+      message: "Give both the package code and its rate, or neither",
+      path: ["packageCode"],
+    },
+  );
 export type CreateClaimBody = z.infer<typeof CreateClaimBody>;
 
 export const UpdateClaimStatusBody = z.object({

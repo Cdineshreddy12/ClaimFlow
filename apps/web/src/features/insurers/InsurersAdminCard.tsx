@@ -177,6 +177,11 @@ export function InsurersAdminCard({
             <SelectContent>
               <SelectItem value="tpa">TPA</SelectItem>
               <SelectItem value="insurer">Insurer</SelectItem>
+              {/* PM-JAY and the state schemes. A payer on this list
+                  rather than a table of its own, so scheme checklist
+                  rules and scheme form layouts come from the machinery
+                  that already exists. */}
+              <SelectItem value="scheme">Government scheme</SelectItem>
             </SelectContent>
           </Select>
           <Input

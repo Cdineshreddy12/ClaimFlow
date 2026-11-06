@@ -23,6 +23,9 @@ export interface Claim {
   assignedTo: string | null;
   checklistSnapshot: ChecklistSnapshotItem[];
   billedAmount: string | null;
+  /** Government scheme claims only — the code picked, and what it pays. */
+  packageCode?: string | null;
+  packageRate?: string | null;
   /** What the insurer authorised, enhancements included — docs/adr/0012. */
   sanctionedAmount: string | null;
   /** What actually arrived, and the day it did. Not inferred from the above. */
