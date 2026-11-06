@@ -57,7 +57,7 @@ describe("UploadRow", () => {
     renderRow(doc());
 
     // The uuid prefix the storage key carries is never shown.
-    const name = screen.getByRole("button", { name: /IMG_0423\.jpg/ });
+    const name = screen.getByRole("button", { name: "IMG_0423.jpg" });
     expect(api.get).not.toHaveBeenCalled();
 
     await userEvent.click(name);
@@ -81,9 +81,7 @@ describe("UploadRow", () => {
       }),
     );
 
-    await userEvent.click(
-      screen.getByRole("button", { name: /IMG_0423\.jpg/ }),
-    );
+    await userEvent.click(screen.getByRole("button", { name: "IMG_0423.jpg" }));
 
     await waitFor(() =>
       expect(api.get).toHaveBeenCalledWith(

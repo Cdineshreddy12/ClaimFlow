@@ -5,15 +5,13 @@ import { Loader } from "../../components/ui/loader";
 import { Tabs, type TabDef } from "../../components/ui/tabs";
 import { PREAUTH_FIELDS } from "@claimflow/contracts";
 import { usePreauthFields } from "../preauth/api";
-import { ChecklistGapsCard } from "./ChecklistGapsCard";
-import { DeductionRiskCard } from "./DeductionRiskCard";
+import { ClaimDocumentsTab } from "./ClaimDocumentsTab";
 import { DeductionsCard } from "./DeductionsCard";
 import { FormReviewCard } from "./FormReviewCard";
 import { MoneyCard } from "./MoneyCard";
 import { ClaimSummaryRail } from "./ClaimSummaryRail";
 import { PreauthFieldsCard } from "./PreauthFieldsCard";
 import { Stepper } from "./Stepper";
-import { UploadedDocumentsCard } from "./UploadedDocumentsCard";
 import { SlaClock } from "../sla/SlaClock";
 import { useClaim, useClaimFinancials, useClaimGaps } from "./api";
 import { STATUS_CHIP_VARIANT, STATUS_LABEL } from "./types";
@@ -191,14 +189,7 @@ export function ClaimFilePage() {
         <div className="min-w-0">
           <Tabs tabs={tabs} active={tab} onChange={setTab}>
             {tab === "documents" ? (
-              <div className="flex flex-col gap-[18px]">
-                <ChecklistGapsCard claim={claim} gaps={gaps} />
-                {/* Under the gaps, not above them: it argues for closing
-                    those specific gaps, so it only makes sense once
-                    you've seen which ones are open. */}
-                <DeductionRiskCard claim={claim} />
-                <UploadedDocumentsCard claim={claim} />
-              </div>
+              <ClaimDocumentsTab claim={claim} gaps={gaps} />
             ) : tab === "money" ? (
               <div className="flex flex-col gap-[18px]">
                 <MoneyCard claim={claim} />

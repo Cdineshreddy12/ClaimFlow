@@ -1,3 +1,4 @@
+import { useDroppable } from "@dnd-kit/core";
 import { CheckIcon, CrossIcon } from "../../components/icons";
 import type { Claim, ClaimGaps } from "./types";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
@@ -54,9 +55,10 @@ export function ChecklistGapsCard({
               gaps?.satisfied.includes(item.documentType) ?? false;
             const missing = item.required && !present;
             return (
-              <div
+              <SlotRow
                 key={item.documentType}
-                className="flex items-center gap-2.5 border-b border-line px-1 py-2.5 last:border-b-0"
+                slot={item.documentType}
+                present={present}
               >
                 <div
                   className={`flex size-5 shrink-0 items-center justify-center rounded-full [&_svg]:size-[11px] ${
@@ -101,11 +103,53 @@ export function ChecklistGapsCard({
                     ×
                   </button>
                 ) : null}
-              </div>
+              </SlotRow>
             );
           })}
         </div>
       )}
     </Card>
+  );
+}
+
+/**
+ * One checklist slot, and a place to drop a document onto.
+ *
+ * The brief asks for misfiled documents to be dragged to the right
+ * slot, and this is the right slot — named, with its state beside it,
+ * on the screen that already says what is missing.
+ *
+ * `useDroppable` outside a DndContext falls back to an inert default
+ * rather than throwing, so this card still renders anywhere it is used
+ * without one.
+ */
+function SlotRow({
+  slot,
+  present,
+  children,
+}: {
+  slot: string;
+  present: boolean;
+  children: React.ReactNode;
+}) {
+  const { setNodeRef, isOver } = useDroppable({
+    id: `slot:${slot}`,
+    data: { slot },
+  });
+
+  return (
+    <div
+      ref={setNodeRef}
+      className={`flex items-center gap-2.5 rounded-sm border-b border-line px-1 py-2.5 transition-colors last:border-b-0 ${
+        isOver
+          ? // Says "this one" while the pointer is still moving. A
+            // target that only confirms after the drop leaves the
+            // desk guessing which row they are over.
+            "bg-accent-soft shadow-[inset_0_0_0_2px_var(--accent)]"
+          : ""
+      }${present ? "" : " "}`}
+    >
+      {children}
+    </div>
   );
 }

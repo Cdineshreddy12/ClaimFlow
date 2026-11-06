@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useDraggable } from "@dnd-kit/core";
 import {
   CLASSIFIER_LABEL,
   LOW_CONFIDENCE_THRESHOLD,
@@ -123,6 +124,39 @@ export function UploadRow({
   const [previewing, setPreviewing] = useState(false);
   const fileName = displayFileName(doc.fileUrl);
 
+  const drag = useDraggable({
+    id: doc.id,
+    // Read back on drop: the filename for the overlay, and the slot it
+    // already sits in so dropping it there again is a no-op.
+    data: { fileName, slot: doc.checklistSlot },
+  });
+
+  /**
+   * A grip, rather than making the whole row draggable.
+   *
+   * The row already carries a filename that opens the file, a slot
+   * picker and three buttons; a drag listener over all of that eats
+   * their clicks and their keyboard focus. A handle says where to take
+   * hold and leaves everything else alone — and it is what dnd-kit's
+   * KeyboardSensor binds to, so the gesture has a keyboard equivalent
+   * instead of being pointer-only.
+   */
+  const grip = (
+    <button
+      type="button"
+      ref={drag.setNodeRef}
+      {...drag.listeners}
+      {...drag.attributes}
+      title={`Drag ${fileName} onto a checklist slot`}
+      aria-label={`Move ${fileName} to a checklist slot`}
+      className="shrink-0 cursor-grab touch-none border-0 bg-transparent px-1 text-ink-faint hover:text-ink active:cursor-grabbing"
+    >
+      <span aria-hidden className="text-md leading-none">
+        ⠿
+      </span>
+    </button>
+  );
+
   /**
    * The filename, as a way into the page itself.
    *
@@ -176,7 +210,10 @@ export function UploadRow({
     return (
       <div className="flex flex-col gap-2 rounded-md border border-line bg-surface-raised px-[13px] py-[11px]">
         {preview}
-        <div className="flex items-center justify-between gap-2.5">{name}</div>
+        <div className="flex items-center gap-1">
+          {grip}
+          {name}
+        </div>
         <div className="text-base [&_b]:font-semibold">
           Sorted to · <b>{doc.checklistSlot}</b>
         </div>
@@ -203,7 +240,10 @@ export function UploadRow({
     <div className="flex flex-col gap-2 rounded-md border border-dashed border-pending bg-surface-raised px-[13px] py-[11px]">
       {preview}
       <div className="flex items-center justify-between gap-2.5">
-        {name}
+        <div className="flex min-w-0 items-center gap-1">
+          {grip}
+          {name}
+        </div>
         {suggestion && confidence !== null ? (
           <span className="shrink-0 text-sm text-ink-faint">
             {Math.round(confidence * 100)}% match
