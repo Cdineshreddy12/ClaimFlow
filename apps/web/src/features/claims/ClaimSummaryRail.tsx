@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { formatAmount } from "../../lib/format";
-import { downloadPreauthForm } from "./api";
+import { downloadPreauthForm, useDoctorApprovals } from "./api";
 import { ClaimActions } from "./ClaimActions";
+import { doctorVerdict } from "./doctor-verdict";
 import type { Claim, ClaimGaps } from "./types";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 
@@ -42,6 +43,8 @@ export function ClaimSummaryRail({
   const missing = gaps?.missing.length ?? 0;
   const [printing, setPrinting] = useState(false);
   const [printError, setPrintError] = useState<string | null>(null);
+  const { data: approvals } = useDoctorApprovals(claim.id);
+  const doctor = doctorVerdict(approvals);
 
   return (
     <aside className="static flex flex-col gap-3.5 xl:sticky xl:top-[var(--rail-top,1.25rem)] xl:max-h-[calc(100vh_-_var(--rail-top,1.25rem)_-_20px)] xl:overflow-y-auto xl:overscroll-contain">
@@ -114,7 +117,45 @@ export function ClaimSummaryRail({
               )}
             </dd>
           </div>
+          {/* The treating doctor's answer, on every tab. It was recorded
+              and then shown only inside the dialog you reach by clicking
+              "Ask a doctor" — so a doctor could decline a note, give a
+              reason, and the claim went out without anyone seeing it
+              (docs/adr/0010). */}
+          <div>
+            <dt>Doctor</dt>
+            <dd>
+              {doctor.kind === "declined" ? (
+                <span className="text-critical">Declined</span>
+              ) : doctor.kind === "approved" ? (
+                <span className="text-approved">Signed off</span>
+              ) : doctor.kind === "awaiting" ? (
+                <span className="text-pending">
+                  {doctor.viewed ? "Opened, no answer" : "Waiting"}
+                </span>
+              ) : doctor.kind === "expired" ? (
+                <span className="text-pending">Link expired</span>
+              ) : (
+                <span className="font-medium text-ink-faint">Not asked</span>
+              )}
+            </dd>
+          </div>
         </dl>
+
+        {/* The reason, in full and unabbreviated. "Declined" alone sends
+            the desk hunting for why; the reason is the entire reason the
+            decline requires one. */}
+        {doctor.kind === "declined" ? (
+          <div className="mt-3 rounded-sm border border-critical bg-critical-bg px-2.5 py-2 text-sm leading-snug text-ink">
+            <span className="font-semibold">{doctor.doctorName}</span> declined
+            {doctor.reason ? (
+              <>
+                {" — "}
+                <span className="italic">{doctor.reason}</span>
+              </>
+            ) : null}
+          </div>
+        ) : null}
       </Card>
     </aside>
   );

@@ -1,6 +1,7 @@
 import { PREAUTH_FIELD_BY_KEY } from "@claimflow/contracts";
 import { Button } from "@/components/ui/button";
-import { useReviewForm } from "./api";
+import { useDoctorApprovals, useReviewForm } from "./api";
+import { doctorVerdict } from "./doctor-verdict";
 import type { Claim } from "./types";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -21,12 +22,16 @@ import { Badge } from "@/components/ui/badge";
 export function FormReviewCard({ claim }: { claim: Claim }) {
   const review = useReviewForm(claim.id);
   const result = review.data;
+  const { data: approvals } = useDoctorApprovals(claim.id);
+  const doctor = doctorVerdict(approvals);
 
   return (
     <Card>
       <CardHeader>
         <CardTitle>Check before sending</CardTitle>
-        {result ? (
+        {doctor.kind === "declined" ? (
+          <Badge variant="critical">Doctor declined</Badge>
+        ) : result ? (
           <Badge
             variant={
               result.blockers > 0
@@ -44,6 +49,35 @@ export function FormReviewCard({ claim }: { claim: Claim }) {
           </Badge>
         ) : null}
       </CardHeader>
+
+      {/* Above the findings and independent of them. This is a fact
+          somebody recorded, not something a model inferred, and it does
+          not wait on anyone pressing "Check the form" — the card whose
+          entire job is "read this before you send" is the last place a
+          clinician's refusal should be invisible. */}
+      {doctor.kind === "declined" ? (
+        <div className="mb-3.5 rounded-sm border border-critical border-l-[3px] border-l-critical bg-critical-bg px-[13px] py-[11px]">
+          <div className="text-base font-semibold text-ink">
+            {doctor.doctorName} declined to sign this off
+          </div>
+          {doctor.reason ? (
+            <div className="mt-[5px] text-sm leading-snug text-ink">
+              {doctor.reason}
+            </div>
+          ) : null}
+          {/* Says what it is and isn't. Nothing here blocks a
+              submission — same rule as every other surface on this
+              screen (docs/adr/0005, 0010). */}
+          <div className="mt-[5px] text-sm text-ink-soft">
+            Recorded, not enforced — sending is still your call.
+          </div>
+        </div>
+      ) : doctor.kind === "awaiting" ? (
+        <div className="mb-3.5 rounded-sm border border-pending bg-pending-bg px-[13px] py-[11px] text-sm leading-snug text-ink">
+          Waiting on <b className="font-semibold">{doctor.doctorName}</b>
+          {doctor.viewed ? " — they've opened the link but not answered." : "."}
+        </div>
+      ) : null}
 
       {!result ? (
         <p className="mb-3.5 text-base leading-[1.55] text-ink-soft">
