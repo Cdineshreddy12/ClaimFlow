@@ -1,4 +1,5 @@
 import { createBrowserRouter } from "react-router-dom";
+import { NotFoundPage, RouteErrorPage } from "./NotFoundPage";
 import { ClaimFilePage } from "../features/claims/ClaimFilePage";
 import { ClaimsListPage } from "../features/claims/ClaimsListPage";
 import { NewClaimPage } from "../features/claims/NewClaimPage";
@@ -22,36 +23,49 @@ import {
 
 export const router: ReturnType<typeof createBrowserRouter> =
   createBrowserRouter([
-    { path: "/login", element: <LoginPage /> },
-    { path: "/signup", element: <SignupPage /> },
-    { path: "/invites/:token", element: <AcceptInvitePage /> },
-    // Public: a doctor opens this from a phone link with no account.
-    { path: "/doctor-approval/:token", element: <DoctorApprovalPage /> },
     {
-      element: <RequireAuth />,
+      // Catches a thrown render as well as a bad address — without it
+      // React Router shows its own "Hey developer" screen to a desk
+      // executive.
+      errorElement: <RouteErrorPage />,
       children: [
+        { path: "/login", element: <LoginPage /> },
+        { path: "/signup", element: <SignupPage /> },
+        { path: "/invites/:token", element: <AcceptInvitePage /> },
+        // Public: a doctor opens this from a phone link with no account.
+        { path: "/doctor-approval/:token", element: <DoctorApprovalPage /> },
         {
-          element: <RequireMembership />,
+          element: <RequireAuth />,
           children: [
-            { path: "/onboarding/profile", element: <ProfileWizardPage /> },
             {
-              element: <RequireCompleteProfile />,
+              element: <RequireMembership />,
               children: [
-                { path: "/", element: <DashboardPage /> },
-                { path: "/claims", element: <ClaimsListPage /> },
-                // Ahead of /claims/:id so the intent is obvious on
-                // reading, though React Router ranks the static
-                // segment higher either way.
-                { path: "/claims/new", element: <NewClaimPage /> },
-                { path: "/claims/:id", element: <ClaimFilePage /> },
-                { path: "/queries", element: <QueryInboxPage /> },
-                { path: "/sla", element: <SlaPage /> },
-                { path: "/receivables", element: <ReceivablesPage /> },
-                { path: "/checklist", element: <ChecklistAdminPage /> },
-                { path: "/reports", element: <ReportsPage /> },
+                { path: "/onboarding/profile", element: <ProfileWizardPage /> },
                 {
-                  path: "/settings/branding",
-                  element: <BrandingSettingsPage />,
+                  element: <RequireCompleteProfile />,
+                  children: [
+                    { path: "/", element: <DashboardPage /> },
+                    { path: "/claims", element: <ClaimsListPage /> },
+                    // Ahead of /claims/:id so the intent is obvious on
+                    // reading, though React Router ranks the static
+                    // segment higher either way.
+                    { path: "/claims/new", element: <NewClaimPage /> },
+                    { path: "/claims/:id", element: <ClaimFilePage /> },
+                    { path: "/queries", element: <QueryInboxPage /> },
+                    { path: "/sla", element: <SlaPage /> },
+                    { path: "/receivables", element: <ReceivablesPage /> },
+                    { path: "/checklist", element: <ChecklistAdminPage /> },
+                    { path: "/reports", element: <ReportsPage /> },
+                    {
+                      path: "/settings/branding",
+                      element: <BrandingSettingsPage />,
+                    },
+                    // Last: anything that matched nothing above. Inside the
+                    // auth tree on purpose, so a signed-out visitor still
+                    // lands on the login page rather than a 404 about a
+                    // screen they were never going to see.
+                    { path: "*", element: <NotFoundPage /> },
+                  ],
                 },
               ],
             },
