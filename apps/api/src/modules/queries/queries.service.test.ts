@@ -81,7 +81,7 @@ describe("queries.service", () => {
 
       expect(summarise).toHaveBeenCalledWith({
         rawEmail: "Please revert within 48 hours.",
-        receivedAt: expect.any(Date),
+        sentAt: expect.any(Date),
       });
       expect(inserted()).toMatchObject({
         aiSummary: SUMMARY,
@@ -90,6 +90,44 @@ describe("queries.service", () => {
         summarisedBy: "claude",
         deadlineInferred: true,
       });
+    });
+
+    it("counts the reply window from the email's own Date header", async () => {
+      // The whole point of the feature is beating a TAT. Anchoring
+      // "within 48 hours" to the paste rather than the send hands the
+      // desk hours it does not have — four on an email opened the same
+      // afternoon, a full day on one found the next morning.
+      const summarise = summariserReturning({});
+
+      const { createQuery } = await import("./queries.service.js");
+      await createQuery(auth("desk_head"), CLAIM_ID, {
+        tpaRawEmail: [
+          "From: preauth@tpa.in",
+          "Date: Thu, 6 Nov 2026 11:42:18 +0530",
+          "",
+          "Kindly revert within 48 hours.",
+        ].join("\n"),
+        requestedItems: [],
+      });
+
+      expect(summarise.mock.calls[0]![0].sentAt.toISOString()).toBe(
+        "2026-11-06T06:12:18.000Z",
+      );
+    });
+
+    it("falls back to now when the paste carries no header", async () => {
+      // Only the body was pasted. The email is presumably fresh, and
+      // inventing a send time would be worse than assuming one.
+      const summarise = summariserReturning({});
+
+      const { createQuery } = await import("./queries.service.js");
+      await createQuery(auth("desk_head"), CLAIM_ID, {
+        tpaRawEmail: "Kindly revert within 48 hours.",
+        requestedItems: [],
+      });
+
+      const sentAt: Date = summarise.mock.calls[0]![0].sentAt;
+      expect(Date.now() - sentAt.getTime()).toBeLessThan(5_000);
     });
 
     it("leaves a summary the desk typed alone, and doesn't label it as the model's", async () => {

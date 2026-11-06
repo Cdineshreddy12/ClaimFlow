@@ -19,7 +19,7 @@ const { ClaudeSummariser, getSummariser, setSummariserForTesting } =
  * costs them the claim.
  */
 
-const RECEIVED_AT = new Date("2026-11-04T09:15:00.000Z");
+const SENT_AT = new Date("2026-11-04T09:15:00.000Z");
 
 const EMAIL = [
   "Dear Provider,",
@@ -42,7 +42,7 @@ async function summariseOne(input: unknown, rawEmail = EMAIL) {
   create.mockResolvedValueOnce(toolUse(input));
   return new ClaudeSummariser("test-key").summarise({
     rawEmail,
-    receivedAt: RECEIVED_AT,
+    sentAt: SENT_AT,
   });
 }
 
@@ -82,7 +82,7 @@ describe("ClaudeSummariser", () => {
       type: "tool",
       name: "record_query_summary",
     });
-    expect(request.messages[0].content).toContain(RECEIVED_AT.toISOString());
+    expect(request.messages[0].content).toContain(SENT_AT.toISOString());
     expect(request.messages[0].content).toContain("within 48 hours");
   });
 
@@ -94,7 +94,7 @@ describe("ClaudeSummariser", () => {
     await expect(
       new ClaudeSummariser("test-key").summarise({
         rawEmail: EMAIL,
-        receivedAt: RECEIVED_AT,
+        sentAt: SENT_AT,
       }),
     ).rejects.toThrow("no structured output");
   });

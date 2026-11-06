@@ -16,7 +16,8 @@ export interface QuerySummary {
 export interface QuerySummariser {
   summarise(input: {
     rawEmail: string;
-    receivedAt: Date;
+    /** When the TPA sent it, off the email's own header where it has one. */
+    sentAt: Date;
   }): Promise<QuerySummary>;
 }
 
@@ -73,7 +74,7 @@ export class ClaudeSummariser implements QuerySummariser {
 
   async summarise(input: {
     rawEmail: string;
-    receivedAt: Date;
+    sentAt: Date;
   }): Promise<QuerySummary> {
     const response = await this.client.messages.create({
       model: MODEL,
@@ -85,11 +86,12 @@ export class ClaudeSummariser implements QuerySummariser {
           role: "user",
           content: [
             "An insurer or TPA sent this about a cashless hospital claim.",
-            `Received: ${input.receivedAt.toISOString()}`,
+            `Sent: ${input.sentAt.toISOString()}`,
             "",
             "Summarise what they want and by when. Resolve any relative",
-            "deadline against the received date above. Do not invent a",
-            "deadline the email does not give.",
+            "deadline against the sent date above — their clock is what",
+            "the window runs from, not when the hospital read it. Do not",
+            "invent a deadline the email does not give.",
             "",
             "--- email ---",
             input.rawEmail.slice(0, MAX_EMAIL_CHARS),

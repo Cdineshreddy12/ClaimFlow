@@ -1,4 +1,5 @@
 import type { Role } from "@claimflow/contracts";
+import { emailSentAt } from "../../lib/email-date.js";
 import { getSummariser } from "../../integrations/summariser/claude.js";
 import * as auditService from "../audit/audit.service.js";
 import { getMemberId } from "../members/members.repository.js";
@@ -77,9 +78,14 @@ async function summariseIfBlank(
   if (!summariser || !body.tpaRawEmail) return body;
 
   try {
+    // The TPA's clock, not ours. "Within 48 hours" runs from when they
+    // sent it; anchoring it to the paste would quietly hand the desk
+    // the hours between. Only a paste with no readable header falls
+    // back to now, where the email is presumably fresh anyway.
+    const now = new Date();
     const result = await summariser.summarise({
       rawEmail: body.tpaRawEmail,
-      receivedAt: new Date(),
+      sentAt: emailSentAt(body.tpaRawEmail, now) ?? now,
     });
     return {
       ...body,
