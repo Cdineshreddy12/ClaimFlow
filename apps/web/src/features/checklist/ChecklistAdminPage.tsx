@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Loader } from "@/components/ui/loader";
 import { CoverageCard } from "./CoverageCard";
+import { ProceduresAdminCard } from "./ProceduresAdminCard";
 import { ProposalsCard } from "./ProposalsCard";
 import {
   Select,
@@ -17,6 +18,7 @@ import {
 } from "@/components/ui/select";
 import { useAuth } from "../auth/AuthProvider";
 import {
+  useChecklistCoverage,
   useChecklistRules,
   useCreateRule,
   useDeleteRule,
@@ -77,6 +79,10 @@ export function ChecklistAdminPage() {
 
   const [newDocumentType, setNewDocumentType] = useState("");
 
+  // On the tab itself, so the count of what this pair requires is
+  // readable from the other two tabs without coming back.
+  const ruleCount = data?.rules.length ? String(data.rules.length) : undefined;
+
   function handleAdd(e: React.FormEvent) {
     e.preventDefault();
     const value = newDocumentType.trim();
@@ -90,40 +96,67 @@ export function ChecklistAdminPage() {
       subtitle="What each insurer requires, per procedure"
     >
       {/*
-        One tab, not two. They were always halves of the same job — the
-        master list of who you file with, and what each of them wants —
-        and splitting them meant picking an insurer from a dropdown on
-        one tab while the list of insurers sat on another. The list now
-        drives the picker, so clicking a name is how you get to its
-        rules.
+        Three tabs, one job each.
+
+        These were merged into one on the argument that the insurer
+        master and its rules are halves of the same job. They are — but
+        stacked on a single tab the screen opened with two dropdowns, a
+        seven-row editor, an add box and a five-column table all at
+        once, and nothing said which of them you were meant to read
+        first.
+
+        The link between them survives the split: picking an insurer
+        here carries to the other tabs, and the insurer list still
+        drives the selection, so clicking a name and switching to Rules
+        lands on that insurer's rules.
       */}
       <Tabs
         tabs={[
-          { id: "rules", label: "Insurers & rules" },
+          {
+            id: "rules",
+            label: "Rules",
+            ...(ruleCount
+              ? { badge: ruleCount, badgeTone: "neutral" as const }
+              : {}),
+          },
+          { id: "insurers", label: "Insurers & TPAs" },
+          { id: "procedures", label: "Procedures" },
           { id: "preauth", label: "Pre-auth form" },
         ]}
         active={tab}
         onChange={setTab}
       >
         {tab === "preauth" ? (
-          // Same insurer the rules tab is on, so one selection drives
-          // both halves of what an insurer wants.
+          // The same insurer the other tabs are on, so one selection
+          // drives everything an insurer wants.
           <LayoutEditor
             insurerId={insurerId || undefined}
             insurerName={
               insurers?.find((i) => i.id === insurerId)?.name ?? undefined
             }
           />
+        ) : tab === "procedures" ? (
+          <ProceduresAdminCard
+            selectedId={procedureId}
+            onSelect={(id) => {
+              // Same move as the insurer list: picking one here is how
+              // you get to its rules.
+              setProcedureId(id);
+              setTab("rules");
+            }}
+          />
+        ) : tab === "insurers" ? (
+          <InsurersAdminCard
+            selectedId={insurerId}
+            onSelect={(id) => {
+              // Picking one here is how you get to its rules — the
+              // reason these two ever shared a tab.
+              setInsurerId(id);
+              setTab("rules");
+            }}
+          />
         ) : (
-          <>
-            <RulesTab />
-            <div className="mt-6">
-              <InsurersAdminCard
-                selectedId={insurerId}
-                onSelect={setInsurerId}
-              />
-            </div>
-          </>
+          <RulesTab />
         )}
       </Tabs>
     </AppShell>

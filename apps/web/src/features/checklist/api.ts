@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { ChecklistProposal } from "@claimflow/contracts";
+import type { ChecklistProposal, ProcedureInput } from "@claimflow/contracts";
 import { api } from "@/lib/api-client";
 
 export interface Insurer {
@@ -12,6 +12,9 @@ export interface Procedure {
   id: string;
   name: string;
   code: string | null;
+  /** How much depends on it — what decides whether it can be deleted. */
+  claims?: number;
+  rules?: number;
 }
 
 export interface ChecklistRule {
@@ -42,6 +45,38 @@ export function useProcedures() {
     queryFn: () => api.get<Procedure[]>("/procedures"),
     staleTime: 10 * 60 * 1000,
   });
+}
+
+function useProcedureMutation<TArgs, TResult>(
+  fn: (args: TArgs) => Promise<TResult>,
+) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: fn,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["procedures"] });
+      // A renamed procedure changes what every claim screen and the
+      // coverage view call it.
+      queryClient.invalidateQueries({ queryKey: ["checklist-rules"] });
+    },
+  });
+}
+
+export function useCreateProcedure() {
+  return useProcedureMutation((body: ProcedureInput) =>
+    api.post<Procedure>("/procedures", body),
+  );
+}
+
+export function useUpdateProcedure() {
+  return useProcedureMutation(
+    ({ id, ...body }: ProcedureInput & { id: string }) =>
+      api.patch<Procedure>(`/procedures/${id}`, body),
+  );
+}
+
+export function useDeleteProcedure() {
+  return useProcedureMutation((id: string) => api.delete(`/procedures/${id}`));
 }
 
 export function useChecklistRules(insurerId: string, procedureId: string) {

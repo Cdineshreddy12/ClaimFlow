@@ -126,6 +126,7 @@ export function InsurersAdminCard({
 
   async function onDelete(insurer: Insurer) {
     setError(null);
+    setConfirmingDelete(null);
     try {
       await remove.mutateAsync(insurer.id);
     } catch (err) {
@@ -158,11 +159,75 @@ export function InsurersAdminCard({
     );
   }
 
+  /*
+    One form, two homes.
+
+    It only ever rendered above the table. Adding is fine there — it
+    is where the "Add insurer" button is — but editing the thirtieth
+    insurer scrolled the form off the top of the screen while the row
+    you clicked stayed where it was, so the click looked like it had
+    done nothing. Editing now happens in the row's own place.
+  */
+  const editForm = (
+    <form
+      className="flex flex-col items-stretch gap-2 sm:flex-row sm:flex-wrap sm:items-center [&>*:first-child]:sm:flex-[2_1_200px] [&>*:nth-child(2)]:sm:flex-[0_1_130px] [&>*:nth-child(3)]:sm:flex-[0_1_130px] [&>*:nth-child(4)]:sm:flex-[1_1_180px]"
+      onSubmit={submit}
+    >
+      <Input
+        aria-label="Name"
+        placeholder="e.g. Star Health TPA"
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+      />
+      <Select value={type} onValueChange={(v) => setType(v as InsurerType)}>
+        <SelectTrigger aria-label="Type">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="tpa">TPA</SelectItem>
+          <SelectItem value="insurer">Insurer</SelectItem>
+          {/* PM-JAY and the state schemes. A payer on this list
+                rather than a table of its own, so scheme checklist
+                rules and scheme form layouts come from the machinery
+                that already exists. */}
+          <SelectItem value="scheme">Government scheme</SelectItem>
+        </SelectContent>
+      </Select>
+      <Input
+        aria-label="Short code"
+        placeholder="Code"
+        value={code}
+        onChange={(e) => setCode(e.target.value)}
+      />
+      <Input
+        aria-label="Claims email"
+        type="email"
+        placeholder="Claims email"
+        value={contactEmail}
+        onChange={(e) => setContactEmail(e.target.value)}
+      />
+      <Button type="submit" disabled={!name.trim() || busy}>
+        {editingId ? "Save" : "Add"}
+      </Button>
+      <Button
+        type="button"
+        variant="outline"
+        onClick={() => {
+          reset();
+          setShowForm(false);
+        }}
+      >
+        Cancel
+      </Button>
+    </form>
+  );
+
   const rows = (insurers ?? []).filter((i) => showRetired || i.isActive);
   const retiredCount = (insurers ?? []).filter((i) => !i.isActive).length;
 
   return (
     <Card>
+      {deleteConfirm}
       <CardHeader>
         <CardTitle>Insurers &amp; TPAs</CardTitle>
         <div className="flex items-center gap-3">
@@ -183,59 +248,7 @@ export function InsurersAdminCard({
         </div>
       </CardHeader>
 
-      {showForm || editingId ? (
-        <form
-          className="mb-4 flex flex-col items-stretch gap-2 sm:flex-row sm:flex-wrap sm:items-center [&>*:first-child]:sm:flex-[2_1_200px] [&>*:nth-child(2)]:sm:flex-[0_1_130px] [&>*:nth-child(3)]:sm:flex-[0_1_130px] [&>*:nth-child(4)]:sm:flex-[1_1_180px]"
-          onSubmit={submit}
-        >
-          <Input
-            aria-label="Name"
-            placeholder="e.g. Star Health TPA"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-          />
-          <Select value={type} onValueChange={(v) => setType(v as InsurerType)}>
-            <SelectTrigger aria-label="Type">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="tpa">TPA</SelectItem>
-              <SelectItem value="insurer">Insurer</SelectItem>
-              {/* PM-JAY and the state schemes. A payer on this list
-                  rather than a table of its own, so scheme checklist
-                  rules and scheme form layouts come from the machinery
-                  that already exists. */}
-              <SelectItem value="scheme">Government scheme</SelectItem>
-            </SelectContent>
-          </Select>
-          <Input
-            aria-label="Short code"
-            placeholder="Code"
-            value={code}
-            onChange={(e) => setCode(e.target.value)}
-          />
-          <Input
-            aria-label="Claims email"
-            type="email"
-            placeholder="Claims email"
-            value={contactEmail}
-            onChange={(e) => setContactEmail(e.target.value)}
-          />
-          <Button type="submit" disabled={!name.trim() || busy}>
-            {editingId ? "Save" : "Add"}
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => {
-              reset();
-              setShowForm(false);
-            }}
-          >
-            Cancel
-          </Button>
-        </form>
-      ) : null}
+      {showForm && !editingId ? <div className="mb-4">{editForm}</div> : null}
 
       {error ? (
         <div className="mb-3 flex items-center justify-between gap-3 rounded-md border border-critical bg-critical-bg px-3.5 py-2.5 text-base font-medium text-critical mt-3">
@@ -260,83 +273,94 @@ export function InsurersAdminCard({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {rows.map((insurer) => (
-              <TableRow
-                key={insurer.id}
-                className={`${insurer.isActive ? "" : "[&>td]:opacity-60"}${
-                  insurer.id === selectedId ? " bg-accent-soft" : ""
-                }`}
-              >
-                <TableCell>
-                  <div className="flex items-center gap-2 font-medium">
-                    {onSelect ? (
-                      <button
-                        type="button"
-                        onClick={() => onSelect(insurer.id)}
-                        title="Show this one's document rules"
-                        className="cursor-pointer border-0 bg-transparent p-0 text-left font-[inherit] text-[length:inherit] font-medium text-accent-ink underline decoration-dotted underline-offset-2"
-                      >
-                        {insurer.name}
-                      </button>
-                    ) : (
-                      insurer.name
-                    )}
-                    {!insurer.isActive ? (
-                      <Badge variant="neutral">Retired</Badge>
+            {rows.map((insurer) =>
+              // The row becomes the form while it is being edited, so
+              // the fields appear where the click happened rather than
+              // at the top of a table you may have scrolled past.
+              insurer.id === editingId ? (
+                <TableRow key={insurer.id}>
+                  <TableCell colSpan={5} className="bg-accent-soft/40">
+                    {editForm}
+                  </TableCell>
+                </TableRow>
+              ) : (
+                <TableRow
+                  key={insurer.id}
+                  className={`${insurer.isActive ? "" : "[&>td]:opacity-60"}${
+                    insurer.id === selectedId ? " bg-accent-soft" : ""
+                  }`}
+                >
+                  <TableCell>
+                    <div className="flex items-center gap-2 font-medium">
+                      {onSelect ? (
+                        <button
+                          type="button"
+                          onClick={() => onSelect(insurer.id)}
+                          title="Show this one's document rules"
+                          className="cursor-pointer border-0 bg-transparent p-0 text-left font-[inherit] text-[length:inherit] font-medium text-accent-ink underline decoration-dotted underline-offset-2"
+                        >
+                          {insurer.name}
+                        </button>
+                      ) : (
+                        insurer.name
+                      )}
+                      {!insurer.isActive ? (
+                        <Badge variant="neutral">Retired</Badge>
+                      ) : null}
+                    </div>
+                    {insurer.contactEmail ? (
+                      <span className="proc">{insurer.contactEmail}</span>
                     ) : null}
-                  </div>
-                  {insurer.contactEmail ? (
-                    <span className="proc">{insurer.contactEmail}</span>
-                  ) : null}
-                </TableCell>
-                <TableCell>{INSURER_TYPE_LABEL[insurer.type]}</TableCell>
-                <TableCell className="font-mono tabular-nums">
-                  {insurer.claimCount}
-                </TableCell>
-                <TableCell className="font-mono tabular-nums">
-                  {insurer.ruleCount}
-                </TableCell>
-                <TableCell className="flex justify-end gap-1 whitespace-nowrap">
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    disabled={busy}
-                    onClick={() => startEdit(insurer)}
-                  >
-                    Edit
-                  </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    disabled={busy}
-                    onClick={() =>
-                      setActive.mutate({
-                        id: insurer.id,
-                        isActive: !insurer.isActive,
-                      })
-                    }
-                  >
-                    {insurer.isActive ? "Retire" : "Reinstate"}
-                  </Button>
-                  {/* Only offered when nothing depends on it. The API
-                        refuses otherwise; not showing the button spares
-                        the desk finding out the hard way. */}
-                  {insurer.claimCount === 0 && insurer.ruleCount === 0 ? (
+                  </TableCell>
+                  <TableCell>{INSURER_TYPE_LABEL[insurer.type]}</TableCell>
+                  <TableCell className="font-mono tabular-nums">
+                    {insurer.claimCount}
+                  </TableCell>
+                  <TableCell className="font-mono tabular-nums">
+                    {insurer.ruleCount}
+                  </TableCell>
+                  <TableCell className="flex justify-end gap-1 whitespace-nowrap">
                     <Button
                       type="button"
                       size="sm"
                       variant="outline"
                       disabled={busy}
-                      onClick={() => onDelete(insurer)}
+                      onClick={() => startEdit(insurer)}
                     >
-                      Delete
+                      Edit
                     </Button>
-                  ) : null}
-                </TableCell>
-              </TableRow>
-            ))}
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      disabled={busy}
+                      onClick={() =>
+                        setActive.mutate({
+                          id: insurer.id,
+                          isActive: !insurer.isActive,
+                        })
+                      }
+                    >
+                      {insurer.isActive ? "Retire" : "Reinstate"}
+                    </Button>
+                    {/* Only offered when nothing depends on it. The API
+                        refuses otherwise; not showing the button spares
+                        the desk finding out the hard way. */}
+                    {insurer.claimCount === 0 && insurer.ruleCount === 0 ? (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        disabled={busy}
+                        onClick={() => setConfirmingDelete(insurer)}
+                      >
+                        Delete
+                      </Button>
+                    ) : null}
+                  </TableCell>
+                </TableRow>
+              ),
+            )}
           </TableBody>
         </Table>
       )}
