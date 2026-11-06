@@ -56,10 +56,21 @@ const RECOGNISE_TOOL: Anthropic.Tool = {
       document_kind: {
         type: ["string", "null"],
         description:
-          "What this document is, in a few words (e.g. 'ultrasound report', 'discharge summary', 'pharmacy receipt'). Null if unreadable.",
+          "What this document is, in a few words (e.g. 'ultrasound report', 'discharge summary', 'pharmacy receipt', 'company logo', 'screenshot'). Null if unreadable.",
+      },
+      is_claim_document: {
+        type: "boolean",
+        description:
+          "False if this is not a hospital or insurance document at all — a logo, a screenshot, a photo of a person or a place, a slide, a meme, an invoice from an unrelated business. Judge the page itself, never the filename.",
       },
     },
-    required: ["claim_reference", "confidence", "reason", "document_kind"],
+    required: [
+      "claim_reference",
+      "confidence",
+      "reason",
+      "document_kind",
+      "is_claim_document",
+    ],
   },
 };
 
@@ -166,9 +177,15 @@ export class ClaudeRecogniser implements ClaimRecogniser {
                     `- ${c.reference} — ${c.patientName}, ${c.procedureName}, ${c.insurerName} (${c.status})`,
                 ),
                 "",
-                "Match on what the page actually says: the patient's name, a UHID,",
-                "a claim reference, a policy number, or a procedure that only one",
-                "of these claims could be about.",
+                "First: is this a hospital or insurance document at all? Files get",
+                "dropped in here by mistake — a logo, a screenshot, a photo, a",
+                "slide, an invoice from some other business. Set is_claim_document",
+                "false for those and leave the claim null. Judge the page, not the",
+                "filename: a file called estimate_sheet.png can be anything.",
+                "",
+                "If it is one: match on what the page actually says — the patient's",
+                "name, a UHID, a claim reference, a policy number, or a procedure",
+                "that only one of these claims could be about.",
                 "",
                 "Return null rather than guessing. Filing a document onto the wrong",
                 "patient's claim is the worst thing that can happen here — much",
@@ -194,7 +211,24 @@ export class ClaudeRecogniser implements ClaimRecogniser {
       confidence: number;
       reason: string;
       document_kind: string | null;
+      is_claim_document: boolean;
     };
+
+    // A file that isn't a claim document has no business matching a
+    // claim, whatever else the model said. Asked only "which of these
+    // claims is it", a model will answer the question it was given —
+    // a logo came back filed as a pre-authorisation form. The refusal
+    // has to be a question it was actually asked.
+    if (result.is_claim_document === false) {
+      return {
+        claimId: null,
+        confidence: 0,
+        reason: result.document_kind
+          ? `Doesn't look like a claim document — it appears to be a ${result.document_kind}.`
+          : "Doesn't look like a claim document.",
+        documentKind: result.document_kind ?? null,
+      };
+    }
 
     // Resolve the reference against the list we actually offered. The
     // model can return a reference that doesn't exist, and a made-up

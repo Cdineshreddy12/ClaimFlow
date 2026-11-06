@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import type Anthropic from "@anthropic-ai/sdk";
-import type { Role } from "@claimflow/contracts";
+import { LOW_CONFIDENCE_THRESHOLD, type Role } from "@claimflow/contracts";
 import {
   getAssistant,
   type AssistantEvent,
@@ -175,8 +175,15 @@ async function recognise(
         readBytes,
         ocrText,
       });
-      slot = classification.slot;
-      slotConfidence = classification.slot ? classification.confidence : null;
+      // A floor the upload row deliberately doesn't apply. There, a
+      // weak suggestion sits beside a dropdown and costs a glance to
+      // reject. Here it becomes a proposal to file, and a desk
+      // approving a row of cards reads the filename and the claim far
+      // more carefully than the slot — so a guess at the slot is the
+      // one most likely to be waved through.
+      const confident = classification.confidence >= LOW_CONFIDENCE_THRESHOLD;
+      slot = confident ? classification.slot : null;
+      slotConfidence = slot ? classification.confidence : null;
     }
   }
 
@@ -415,6 +422,17 @@ export async function chat(
         "",
         "Propose a filing for each one you are confident about, and say plainly",
         "which you aren't — an unidentified file needs the desk to pick the claim.",
+        "",
+        "Never propose a filing for a file whose 'identified by' says it doesn't",
+        "look like a claim document, or whose claim_id is unknown. Name what it",
+        "appears to be and leave it alone. A stray logo or screenshot filed into",
+        "a checklist slot is worse than one left sitting in the panel: the slot",
+        "then reads as answered, and the document it was waiting for never gets",
+        "chased.",
+        "",
+        "A file with no suggested slot is not a file with no home — it is one",
+        "nothing read confidently enough to place. Ask which slot, or propose",
+        "only the claim.",
         "",
         "The ids above are for the tools. Never put one in a sentence: call each",
         "file by its filename. A desk executive recognises IMG_0423.jpg and has",

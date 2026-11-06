@@ -41,8 +41,13 @@ const CLASSIFY_TOOL: Anthropic.Tool = {
         description:
           "A short quote or description of what in the document identifies it. This is shown to desk staff.",
       },
+      is_claim_document: {
+        type: "boolean",
+        description:
+          "False if this is not a hospital or insurance document at all — a logo, a screenshot, a photo of a person or a place, a slide, an invoice from an unrelated business. Judge the page itself, never the filename.",
+      },
     },
-    required: ["slot", "confidence", "reason"],
+    required: ["slot", "confidence", "reason", "is_claim_document"],
   },
 };
 
@@ -138,13 +143,26 @@ export class ClaudeClassifier implements DocumentClassifier {
                     ]
                   : []),
                 "",
-                "Decide which of these checklist slots it belongs in:",
+                "First: is this a hospital or insurance document at all? Files get",
+                "dropped in here by mistake — a logo, a screenshot, a photo, a",
+                "slide. Set is_claim_document false for those and return a null",
+                "slot. Judge the page, not the filename: a file called",
+                "estimate_sheet.png can be anything.",
+                "",
+                "If it is one, decide which of these checklist slots it belongs in:",
                 ...input.candidateSlots.map((s) => `- ${s}`),
                 "",
-                "Copy the slot text verbatim if one fits. If none fits, return null —",
-                "a wrong suggestion costs the desk more time than no suggestion.",
-                "Many of these are handwritten scans; say so in your reason if the",
-                "writing is unclear rather than guessing confidently.",
+                "This list is what the claim is still missing, not a description of",
+                "what you are holding. There is no requirement that one of them fit,",
+                "and most documents fit none of them. Return null unless the",
+                "document IS the thing the slot names — an ultrasound scan is not a",
+                "photo ID proof, and a cost estimate is not a pre-authorisation",
+                "form. Do not pick the closest one; a wrong suggestion costs the",
+                "desk more time than no suggestion.",
+                "",
+                "Copy the slot text verbatim when one does fit. Many of these are",
+                "handwritten scans; say so in your reason if the writing is unclear",
+                "rather than guessing confidently.",
               ].join("\n"),
             },
           ],
@@ -168,7 +186,21 @@ export class ClaudeClassifier implements DocumentClassifier {
       slot: string | null;
       confidence: number;
       reason: string;
+      is_claim_document: boolean;
     };
+
+    // Nothing that isn't a claim document gets a slot, whatever else
+    // came back. Asked only "which of these slots", a model answers
+    // that question — a company logo was coming back as a
+    // pre-authorisation form. The refusal has to be a field it fills in.
+    if (result.is_claim_document === false) {
+      return {
+        slot: null,
+        confidence: 0,
+        reason: `Doesn't look like a claim document. ${result.reason}`.trim(),
+        classifiedBy: "claude",
+      };
+    }
 
     // Trust nothing: the model can return a slot that isn't on this
     // claim's checklist, and filing against a slot that doesn't exist
