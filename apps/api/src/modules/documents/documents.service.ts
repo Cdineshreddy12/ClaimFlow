@@ -16,6 +16,10 @@ import type { RequestUploadUrlBody } from "./documents.schema.js";
 
 export class ClaimNotFoundError extends Error {}
 export class DocumentNotFoundError extends Error {}
+/** Re-reading a filed document would overwrite the evidence someone acted on. */
+export class DocumentAlreadyFiledError extends Error {}
+/** The classifier couldn't read the file — a corrupt scan, or a format it refuses. */
+export class DocumentUnreadableError extends Error {}
 
 interface AuthContext {
   userId: string;
@@ -130,6 +134,79 @@ export async function classifyDocument(
       error: err instanceof Error ? err.message : String(err),
     });
     return undefined;
+  }
+}
+
+/**
+ * Reads an already-uploaded document again, against the checklist as it
+ * stands now.
+ *
+ * A classification is a point-in-time answer to "which of these slots",
+ * and the list it was asked about changes: a cost estimate was read on
+ * the 4th against six slots, correctly refused all of them, and on the
+ * 5th the claim gained a "Cost estimate" slot. The stored refusal then
+ * described a checklist that no longer existed, while the right slot
+ * sat in the dropdown underneath it.
+ *
+ * On demand rather than automatically on every slot addition: that
+ * would mean model calls the desk never asked for and cannot see the
+ * cost of, for documents nobody is currently filing.
+ *
+ * Confirmed documents are refused. A filed document is a settled
+ * decision, and re-reading it would replace the evidence a human
+ * actually acted on with a fresh opinion of the same page.
+ */
+export async function reclassifyDocument(
+  auth: AuthContext,
+  claimId: string,
+  documentId: string,
+) {
+  const document = await documentsRepository.getById(claimId, documentId);
+  if (!document) throw new DocumentNotFoundError(documentId);
+  if (document.confirmedAt) throw new DocumentAlreadyFiledError(documentId);
+
+  const updated = await classifyDocument(
+    auth,
+    claimId,
+    documentId,
+    document.fileUrl,
+    contentTypeFromKey(document.fileUrl),
+  );
+
+  // classifyDocument swallows its own failures, which is right on the
+  // upload path — the file is stored and the desk can pick a slot by
+  // hand, so failing the upload would report a break that didn't
+  // happen. Here it is wrong: somebody pressed a button and is waiting
+  // to see what it did. An unchanged row returned as success is a
+  // button that silently does nothing.
+  if (!updated) throw new DocumentUnreadableError(documentId);
+  return updated;
+}
+
+/**
+ * The upload recorded no content type, so the extension is what's left.
+ *
+ * Only has to be good enough for the classifier to decide how to attach
+ * the bytes; anything it doesn't recognise comes back as a type the
+ * classifier declines to read, which is the honest outcome for a file
+ * we can't identify either.
+ */
+function contentTypeFromKey(key: string): string {
+  const ext = key.toLowerCase().split(".").pop() ?? "";
+  switch (ext) {
+    case "jpg":
+    case "jpeg":
+      return "image/jpeg";
+    case "png":
+      return "image/png";
+    case "gif":
+      return "image/gif";
+    case "webp":
+      return "image/webp";
+    case "pdf":
+      return "application/pdf";
+    default:
+      return "application/octet-stream";
   }
 }
 

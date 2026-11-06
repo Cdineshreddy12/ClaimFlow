@@ -3,6 +3,7 @@ import {
   useConfirmDocument,
   useDiscardDocument,
   useDocuments,
+  useReclassifyDocument,
   useUploadDocument,
 } from "../documents/api";
 import type { Claim } from "./types";
@@ -15,6 +16,7 @@ export function UploadedDocumentsCard({ claim }: { claim: Claim }) {
   const uploadDoc = useUploadDocument(claim.id);
   const confirmDoc = useConfirmDocument(claim.id);
   const discardDoc = useDiscardDocument(claim.id);
+  const reread = useReclassifyDocument(claim.id);
   const fileInput = useRef<HTMLInputElement>(null);
 
   return (
@@ -59,11 +61,24 @@ export function UploadedDocumentsCard({ claim }: { claim: Claim }) {
               key={doc.id}
               doc={doc}
               claim={claim}
-              isBusy={confirmDoc.isPending || discardDoc.isPending}
+              isBusy={
+                confirmDoc.isPending || discardDoc.isPending || reread.isPending
+              }
               onConfirm={(checklistSlot) =>
                 confirmDoc.mutate({ documentId: doc.id, checklistSlot })
               }
               onDiscard={() => discardDoc.mutate(doc.id)}
+              onReread={() => reread.mutate(doc.id)}
+              // Scoped to the row that was actually re-read — one
+              // mutation serves the whole list, and an error shown
+              // on every row would blame files nobody touched.
+              rereadError={
+                reread.isError && reread.variables === doc.id
+                  ? reread.error instanceof Error
+                    ? reread.error.message
+                    : "Couldn't read this document."
+                  : null
+              }
             />
           ))}
         </div>

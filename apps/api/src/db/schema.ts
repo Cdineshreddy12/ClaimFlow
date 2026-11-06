@@ -361,6 +361,15 @@ export const documents = pgTable(
     classifiedBy: text("classified_by"),
     /** Why the classifier thinks so; shown to the human before they confirm. */
     classificationReason: text("classification_reason"),
+    /**
+     * When it was last read — not when it was uploaded.
+     *
+     * A classification answers "which of these slots", and the claim's
+     * checklist changes underneath it. This is what lets the claim
+     * screen tell a current reading from one that predates a slot the
+     * claim has since gained.
+     */
+    classifiedAt: timestamp("classified_at", { withTimezone: true }),
     confirmedBy: uuid("confirmed_by").references(() => members.id),
     confirmedAt: timestamp("confirmed_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true })

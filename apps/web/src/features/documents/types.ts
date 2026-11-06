@@ -10,6 +10,8 @@ export interface ClaimDocument {
   confidence: string | null;
   classifiedBy: ClassifierKind | null;
   classificationReason: string | null;
+  /** When it was last read. Null means nothing ever has been. */
+  classifiedAt?: string | null;
   confirmedBy: string | null;
   confirmedAt: string | null;
   createdAt: string;

@@ -3,7 +3,9 @@ import { authenticate } from "../../middleware/authenticate.js";
 import * as documentsService from "./documents.service.js";
 import {
   ClaimNotFoundError,
+  DocumentAlreadyFiledError,
   DocumentNotFoundError,
+  DocumentUnreadableError,
 } from "./documents.service.js";
 import {
   ClaimIdParams,
@@ -93,6 +95,40 @@ export async function registerDocumentsRoutes(app: FastifyInstance) {
     } catch (err) {
       if (err instanceof DocumentNotFoundError) {
         return reply.code(404).send({ error: "document not found" });
+      }
+      throw err;
+    }
+  });
+
+  /**
+   * Read it again, against the checklist as it stands now.
+   *
+   * POST rather than PATCH: it spends a model call and overwrites the
+   * suggestion columns, which is an action rather than an edit to a
+   * field the caller supplied.
+   */
+  app.post("/:documentId/reclassify", async (request, reply) => {
+    const { claimId, documentId } = DocumentIdParams.parse(request.params);
+    try {
+      const updated = await documentsService.reclassifyDocument(
+        request.authUser!,
+        claimId,
+        documentId,
+      );
+      return reply.send(updated);
+    } catch (err) {
+      if (err instanceof DocumentNotFoundError) {
+        return reply.code(404).send({ error: "document not found" });
+      }
+      if (err instanceof DocumentAlreadyFiledError) {
+        return reply
+          .code(422)
+          .send({ error: "this document is already filed" });
+      }
+      if (err instanceof DocumentUnreadableError) {
+        return reply
+          .code(422)
+          .send({ error: "couldn't read this document — pick a slot by hand" });
       }
       throw err;
     }

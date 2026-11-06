@@ -55,6 +55,9 @@ export async function saveClassification(
       confidence: classification.confidence.toFixed(3),
       classificationReason: classification.reason,
       classifiedBy: classification.classifiedBy,
+      // Stamped on every write, so a re-read clears the "this predates
+      // the current checklist" flag that prompted it.
+      classifiedAt: new Date(),
     })
     .where(eq(documents.id, documentId))
     .returning();

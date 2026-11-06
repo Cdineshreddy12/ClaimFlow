@@ -76,6 +76,28 @@ export function useConfirmDocument(claimId: string) {
   });
 }
 
+/**
+ * Reads a document again against the checklist as it stands now.
+ *
+ * Only invalidates the document list — a re-read changes a suggestion,
+ * never a filing, so the gap view cannot have moved.
+ */
+export function useReclassifyDocument(claimId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (documentId: string) =>
+      api.post<ClaimDocument>(
+        `/claims/${claimId}/documents/${documentId}/reclassify`,
+        {},
+      ),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ["claims", claimId, "documents"],
+      });
+    },
+  });
+}
+
 export function useDiscardDocument(claimId: string) {
   const queryClient = useQueryClient();
   return useMutation({

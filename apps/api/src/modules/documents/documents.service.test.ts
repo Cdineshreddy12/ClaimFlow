@@ -2,10 +2,16 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as documentsRepository from "./documents.repository.js";
 import * as s3 from "../../integrations/storage/s3.js";
 import * as orgMembersRepository from "../members/members.repository.js";
+import * as claimsRepository from "../claims/claims.repository.js";
+import * as classifier from "../../integrations/classifier/index.js";
 
 vi.mock("./documents.repository.js");
 vi.mock("../../integrations/storage/s3.js");
 vi.mock("../members/members.repository.js");
+vi.mock("../claims/claims.repository.js");
+vi.mock("../../integrations/classifier/index.js");
+vi.mock("../../integrations/ocr/textract.js");
+vi.mock("../audit/audit.service.js");
 
 const USER_ID = "22222222-2222-2222-2222-222222222222";
 const CLAIM_ID = "33333333-3333-3333-3333-333333333333";
@@ -130,6 +136,112 @@ describe("documents.service", () => {
         discardDocument(auth(), CLAIM_ID, DOCUMENT_ID),
       ).rejects.toThrow(DocumentNotFoundError);
       expect(s3.deleteObject).not.toHaveBeenCalled();
+    });
+  });
+
+  /**
+   * A classification answers "which of these slots", and the list moves
+   * underneath it: a cost estimate was read against six slots, refused
+   * them all correctly, and the next day the claim gained a "Cost
+   * estimate" slot. Re-reading is how that answer catches up.
+   */
+  describe("reclassifyDocument", () => {
+    it("reads the file again against the checklist as it stands now", async () => {
+      vi.mocked(documentsRepository.getById).mockResolvedValue({
+        id: DOCUMENT_ID,
+        fileUrl: "claims/x/estimate_sheet.png",
+        confirmedAt: null,
+      } as never);
+      vi.mocked(claimsRepository.getClaimById).mockResolvedValue({
+        checklistSnapshot: [
+          { documentType: "Photo ID proof" },
+          { documentType: "Cost estimate" },
+        ],
+      } as never);
+      vi.mocked(s3.getObjectBytes).mockResolvedValue(new Uint8Array([1]));
+      const classify = vi.fn().mockResolvedValue({
+        slot: "Cost estimate",
+        confidence: 0.94,
+        reason: "Headed ESTIMATED COST OF HOSPITALISATION.",
+        classifiedBy: "claude",
+      });
+      vi.mocked(classifier.getClassifier).mockReturnValue({ classify });
+      vi.mocked(documentsRepository.saveClassification).mockResolvedValue({
+        id: DOCUMENT_ID,
+        aiClassifiedType: "Cost estimate",
+      } as never);
+
+      const { reclassifyDocument } = await import("./documents.service.js");
+      await reclassifyDocument(auth(), CLAIM_ID, DOCUMENT_ID);
+
+      // The slot added since the first read is on the list this time.
+      expect(classify).toHaveBeenCalledWith(
+        expect.objectContaining({
+          candidateSlots: ["Photo ID proof", "Cost estimate"],
+          // Derived from the key, because the upload stored no content type.
+          contentType: "image/png",
+        }),
+      );
+      expect(documentsRepository.saveClassification).toHaveBeenCalledWith(
+        DOCUMENT_ID,
+        expect.objectContaining({ slot: "Cost estimate" }),
+      );
+    });
+
+    it("refuses a document that is already filed", async () => {
+      vi.mocked(documentsRepository.getById).mockResolvedValue({
+        id: DOCUMENT_ID,
+        fileUrl: "claims/x/estimate_sheet.png",
+        confirmedAt: "2026-11-05T12:00:00.000Z",
+      } as never);
+
+      const { reclassifyDocument, DocumentAlreadyFiledError } =
+        await import("./documents.service.js");
+
+      // Re-reading a filed document would replace the evidence a human
+      // actually acted on with a fresh opinion of the same page.
+      await expect(
+        reclassifyDocument(auth(), CLAIM_ID, DOCUMENT_ID),
+      ).rejects.toThrow(DocumentAlreadyFiledError);
+      expect(documentsRepository.saveClassification).not.toHaveBeenCalled();
+    });
+
+    it("raises when the classifier can't read the file", async () => {
+      vi.mocked(documentsRepository.getById).mockResolvedValue({
+        id: DOCUMENT_ID,
+        fileUrl: "claims/x/blank.png",
+        confirmedAt: null,
+      } as never);
+      vi.mocked(claimsRepository.getClaimById).mockResolvedValue({
+        checklistSnapshot: [{ documentType: "Photo ID proof" }],
+      } as never);
+      vi.mocked(s3.getObjectBytes).mockResolvedValue(new Uint8Array([1]));
+      vi.mocked(classifier.getClassifier).mockReturnValue({
+        // What the Anthropic API actually does with a 146-byte
+        // placeholder PNG: 400, "Could not process image".
+        classify: vi.fn().mockRejectedValue(new Error("Could not process")),
+      });
+
+      const { reclassifyDocument, DocumentUnreadableError } =
+        await import("./documents.service.js");
+
+      // The upload path swallows this on purpose — the file is stored
+      // and a human can pick a slot. Here somebody pressed a button and
+      // is owed an answer.
+      await expect(
+        reclassifyDocument(auth(), CLAIM_ID, DOCUMENT_ID),
+      ).rejects.toThrow(DocumentUnreadableError);
+    });
+
+    it("raises when the document isn't there", async () => {
+      vi.mocked(documentsRepository.getById).mockResolvedValue(undefined);
+
+      const { reclassifyDocument, DocumentNotFoundError } =
+        await import("./documents.service.js");
+
+      await expect(
+        reclassifyDocument(auth(), CLAIM_ID, DOCUMENT_ID),
+      ).rejects.toThrow(DocumentNotFoundError);
     });
   });
 });
