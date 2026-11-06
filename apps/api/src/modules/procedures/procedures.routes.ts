@@ -10,6 +10,11 @@ import {
 } from "./procedures.service.js";
 
 const IdParams = z.object({ id: z.string().uuid() });
+const SetActiveBody = z.object({ isActive: z.boolean() });
+/** Only the admin screen asks for retired rows; every picker wants the live list. */
+const ListQuery = z.object({
+  includeInactive: z.enum(["true", "false"]).optional(),
+});
 
 /**
  * The procedure master.
@@ -22,9 +27,10 @@ const IdParams = z.object({ id: z.string().uuid() });
 export async function registerProceduresRoutes(app: FastifyInstance) {
   app.addHook("preHandler", authenticate);
 
-  app.get("/", async (_request, reply) =>
-    reply.send(await service.listProcedures()),
-  );
+  app.get("/", async (request, reply) => {
+    const { includeInactive } = ListQuery.parse(request.query);
+    return reply.send(await service.listProcedures(includeInactive === "true"));
+  });
 
   app.post(
     "/",
@@ -39,7 +45,7 @@ export async function registerProceduresRoutes(app: FastifyInstance) {
         if (err instanceof DuplicateProcedureError) {
           return reply
             .code(409)
-            .send({ error: "a procedure with that name already exists" });
+            .send({ error: "A procedure with that name already exists" });
         }
         throw err;
       }
@@ -63,7 +69,26 @@ export async function registerProceduresRoutes(app: FastifyInstance) {
         if (err instanceof DuplicateProcedureError) {
           return reply
             .code(409)
-            .send({ error: "a procedure with that name already exists" });
+            .send({ error: "A procedure with that name already exists" });
+        }
+        throw err;
+      }
+    },
+  );
+
+  app.patch(
+    "/:id/active",
+    { preHandler: requireRole("org_admin", "desk_head") },
+    async (request, reply) => {
+      const { id } = IdParams.parse(request.params);
+      const { isActive } = SetActiveBody.parse(request.body);
+      try {
+        return reply.send(
+          await service.setProcedureActive(request.authUser!, id, isActive),
+        );
+      } catch (err) {
+        if (err instanceof ProcedureNotFoundError) {
+          return reply.code(404).send({ error: "procedure not found" });
         }
         throw err;
       }
@@ -83,9 +108,9 @@ export async function registerProceduresRoutes(app: FastifyInstance) {
           return reply.code(404).send({ error: "procedure not found" });
         }
         if (err instanceof ProcedureInUseError) {
-          // Says what depends on it, because the answer is "rename it".
+          // Says what depends on it, because the answer is "retire it".
           return reply.code(409).send({
-            error: `In use by ${err.usage.claims} claim(s) and ${err.usage.rules} rule(s) — rename it instead.`,
+            error: `In use by ${err.usage.claims} claim(s) and ${err.usage.rules} rule(s) — retire it instead.`,
           });
         }
         throw err;

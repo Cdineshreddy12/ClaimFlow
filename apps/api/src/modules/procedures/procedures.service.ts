@@ -16,8 +16,34 @@ interface AuthContext {
   userId: string;
 }
 
-export function listProcedures() {
-  return repo.list();
+export function listProcedures(includeInactive = false) {
+  return repo.list(includeInactive);
+}
+
+/**
+ * Retiring, not deleting. Claims already opened keep the procedure they
+ * were opened under; it just stops being offered on new ones.
+ *
+ * This is the operation a hospital actually needs on a list that lives
+ * for years. Deleting is refused the moment a claim references the row,
+ * so without this a procedure the hospital had stopped doing stayed in
+ * the picker permanently.
+ */
+export async function setProcedureActive(
+  auth: AuthContext,
+  id: string,
+  isActive: boolean,
+) {
+  const updated = await repo.setActive(id, isActive);
+  if (!updated) throw new ProcedureNotFoundError(id);
+
+  await auditService.record(auth, {
+    action: isActive ? "procedure.reactivated" : "procedure.retired",
+    entityType: "procedure",
+    entityId: id,
+    after: { name: updated.name },
+  });
+  return updated;
 }
 
 function fields(input: ProcedureInput) {
@@ -74,9 +100,9 @@ export async function updateProcedure(
  *
  * A procedure with claims against it cannot go: those claims were
  * opened under that name, and a checklist snapshot six weeks old has
- * to stay answerable. Renaming is the move for a procedure the
- * hospital has stopped doing — the claims keep their history and the
- * picker stops offering the old wording.
+ * to stay answerable. Retiring is the move for a procedure the hospital
+ * has stopped doing — the claims keep their history, the picker stops
+ * offering it, and it can be put back.
  */
 export async function deleteProcedure(auth: AuthContext, id: string) {
   const existing = await repo.getById(id);

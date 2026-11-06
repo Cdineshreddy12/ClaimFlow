@@ -10,7 +10,7 @@ import { checklistRules, claims, procedures } from "../../db/schema.js";
  * filed against it can never be deleted without those claims losing
  * the name they were opened under.
  */
-export async function list() {
+export async function list(includeInactive = false) {
   /*
     Two grouped queries, not correlated subqueries in the select.
 
@@ -35,11 +35,13 @@ export async function list() {
   const claimsBy = new Map(claimCounts.map((r) => [r.procedureId, r.n]));
   const rulesBy = new Map(ruleCounts.map((r) => [r.procedureId, r.n]));
 
-  return rows.map((r) => ({
-    ...r,
-    claims: claimsBy.get(r.id) ?? 0,
-    rules: rulesBy.get(r.id) ?? 0,
-  }));
+  return rows
+    .filter((r) => includeInactive || r.isActive)
+    .map((r) => ({
+      ...r,
+      claims: claimsBy.get(r.id) ?? 0,
+      rules: rulesBy.get(r.id) ?? 0,
+    }));
 }
 
 export async function getById(id: string) {
@@ -79,7 +81,24 @@ export async function update(
 ) {
   const [row] = await db
     .update(procedures)
-    .set(fields)
+    .set({ ...fields, updatedAt: new Date() })
+    .where(eq(procedures.id, id))
+    .returning();
+  return row;
+}
+
+/**
+ * Takes a procedure off the pickers, or puts it back.
+ *
+ * The reversible half of the pair. Deleting is refused as soon as a
+ * claim references the row, which is every procedure a hospital has
+ * actually used — so without this there was no way to stop offering one
+ * the hospital no longer does.
+ */
+export async function setActive(id: string, isActive: boolean) {
+  const [row] = await db
+    .update(procedures)
+    .set({ isActive, updatedAt: new Date() })
     .where(eq(procedures.id, id))
     .returning();
   return row;

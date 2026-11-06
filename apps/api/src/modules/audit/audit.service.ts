@@ -33,6 +33,8 @@ export type AuditAction =
   | "query.deadline_confirmed"
   | "procedure.created"
   | "procedure.updated"
+  | "procedure.retired"
+  | "procedure.reactivated"
   | "procedure.deleted"
   | "insurer.created"
   | "insurer.updated"

@@ -12,6 +12,8 @@ export interface Procedure {
   id: string;
   name: string;
   code: string | null;
+  /** Retired procedures stay on the admin list and leave every picker. */
+  isActive: boolean;
   /** How much depends on it — what decides whether it can be deleted. */
   claims?: number;
   rules?: number;
@@ -39,10 +41,18 @@ export function useInsurers() {
   });
 }
 
-export function useProcedures() {
+/**
+ * Live procedures by default — a picker should never offer one the
+ * hospital has stopped doing. Only the admin list asks for the retired
+ * ones, so it can show them and put them back.
+ */
+export function useProcedures(includeInactive = false) {
   return useQuery({
-    queryKey: ["procedures"],
-    queryFn: () => api.get<Procedure[]>("/procedures"),
+    queryKey: ["procedures", { includeInactive }],
+    queryFn: () =>
+      api.get<Procedure[]>(
+        `/procedures${includeInactive ? "?includeInactive=true" : ""}`,
+      ),
     staleTime: 10 * 60 * 1000,
   });
 }
@@ -77,6 +87,14 @@ export function useUpdateProcedure() {
 
 export function useDeleteProcedure() {
   return useProcedureMutation((id: string) => api.delete(`/procedures/${id}`));
+}
+
+/** The reversible half: off the pickers, still on every claim that used it. */
+export function useSetProcedureActive() {
+  return useProcedureMutation(
+    ({ id, isActive }: { id: string; isActive: boolean }) =>
+      api.patch<Procedure>(`/procedures/${id}/active`, { isActive }),
+  );
 }
 
 export function useChecklistRules(insurerId: string, procedureId: string) {

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Input } from "@/components/ui/input";
@@ -16,6 +17,7 @@ import {
   useCreateProcedure,
   useDeleteProcedure,
   useProcedures,
+  useSetProcedureActive,
   useUpdateProcedure,
   type Procedure,
 } from "./api";
@@ -39,10 +41,14 @@ export function ProceduresAdminCard({
   selectedId?: string;
   onSelect?: (id: string) => void;
 }) {
-  const { data: procedures, isLoading, isError } = useProcedures();
+  // The one caller that wants the retired rows: it is the screen that
+  // puts them back.
+  const { data: procedures, isLoading, isError } = useProcedures(true);
+  const [showRetired, setShowRetired] = useState(false);
   const create = useCreateProcedure();
   const update = useUpdateProcedure();
   const remove = useDeleteProcedure();
+  const setActive = useSetProcedureActive();
 
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -53,7 +59,11 @@ export function ProceduresAdminCard({
     null,
   );
 
-  const busy = create.isPending || update.isPending || remove.isPending;
+  const busy =
+    create.isPending ||
+    update.isPending ||
+    remove.isPending ||
+    setActive.isPending;
 
   function reset() {
     setEditingId(null);
@@ -146,7 +156,8 @@ export function ProceduresAdminCard({
     );
   }
 
-  const rows = procedures ?? [];
+  const rows = (procedures ?? []).filter((p) => showRetired || p.isActive);
+  const retiredCount = (procedures ?? []).filter((p) => !p.isActive).length;
 
   return (
     <Card>
@@ -154,7 +165,7 @@ export function ProceduresAdminCard({
         open={confirmingDelete !== null}
         onOpenChange={(open) => !open && setConfirmingDelete(null)}
         title={`Delete ${confirmingDelete?.name ?? ""}?`}
-        description="It comes off the list for good. Nothing is filed against it, so nothing breaks — but a procedure the hospital has simply stopped doing is better renamed than removed."
+        description="It comes off the list for good. Nothing is filed against it, so nothing breaks — but if you only want it off the picker, Retire keeps the record."
         confirmLabel="Delete it"
         busy={remove.isPending}
         onConfirm={() => confirmingDelete && onDelete(confirmingDelete)}
@@ -162,11 +173,22 @@ export function ProceduresAdminCard({
 
       <CardHeader>
         <CardTitle>Procedures</CardTitle>
-        {!showForm && !editingId ? (
-          <Button type="button" onClick={() => setShowForm(true)}>
-            Add procedure
-          </Button>
-        ) : null}
+        <div className="flex items-center gap-3">
+          {retiredCount > 0 ? (
+            <button
+              type="button"
+              className="cursor-pointer border-0 bg-transparent p-0 font-[inherit] font-semibold text-accent-ink underline"
+              onClick={() => setShowRetired((v) => !v)}
+            >
+              {showRetired ? "Hide retired" : `Show ${retiredCount} retired`}
+            </button>
+          ) : null}
+          {!showForm && !editingId ? (
+            <Button type="button" onClick={() => setShowForm(true)}>
+              Add procedure
+            </Button>
+          ) : null}
+        </div>
       </CardHeader>
 
       {showForm && !editingId ? <div className="mb-4">{form}</div> : null}
@@ -205,22 +227,27 @@ export function ProceduresAdminCard({
               ) : (
                 <TableRow
                   key={procedure.id}
-                  className={
-                    procedure.id === selectedId ? "bg-accent-soft" : ""
-                  }
+                  className={`${procedure.isActive ? "" : "[&>td]:opacity-60"}${
+                    procedure.id === selectedId ? " bg-accent-soft" : ""
+                  }`}
                 >
                   <TableCell className="font-medium">
-                    {onSelect ? (
-                      <button
-                        type="button"
-                        onClick={() => onSelect(procedure.id)}
-                        className="cursor-pointer border-0 bg-transparent p-0 font-[inherit] text-[length:inherit] text-accent-ink underline decoration-dotted underline-offset-2"
-                      >
-                        {procedure.name}
-                      </button>
-                    ) : (
-                      procedure.name
-                    )}
+                    <div className="flex items-center gap-2">
+                      {onSelect ? (
+                        <button
+                          type="button"
+                          onClick={() => onSelect(procedure.id)}
+                          className="cursor-pointer border-0 bg-transparent p-0 font-[inherit] text-[length:inherit] text-accent-ink underline decoration-dotted underline-offset-2"
+                        >
+                          {procedure.name}
+                        </button>
+                      ) : (
+                        procedure.name
+                      )}
+                      {!procedure.isActive ? (
+                        <Badge variant="neutral">Retired</Badge>
+                      ) : null}
+                    </div>
                   </TableCell>
                   <TableCell className="font-mono text-sm text-ink-faint">
                     {procedure.code ?? "—"}
@@ -236,6 +263,24 @@ export function ProceduresAdminCard({
                       onClick={() => startEdit(procedure)}
                     >
                       Edit
+                    </Button>
+                    {/* The reversible one, and the one a desk actually
+                        needs: deleting is refused the moment a claim
+                        points at the row, which is every procedure the
+                        hospital has really used. */}
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      disabled={busy}
+                      onClick={() =>
+                        setActive.mutate({
+                          id: procedure.id,
+                          isActive: !procedure.isActive,
+                        })
+                      }
+                    >
+                      {procedure.isActive ? "Retire" : "Reinstate"}
                     </Button>
                     {/* Only when nothing depends on it. A procedure with
                         claims against it keeps its name, because those

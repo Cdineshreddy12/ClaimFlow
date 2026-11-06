@@ -212,7 +212,17 @@ export const procedures = pgTable("procedures", {
   id: uuid("id").primaryKey().defaultRandom(),
   name: text("name").notNull(),
   code: text("code"),
+  /**
+   * Retired rather than deleted, for the same reason as an insurer: a
+   * procedure with claims against it can never be removed without those
+   * claims losing the name they were opened under. This takes it off
+   * the pickers instead, and can be undone.
+   */
+  isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
 });
