@@ -325,4 +325,66 @@ describe("UploadRow", () => {
       ).toBeInTheDocument();
     });
   });
+
+  /**
+   * Discard deletes the row AND the object in S3, from a button a
+   * mouse-width from Confirm, with no undo. It used to fire on the
+   * first click.
+   */
+  describe("discarding", () => {
+    it("asks before deleting, and names the file", async () => {
+      const onDiscard = vi.fn();
+      render(
+        <UploadRow
+          doc={doc()}
+          claim={CLAIM}
+          onConfirm={vi.fn()}
+          onDiscard={onDiscard}
+          isBusy={false}
+        />,
+      );
+
+      await userEvent.click(screen.getByRole("button", { name: "Discard" }));
+      expect(onDiscard).not.toHaveBeenCalled();
+      expect(screen.getByText(/Discard IMG_0423\.jpg\?/)).toBeInTheDocument();
+      // Says what actually happens, not "are you sure".
+      expect(screen.getByText(/deleted from storage/)).toBeInTheDocument();
+    });
+
+    it("deletes once the verb is clicked, not before", async () => {
+      const onDiscard = vi.fn();
+      render(
+        <UploadRow
+          doc={doc()}
+          claim={CLAIM}
+          onConfirm={vi.fn()}
+          onDiscard={onDiscard}
+          isBusy={false}
+        />,
+      );
+
+      await userEvent.click(screen.getByRole("button", { name: "Discard" }));
+      await userEvent.click(
+        screen.getByRole("button", { name: "Discard the file" }),
+      );
+      expect(onDiscard).toHaveBeenCalledTimes(1);
+    });
+
+    it("keeps the file when the desk backs out", async () => {
+      const onDiscard = vi.fn();
+      render(
+        <UploadRow
+          doc={doc()}
+          claim={CLAIM}
+          onConfirm={vi.fn()}
+          onDiscard={onDiscard}
+          isBusy={false}
+        />,
+      );
+
+      await userEvent.click(screen.getByRole("button", { name: "Discard" }));
+      await userEvent.click(screen.getByRole("button", { name: "Keep it" }));
+      expect(onDiscard).not.toHaveBeenCalled();
+    });
+  });
 });

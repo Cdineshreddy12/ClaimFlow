@@ -5,6 +5,7 @@ import {
   LOW_CONFIDENCE_THRESHOLD,
 } from "@claimflow/contracts";
 import { FileIcon } from "@/components/icons";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { FilePreview } from "@/components/FilePreview";
 import { Button } from "@/components/ui/button";
 import {
@@ -122,6 +123,9 @@ export function UploadRow({
   // off the stale notice alone left it with no way to try.
   const canReread = isStale || !suggestion;
   const [previewing, setPreviewing] = useState(false);
+  // Discarding deletes the row and the file in S3. The button sits a
+  // mouse-width from Confirm and there is no undo.
+  const [confirmingDiscard, setConfirmingDiscard] = useState(false);
   const fileName = displayFileName(doc.fileUrl);
 
   const drag = useDraggable({
@@ -191,6 +195,21 @@ export function UploadRow({
     </Button>
   ) : null;
 
+  const discardConfirm = (
+    <ConfirmDialog
+      open={confirmingDiscard}
+      onOpenChange={setConfirmingDiscard}
+      title={`Discard ${fileName}?`}
+      description="The file is deleted from storage as well as from this claim. If it was the only copy of a scan, it is gone."
+      confirmLabel="Discard the file"
+      busy={isBusy}
+      onConfirm={() => {
+        setConfirmingDiscard(false);
+        onDiscard();
+      }}
+    />
+  );
+
   const preview = previewing ? (
     <FilePreview
       target={{
@@ -239,6 +258,7 @@ export function UploadRow({
   return (
     <div className="flex flex-col gap-2 rounded-md border border-dashed border-pending bg-surface-raised px-[13px] py-[11px]">
       {preview}
+      {discardConfirm}
       <div className="flex items-center justify-between gap-2.5">
         <div className="flex min-w-0 items-center gap-1">
           {grip}
@@ -383,7 +403,7 @@ export function UploadRow({
           variant="outline"
           size="sm"
           disabled={isBusy}
-          onClick={onDiscard}
+          onClick={() => setConfirmingDiscard(true)}
         >
           Discard
         </Button>

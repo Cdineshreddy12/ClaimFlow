@@ -9,6 +9,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Loader } from "@/components/ui/loader";
 import {
   useCreateInsurer,
@@ -61,6 +62,17 @@ export function InsurersAdminCard({
   const update = useUpdateInsurer();
   const setActive = useSetInsurerActive();
   const remove = useDeleteInsurer();
+  /*
+    Deleting removes the row for good.
+
+    Only offered on an insurer with no claims and no rules, so nothing
+    depends on it — but it still sits next to Edit and Retire on a
+    shared master list, and there is no undo. Retire is the reversible
+    one; this is not.
+  */
+  const [confirmingDelete, setConfirmingDelete] = useState<Insurer | null>(
+    null,
+  );
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [name, setName] = useState("");
@@ -124,6 +136,18 @@ export function InsurersAdminCard({
       );
     }
   }
+
+  const deleteConfirm = (
+    <ConfirmDialog
+      open={confirmingDelete !== null}
+      onOpenChange={(open) => !open && setConfirmingDelete(null)}
+      title={`Delete ${confirmingDelete?.name ?? ""}?`}
+      description="It comes off the master list for good. Nothing is filed against it, so nothing breaks — but if you only want it off the picker, Retire keeps the record."
+      confirmLabel="Delete it"
+      busy={remove.isPending}
+      onConfirm={() => confirmingDelete && onDelete(confirmingDelete)}
+    />
+  );
 
   if (isLoading) return <Loader label="Loading insurers…" />;
   if (isError) {
