@@ -51,6 +51,8 @@ export function DoctorApprovalPage() {
     );
   }
 
+  const nothingToReview = data.documents.length === 0;
+
   return (
     <div className="mx-auto max-w-md px-5 py-8">
       <div className="text-[11px] font-semibold uppercase tracking-[0.07em] text-ink-faint">
@@ -81,7 +83,7 @@ export function DoctorApprovalPage() {
         <div className="text-[11px] font-semibold uppercase tracking-[0.07em] text-ink-faint">
           Notes to review
         </div>
-        {data.documents.length === 0 ? (
+        {nothingToReview ? (
           <p className="mt-2 text-[13px] text-ink-faint">
             No clinical documents have been attached yet. Please ask the desk
             before approving.
@@ -116,23 +118,38 @@ export function DoctorApprovalPage() {
       {!declining ? (
         // Tall tap targets: this is a phone, often one-handed, often in a ward.
         <div className="mt-7 flex flex-col gap-2.5">
+          {/*
+            Nothing attached means there is nothing to approve. The page
+            already said so, and leaving the button live anyway invited
+            a clinical sign-off over an empty set — recorded against the
+            claim, and against this doctor's name, as though notes had
+            been read. Declining stays open: "attach the notes" is the
+            useful answer, and it is the one the desk needs.
+          */}
           <Button
             type="button"
+            variant={nothingToReview ? "outline" : "primary"}
             className="w-full py-3 text-[15px]"
-            disabled={decide.isPending}
+            disabled={decide.isPending || nothingToReview}
             onClick={() => decide.mutate({ approved: true })}
           >
             {decide.isPending ? "Sending…" : "Approve these notes"}
           </Button>
           <Button
             type="button"
-            variant="outline"
+            variant={nothingToReview ? "primary" : "outline"}
             className="w-full py-3 text-[15px]"
             disabled={decide.isPending}
             onClick={() => setDeclining(true)}
           >
             Something needs changing
           </Button>
+          {nothingToReview ? (
+            <p className="text-center text-[13px] text-ink-faint">
+              There is nothing here to approve yet. Ask the desk to attach the
+              notes, or send it back saying what you need.
+            </p>
+          ) : null}
         </div>
       ) : (
         <form

@@ -6,6 +6,7 @@ import {
   ClaimNotFoundError,
   LinkAlreadyDecidedError,
   LinkExpiredError,
+  NothingToApproveError,
   LinkNotFoundError,
 } from "./doctor-approval.service.js";
 
@@ -72,6 +73,12 @@ function replyForLinkError(err: unknown, reply: FastifyReply): boolean {
   }
   if (err instanceof LinkAlreadyDecidedError) {
     void reply.code(410).send({ error: "this link has already been used" });
+    return true;
+  }
+  if (err instanceof NothingToApproveError) {
+    void reply.code(409).send({
+      error: "no clinical notes are attached to this claim yet",
+    });
     return true;
   }
   return false;

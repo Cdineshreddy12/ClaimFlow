@@ -133,6 +133,9 @@ describe("doctor-approval.service", () => {
     it("records an approval and audits it with no org_member actor", async () => {
       vi.mocked(repo.getByTokenWithContext).mockResolvedValue(row() as never);
       vi.mocked(repo.recordDecision).mockResolvedValue({} as never);
+      vi.mocked(documentsRepository.listForClaim).mockResolvedValue([
+        doc("Treating doctor's note"),
+      ] as never);
 
       const { decide } = await import("./doctor-approval.service.js");
       await decide(TOKEN, { approved: true });
@@ -147,6 +150,42 @@ describe("doctor-approval.service", () => {
           actorId: null,
         }),
       );
+    });
+
+    it("refuses an approval when nothing clinical is attached", async () => {
+      // An attestation over an empty set, filed under a named doctor.
+      // The page hides the button, but the token is a public credential
+      // and the page is not the boundary.
+      vi.mocked(repo.getByTokenWithContext).mockResolvedValue(row() as never);
+      vi.mocked(documentsRepository.listForClaim).mockResolvedValue([
+        doc("Photo ID proof"), // administrative — nothing to vouch for
+        doc("Treating doctor's note", false), // unconfirmed
+      ] as never);
+
+      const { decide, NothingToApproveError } =
+        await import("./doctor-approval.service.js");
+      await expect(decide(TOKEN, { approved: true })).rejects.toBeInstanceOf(
+        NothingToApproveError,
+      );
+      expect(repo.recordDecision).not.toHaveBeenCalled();
+    });
+
+    it("still lets the doctor send it back when nothing is attached", async () => {
+      // "Attach the notes" is the useful answer, and the one the desk
+      // needs — refusing both directions would leave them stuck.
+      vi.mocked(repo.getByTokenWithContext).mockResolvedValue(row() as never);
+      vi.mocked(repo.recordDecision).mockResolvedValue({} as never);
+      vi.mocked(documentsRepository.listForClaim).mockResolvedValue(
+        [] as never,
+      );
+
+      const { decide } = await import("./doctor-approval.service.js");
+      await decide(TOKEN, { approved: false, reason: "Nothing attached" });
+
+      expect(repo.recordDecision).toHaveBeenCalledWith("approval-1", {
+        approved: false,
+        reason: "Nothing attached",
+      });
     });
 
     it("carries the decline reason into the audit entry", async () => {

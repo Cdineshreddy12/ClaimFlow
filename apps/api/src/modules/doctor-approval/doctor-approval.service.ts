@@ -9,6 +9,7 @@ export class ClaimNotFoundError extends Error {}
 export class LinkNotFoundError extends Error {}
 export class LinkExpiredError extends Error {}
 export class LinkAlreadyDecidedError extends Error {}
+export class NothingToApproveError extends Error {}
 
 interface AuthContext {
   userId: string;
@@ -54,6 +55,17 @@ function assertUsable(
   if (approval.expiresAt < new Date()) throw new LinkExpiredError(approval.id);
 }
 
+/** The confirmed clinical documents on a claim — what a doctor is being asked to vouch for. */
+async function clinicalDocuments(claimId: string) {
+  const documents = (await documentsRepository.listForClaim(claimId)) ?? [];
+  return documents.filter(
+    (doc) =>
+      doc.confirmedAt !== null &&
+      doc.checklistSlot !== null &&
+      CLINICAL_SLOT_PATTERN.test(doc.checklistSlot),
+  );
+}
+
 /**
  * What the doctor sees on their phone. Unauthenticated — the token is
  * the credential — so this is the narrowest useful view: who the patient
@@ -82,14 +94,7 @@ export async function viewByToken(token: string) {
     );
   }
 
-  const documents = (await documentsRepository.listForClaim(row.claimId)) ?? [];
-
-  const clinical = documents.filter(
-    (doc) =>
-      doc.confirmedAt !== null &&
-      doc.checklistSlot !== null &&
-      CLINICAL_SLOT_PATTERN.test(doc.checklistSlot),
-  );
+  const clinical = await clinicalDocuments(row.claimId);
 
   return {
     hospitalName: row.hospitalName,
@@ -114,6 +119,18 @@ export async function decide(
   const row = await repo.getByTokenWithContext(token);
   if (!row) throw new LinkNotFoundError(token);
   assertUsable(row);
+
+  // An approval over an empty set is a clinical attestation to nothing,
+  // filed under a named doctor. The page hides the button, but the
+  // token is a public credential and the page is not the boundary.
+  // Declining is always allowed: "attach the notes" is the useful
+  // answer when there is nothing there.
+  if (
+    decision.approved &&
+    (await clinicalDocuments(row.claimId)).length === 0
+  ) {
+    throw new NothingToApproveError(row.claimId);
+  }
 
   const updated = await repo.recordDecision(row.approval.id, decision);
 
