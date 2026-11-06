@@ -1,14 +1,14 @@
-import { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { Search } from "reicon-react";
-import { ClaimStatus } from "@claimflow/contracts";
+import { CLAIM_PAGE_SIZE, ClaimStatus } from "@claimflow/contracts";
 import { AppShell } from "../../app/AppShell";
 import { Button } from "@/components/ui/button";
 import { Loader } from "../../components/ui/loader";
 import { formatAmount, formatDuration } from "../../lib/format";
-import { useClaims } from "./api";
+import { useDebounced } from "../../lib/use-debounced";
+import { useClaimsPage } from "./api";
 import {
-  applyClaimList,
   DEFAULT_LIST_STATE,
   nextSort,
   type ClaimListState,
@@ -67,19 +67,38 @@ function stageTimeClass(claim: Claim): string {
 }
 
 export function ClaimsListPage() {
-  const { data: claims, isLoading, isError } = useClaims();
+  const navigate = useNavigate();
   const [state, setState] = useState<ClaimListState>(DEFAULT_LIST_STATE);
+  const [offset, setOffset] = useState(0);
+
+  // Typing is not a request. Without this every keystroke was a query,
+  // and on a slow link the results arrived in the wrong order.
+  const q = useDebounced(state.search, 250);
+
+  // Any change to what is being asked for starts at the first page —
+  // page 4 of the old filter is a different, usually empty, page of
+  // the new one.
+  useEffect(() => {
+    setOffset(0);
+  }, [q, state.status, state.sortKey, state.direction]);
+
+  const { data, isLoading, isError } = useClaimsPage({
+    q,
+    statusFilter: state.status,
+    sort: state.sortKey,
+    dir: state.direction,
+    limit: CLAIM_PAGE_SIZE,
+    offset,
+  });
 
   // Stamped once per mount so the "time in stage" column doesn't tick
   // while someone is reading it.
   const now = useMemo(() => Date.now(), []);
 
-  const visible = useMemo(
-    () => applyClaimList(claims ?? [], state),
-    [claims, state],
-  );
-
-  const total = claims?.length ?? 0;
+  const visible = data?.rows ?? [];
+  const total = data?.total ?? 0;
+  const from = total === 0 ? 0 : offset + 1;
+  const to = Math.min(offset + visible.length, total);
 
   return (
     <AppShell title="Claims" subtitle="Every claim on the desk">
@@ -228,12 +247,36 @@ export function ClaimsListPage() {
 
       {!isLoading && !isError && total > 0 ? (
         <TableFooterBar>
-          <span>Total rows: {total}</span>
           <span>
-            {visible.length === total
-              ? "No filters applied"
-              : `Showing ${visible.length} of ${total}`}
+            Showing {from}–{to} of {total}
           </span>
+          {/* Only rendered when there is more than one page. A desk
+              with eleven claims should not be looking at paging
+              controls that do nothing. */}
+          {total > CLAIM_PAGE_SIZE ? (
+            <span className="flex items-center gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={offset === 0}
+                onClick={() =>
+                  setOffset((o) => Math.max(0, o - CLAIM_PAGE_SIZE))
+                }
+              >
+                Previous
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={to >= total}
+                onClick={() => setOffset((o) => o + CLAIM_PAGE_SIZE)}
+              >
+                Next
+              </Button>
+            </span>
+          ) : null}
         </TableFooterBar>
       ) : null}
     </AppShell>

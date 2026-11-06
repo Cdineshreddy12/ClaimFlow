@@ -1,4 +1,4 @@
-import { RecordPaymentBody } from "@claimflow/contracts";
+import { ClaimListQuery, RecordPaymentBody } from "@claimflow/contracts";
 import type { FastifyInstance } from "fastify";
 import { authenticate, requireRole } from "../../middleware/authenticate.js";
 import * as claimsService from "./claims.service.js";
@@ -26,10 +26,39 @@ import {
 export async function registerClaimsRoutes(app: FastifyInstance) {
   app.addHook("preHandler", authenticate);
 
+  /*
+    Sends a page when asked for one, every match otherwise.
+
+    The list screen always sends a limit; the dashboard's charts and
+    the assistant's claim matching want the whole set and send none.
+    One endpoint rather than two, because the filtering, the scoping
+    and the search are identical either way — only the slice differs.
+  */
   app.get("/", async (request, reply) => {
     const query = ListClaimsQuery.parse(request.query);
-    const result = await claimsService.listClaims(request.authUser!, query);
-    return reply.send(result);
+    const page = ClaimListQuery.parse(request.query);
+    if (page.limit === undefined) {
+      return reply.send(
+        await claimsService.listClaims(request.authUser!, query),
+      );
+    }
+    return reply.send(
+      await claimsService.listClaimsPage(request.authUser!, {
+        ...query,
+        ...page,
+      }),
+    );
+  });
+
+  /*
+    The dashboard, as six numbers rather than every claim.
+
+    Declared before "/:id" so "overview" is never read as a claim id.
+    Fastify matches static segments first regardless, but the order
+    says the intent to whoever reads this next.
+  */
+  app.get("/overview", async (request, reply) => {
+    return reply.send(await claimsService.getClaimOverview(request.authUser!));
   });
 
   app.get("/:id", async (request, reply) => {

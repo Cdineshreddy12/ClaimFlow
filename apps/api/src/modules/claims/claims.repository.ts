@@ -1,5 +1,21 @@
-import { and, eq, getTableColumns, sql } from "drizzle-orm";
-import type { ClaimStatus } from "@claimflow/contracts";
+import {
+  and,
+  eq,
+  getTableColumns,
+  ilike,
+  inArray,
+  or,
+  sql,
+  type SQL,
+} from "drizzle-orm";
+import type { PgColumn } from "drizzle-orm/pg-core";
+import {
+  CLAIM_STATUS_ORDER,
+  type ClaimPage,
+  type ClaimSortKey,
+  type ClaimStatus,
+  type SortDirection,
+} from "@claimflow/contracts";
 import { db } from "../../db/client.js";
 import {
   claimStatusEvents,
@@ -19,16 +35,115 @@ import type {
  * that filter is applied by the service, not assumed here.
  */
 
+/**
+ * One page of claims, filtered, searched and sorted in the database.
+ *
+ * All of this used to happen in the browser over every claim the API
+ * had ever returned — fine at three, ruinous at a hospital's two
+ * thousand a year, and the same array fed the dashboard's charts.
+ *
+ * `limit` absent means "every match", which the dashboard still wants:
+ * it needs totals, not a page. The list screen always sends one.
+ *
+ * Status order, the status groups and which columns a search looks at
+ * all come from @claimflow/contracts, because the SQL and the UI have
+ * to agree about them and two copies would drift.
+ */
 export async function listClaims(filters: {
   status?: ClaimStatus;
   assignedTo?: string | null;
-}) {
+  statuses?: ClaimStatus[] | null;
+  q?: string | undefined;
+  sort?: ClaimSortKey | undefined;
+  dir?: SortDirection | undefined;
+  limit?: number | undefined;
+  offset?: number | undefined;
+}): Promise<ClaimPage<Awaited<ReturnType<typeof selectClaims>>[number]>> {
   const conditions = [];
   if (filters.status) conditions.push(eq(claims.status, filters.status));
+  if (filters.statuses && filters.statuses.length > 0) {
+    conditions.push(inArray(claims.status, filters.statuses));
+  }
   if (filters.assignedTo)
     conditions.push(eq(claims.assignedTo, filters.assignedTo));
 
-  return db
+  const q = filters.q?.trim();
+  if (q) {
+    // The four things a desk reads off a TPA email. ILIKE rather than
+    // full-text: these are names and references, not prose, and a
+    // desk types half of one.
+    const like = `%${q.replace(/[%_]/g, (c) => `\\${c}`)}%`;
+    conditions.push(
+      or(
+        ilike(claims.patientName, like),
+        ilike(claims.reference, like),
+        ilike(insurers.name, like),
+        ilike(procedures.name, like),
+      )!,
+    );
+  }
+
+  const where = conditions.length > 0 ? and(...conditions) : undefined;
+
+  const [rows, counted] = await Promise.all([
+    selectClaims(where, filters),
+    db
+      .select({ total: sql<number>`count(*)::int` })
+      .from(claims)
+      .innerJoin(insurers, eq(claims.insurerId, insurers.id))
+      .innerJoin(procedures, eq(claims.procedureId, procedures.id))
+      .where(where),
+  ]);
+
+  return { rows, total: Number(counted[0]?.total ?? 0) };
+}
+
+/** The ORDER BY, mirroring the comparators the list used to run in the browser. */
+function orderFor(sort: ClaimSortKey | undefined, dir: SortDirection) {
+  const desc = dir === "desc";
+  const d = (col: SQL | PgColumn) =>
+    desc ? sql`${col} desc` : sql`${col} asc`;
+  switch (sort) {
+    case "patient":
+      return d(claims.patientName);
+    case "insurer":
+      return d(insurers.name);
+    case "status":
+      // Lifecycle order, not alphabetical — the same table the UI uses.
+      return d(
+        sql`case ${claims.status} ${sql.join(
+          Object.entries(CLAIM_STATUS_ORDER).map(
+            ([status, rank]) => sql`when ${status} then ${rank}`,
+          ),
+          sql` `,
+        )} end`,
+      );
+    case "amount":
+      // A claim with no amount yet sorts last either way rather than
+      // counting as zero, which would bury it under settled rupees.
+      return desc
+        ? sql`${claims.billedAmount} desc nulls last`
+        : sql`${claims.billedAmount} asc nulls last`;
+    case "stageTime":
+    default:
+      // Oldest updatedAt = longest in stage. Descending by waiting time
+      // is ascending by timestamp, so this is inverted deliberately.
+      return desc
+        ? sql`${claims.updatedAt} asc`
+        : sql`${claims.updatedAt} desc`;
+  }
+}
+
+function selectClaims(
+  where: SQL | undefined,
+  filters: {
+    sort?: ClaimSortKey | undefined;
+    dir?: SortDirection | undefined;
+    limit?: number | undefined;
+    offset?: number | undefined;
+  },
+) {
+  const query = db
     .select({
       ...getTableColumns(claims),
       insurerName: insurers.name,
@@ -37,7 +152,13 @@ export async function listClaims(filters: {
     .from(claims)
     .innerJoin(insurers, eq(claims.insurerId, insurers.id))
     .innerJoin(procedures, eq(claims.procedureId, procedures.id))
-    .where(conditions.length > 0 ? and(...conditions) : undefined);
+    .where(where)
+    // A stable tiebreak, or two claims updated in the same millisecond
+    // can swap between pages and one of them is never seen.
+    .orderBy(orderFor(filters.sort, filters.dir ?? "desc"), sql`${claims.id}`);
+
+  if (filters.limit === undefined) return query;
+  return query.limit(filters.limit).offset(filters.offset ?? 0);
 }
 
 /** Joins insurer/procedure names on — anything rendering a single claim needs a name, not a bare id. */
@@ -240,4 +361,117 @@ export async function recordStatusChange(
   });
 
   return updated;
+}
+
+/**
+ * Every number the dashboard shows, counted in one round trip.
+ *
+ * Five separate questions, asked together rather than by shipping the
+ * whole claims table to the browser and looping over it five times.
+ * Each is a plain aggregate; none of them reads a row the UI then
+ * throws away.
+ *
+ * `assignedTo` carries the desk executive's scoping — their dashboard
+ * counts their own claims, the same rule the list obeys.
+ */
+export async function claimOverview(opts: {
+  assignedTo?: string | undefined;
+  monthStart: Date;
+  trendStart: Date;
+  needsAttention: ClaimStatus[];
+  openStatuses: ClaimStatus[];
+  waitingLimit: number;
+}) {
+  const mine = opts.assignedTo
+    ? eq(claims.assignedTo, opts.assignedTo)
+    : undefined;
+  const openOnly = and(inArray(claims.status, opts.openStatuses), mine);
+
+  const [totals, byStatus, trend, waiting] = await Promise.all([
+    db
+      .select({
+        openClaims: sql<number>`count(*)::int`,
+        // Averaged in SQL rather than by sending every updatedAt over
+        // the wire for the browser to subtract.
+        avgStageHours: sql<
+          number | null
+        >`avg(extract(epoch from (now() - ${claims.updatedAt})) / 3600)`,
+      })
+      .from(claims)
+      .where(openOnly),
+
+    db
+      .select({ status: claims.status, count: sql<number>`count(*)::int` })
+      .from(claims)
+      .where(mine)
+      .groupBy(claims.status),
+
+    db
+      .select({
+        month: sql<string>`to_char(date_trunc('month', ${claims.settledOn}), 'YYYY-MM')`,
+        count: sql<number>`count(*)::int`,
+        value: sql<string>`coalesce(sum(${claims.settledAmount}), 0)`,
+      })
+      .from(claims)
+      .where(
+        and(
+          sql`${claims.settledOn} is not null`,
+          sql`${claims.settledOn} >= ${opts.trendStart.toISOString().slice(0, 10)}::date`,
+          mine,
+        ),
+      )
+      .groupBy(sql`date_trunc('month', ${claims.settledOn})`),
+
+    db
+      .select({
+        id: claims.id,
+        reference: claims.reference,
+        patientName: claims.patientName,
+        status: claims.status,
+        updatedAt: claims.updatedAt,
+        insurerName: insurers.name,
+        procedureName: procedures.name,
+      })
+      .from(claims)
+      .innerJoin(insurers, eq(claims.insurerId, insurers.id))
+      .innerJoin(procedures, eq(claims.procedureId, procedures.id))
+      .where(and(inArray(claims.status, opts.needsAttention), mine))
+      // Longest-waiting first: the top of this list is the thing most
+      // at risk, and only the top of it is ever read.
+      .orderBy(sql`${claims.updatedAt} asc`)
+      .limit(opts.waitingLimit),
+  ]);
+
+  const settled = await db
+    .select({
+      count: sql<number>`count(*)::int`,
+      value: sql<string>`coalesce(sum(${claims.settledAmount}), 0)`,
+    })
+    .from(claims)
+    .where(
+      and(
+        sql`${claims.settledOn} >= ${opts.monthStart.toISOString().slice(0, 10)}::date`,
+        mine,
+      ),
+    );
+
+  return {
+    openClaims: Number(totals[0]?.openClaims ?? 0),
+    avgStageHours:
+      totals[0]?.avgStageHours == null ? null : Number(totals[0].avgStageHours),
+    byStatus: byStatus.map((r) => ({
+      status: r.status as ClaimStatus,
+      count: Number(r.count),
+    })),
+    trend: trend.map((r) => ({
+      month: r.month,
+      count: Number(r.count),
+      value: Number(r.value),
+    })),
+    settledThisMonth: {
+      count: Number(settled[0]?.count ?? 0),
+      value: Number(settled[0]?.value ?? 0),
+    },
+    waiting,
+  };
 }

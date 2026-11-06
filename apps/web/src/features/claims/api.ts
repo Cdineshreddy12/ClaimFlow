@@ -14,6 +14,51 @@ export function useClaims() {
   });
 }
 
+/**
+ * The dashboard's numbers, counted in the database.
+ *
+ * Replaces fetching every claim and computing six figures, a donut, a
+ * six-month trend and an attention list over the array in the browser.
+ */
+export function useClaimOverview() {
+  return useQuery({
+    queryKey: ["claims", "overview"],
+    queryFn: () => api.get<ClaimOverview>("/claims/overview"),
+  });
+}
+
+/**
+ * One page, filtered, searched and sorted in the database.
+ *
+ * The list screen used to fetch every claim the hospital had ever
+ * opened and do all of this in the browser. `keepPreviousData` holds
+ * the current page on screen while the next one loads, so paging and
+ * typing in the search box don't blank the table on every keystroke.
+ */
+export function useClaimsPage(params: {
+  q: string;
+  statusFilter: string;
+  sort: string;
+  dir: string;
+  limit: number;
+  offset: number;
+}) {
+  const search = new URLSearchParams({
+    statusFilter: params.statusFilter,
+    sort: params.sort,
+    dir: params.dir,
+    limit: String(params.limit),
+    offset: String(params.offset),
+    ...(params.q.trim() ? { q: params.q.trim() } : {}),
+  });
+  return useQuery({
+    queryKey: ["claims", "page", search.toString()],
+    queryFn: () =>
+      api.get<{ rows: Claim[]; total: number }>(`/claims?${search}`),
+    placeholderData: (previous) => previous,
+  });
+}
+
 export function useClaim(id: string) {
   return useQuery({
     queryKey: ["claims", id],

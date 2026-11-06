@@ -3,6 +3,12 @@ import {
   canTransition,
   isSchemePayer,
   isTerminal,
+  needsAttention,
+  OVERVIEW_WAITING_LIMIT,
+  statusesForFilter,
+  trailingMonths,
+  type ClaimListQuery,
+  type ClaimOverview,
   slaDeadlineFor,
   type ClaimFinancials,
   type ClaimStatus,
@@ -42,20 +48,106 @@ interface AuthContext {
  * the org half). desk_head and everyone above sees the full org.
  */
 export async function listClaims(auth: AuthContext, query: ListClaimsQuery) {
-  const statusFilter =
-    query.status !== undefined ? { status: query.status } : {};
+  // No limit: every match. The dashboard's charts and the
+  // assistant's claim matching both need the whole set, not a page.
+  const { rows } = await listClaimsPage(auth, {
+    ...query,
+    statusFilter: "all",
+  });
+  return rows;
+}
+
+/**
+ * One page of claims, with the total behind it.
+ *
+ * The desk's list screen is the one place a hospital's whole history
+ * accumulates, and it used to fetch all of it and filter in the
+ * browser. Callers that genuinely want every claim — the dashboard's
+ * charts, the assistant's claim-matching — go through `listClaims`
+ * above and send no limit.
+ *
+ * The scoping rule is unchanged and still comes first: a desk
+ * executive sees their own claims whatever else they ask for
+ * (docs/adr/0002).
+ */
+export async function listClaimsPage(
+  auth: AuthContext,
+  query: ListClaimsQuery & ClaimListQuery,
+) {
   const forceOwnClaimsOnly =
     auth.role === "desk_executive" || query.scope === "mine";
+  const assignedTo = forceOwnClaimsOnly
+    ? await getMemberId(auth.userId)
+    : undefined;
 
-  if (forceOwnClaimsOnly) {
-    const memberId = await getMemberId(auth.userId);
-    return claimsRepository.listClaims({
-      ...statusFilter,
-      assignedTo: memberId,
-    });
-  }
+  return claimsRepository.listClaims({
+    ...(query.status !== undefined ? { status: query.status } : {}),
+    ...(assignedTo !== undefined ? { assignedTo } : {}),
+    statuses: query.status
+      ? null
+      : statusesForFilter(query.statusFilter ?? "open"),
+    q: query.q,
+    sort: query.sort,
+    dir: query.dir,
+    limit: query.limit,
+    offset: query.offset,
+  });
+}
 
-  return claimsRepository.listClaims(statusFilter);
+/**
+ * The dashboard, counted rather than fetched.
+ *
+ * Replaces "send every claim and let the browser work it out". The
+ * month boundary and the six-month window are decided here, on the
+ * server's clock — the browser's was fine while the browser did the
+ * counting, and is not once the counting moves.
+ *
+ * Empty months are filled in afterwards so the trend chart has six
+ * columns whatever the data looks like; a chart that silently drops a
+ * quiet month reads as a shorter history rather than a quieter one.
+ */
+export async function getClaimOverview(
+  auth: AuthContext,
+  now = new Date(),
+): Promise<ClaimOverview> {
+  const forceOwnClaimsOnly = auth.role === "desk_executive";
+  const assignedTo = forceOwnClaimsOnly
+    ? await getMemberId(auth.userId)
+    : undefined;
+
+  const months = trailingMonths(now);
+  const first = months[0]!;
+
+  const raw = await claimsRepository.claimOverview({
+    ...(assignedTo ? { assignedTo } : {}),
+    monthStart: new Date(now.getFullYear(), now.getMonth(), 1),
+    trendStart: new Date(first.year, first.month, 1),
+    needsAttention: statusesForFilter("attention") ?? [],
+    openStatuses: statusesForFilter("open") ?? [],
+    waitingLimit: OVERVIEW_WAITING_LIMIT,
+  });
+
+  const byMonth = new Map(raw.trend.map((r) => [r.month, r]));
+
+  return {
+    openClaims: raw.openClaims,
+    needsAttention: raw.byStatus
+      .filter((r) => needsAttention(r.status))
+      .reduce((sum, r) => sum + r.count, 0),
+    avgTimeInStageHours: raw.avgStageHours,
+    settledThisMonth: raw.settledThisMonth,
+    byStatus: raw.byStatus,
+    settledTrend: months.map(({ year, month }) => {
+      const key = `${year}-${String(month + 1).padStart(2, "0")}`;
+      const hit = byMonth.get(key);
+      return { year, month, count: hit?.count ?? 0, value: hit?.value ?? 0 };
+    }),
+    waiting: raw.waiting.map((w) => ({
+      ...w,
+      status: w.status as ClaimStatus,
+      updatedAt: w.updatedAt.toISOString(),
+    })),
+  };
 }
 
 export async function getClaim(auth: AuthContext, id: string) {

@@ -48,6 +48,69 @@ describe.skipIf(!process.env.DATABASE_URL)(
       await db.delete(procedures).where(eq(procedures.id, procedureId));
     });
 
+    /**
+     * The paging, searching and ordering that used to run in the
+     * browser over every claim the hospital had ever opened. SQL now,
+     * so the only honest test of it is against a real database.
+     */
+    describe("listClaims", () => {
+      it("pages, and reports the total behind the page", async () => {
+        for (const name of ["Page A", "Page B", "Page C"]) {
+          await claimsRepository.createClaim(
+            { patientName: name, insurerId, procedureId },
+            [],
+          );
+        }
+
+        const first = await claimsRepository.listClaims({
+          q: "Page ",
+          limit: 2,
+          offset: 0,
+        });
+
+        expect(first.rows).toHaveLength(2);
+        // The count is of matches, not of the page — "of 3" has to be
+        // right or the pager lies about whether there is a next page.
+        expect(first.total).toBe(3);
+
+        const second = await claimsRepository.listClaims({
+          q: "Page ",
+          limit: 2,
+          offset: 2,
+        });
+        expect(second.rows).toHaveLength(1);
+        // No row appears on both pages.
+        const ids = new Set([...first.rows, ...second.rows].map((r) => r.id));
+        expect(ids.size).toBe(3);
+      });
+
+      it("searches the patient's name, case-insensitively", async () => {
+        await claimsRepository.createClaim(
+          { patientName: "Rukmini Searchable", insurerId, procedureId },
+          [],
+        );
+
+        const found = await claimsRepository.listClaims({ q: "rukmini" });
+        expect(found.rows.map((r) => r.patientName)).toContain(
+          "Rukmini Searchable",
+        );
+      });
+
+      it("treats % in a search as a character, not a wildcard", async () => {
+        // Otherwise a stray % matches every claim on the desk.
+        const all = await claimsRepository.listClaims({});
+        const wild = await claimsRepository.listClaims({ q: "%" });
+        expect(wild.total).toBeLessThan(all.total);
+      });
+
+      it("filters to the statuses it is given", async () => {
+        const open = await claimsRepository.listClaims({
+          statuses: ["DRAFT"],
+        });
+        for (const row of open.rows) expect(row.status).toBe("DRAFT");
+      });
+    });
+
     it("creates a claim and reads it back", async () => {
       const created = await claimsRepository.createClaim(
         { patientName: "Test Patient", insurerId, procedureId },
