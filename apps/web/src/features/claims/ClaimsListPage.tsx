@@ -172,7 +172,24 @@ export function ClaimsListPage() {
               </TableHeader>
               <TableBody>
                 {visible.map((claim) => (
-                  <TableRow key={claim.id}>
+                  /*
+                    The whole row opens the claim.
+
+                    It highlighted on hover and then only the reference
+                    navigated — so clicking a patient's name, which is
+                    the thing a desk actually reads the row for, did
+                    nothing. The hover state was promising a click the
+                    row did not honour.
+
+                    The link stays: it is what gives the row a keyboard
+                    stop and what lets a desk middle-click a claim into
+                    a new tab, neither of which an onClick provides.
+                  */
+                  <TableRow
+                    key={claim.id}
+                    onClick={() => navigate(`/claims/${claim.id}`)}
+                    className="cursor-pointer"
+                  >
                     <TableCell className="font-mono tabular-nums">
                       <Link
                         to={`/claims/${claim.id}`}

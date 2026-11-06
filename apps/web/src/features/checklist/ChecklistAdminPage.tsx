@@ -36,14 +36,36 @@ export function ChecklistAdminPage() {
   const [insurerId, setInsurerId] = useState("");
   const [procedureId, setProcedureId] = useState("");
 
-  // Land on a real pair rather than an empty screen — the admin almost
-  // always wants to see *a* checklist, not choose from nothing.
+  /*
+    Land on a pair that has rules.
+
+    It used to take the first insurer and the first procedure, which
+    are two independent alphabetical picks and almost never a pair
+    anyone has configured — so the page opened on "No documents
+    required yet for this pair" and read as though the whole feature
+    were empty, with twenty rules one dropdown away.
+
+    Coverage already knows which pairs are real; the busiest of them is
+    the one an admin most likely came here for. Falling back to the
+    first of each only when nothing is configured at all, which is the
+    one time an empty screen is the truth.
+  */
+  const { data: coverage } = useChecklistCoverage();
   useEffect(() => {
-    if (!insurerId && insurers?.length) setInsurerId(insurers[0]!.id);
-  }, [insurers, insurerId]);
-  useEffect(() => {
-    if (!procedureId && procedures?.length) setProcedureId(procedures[0]!.id);
-  }, [procedures, procedureId]);
+    if (insurerId || procedureId) return;
+    const busiest = [...(coverage?.covered ?? [])].sort(
+      (a, b) => b.claims - a.claims || b.rules - a.rules,
+    )[0];
+    if (busiest) {
+      setInsurerId(busiest.insurerId);
+      setProcedureId(busiest.procedureId);
+      return;
+    }
+    if (coverage && insurers?.length && procedures?.length) {
+      setInsurerId(insurers[0]!.id);
+      setProcedureId(procedures[0]!.id);
+    }
+  }, [coverage, insurers, procedures, insurerId, procedureId]);
 
   const { data, isLoading, isError } = useChecklistRules(
     insurerId,

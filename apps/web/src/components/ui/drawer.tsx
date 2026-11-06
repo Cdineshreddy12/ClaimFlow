@@ -19,8 +19,11 @@ export const DrawerClose = DialogPrimitive.Close;
 
 export const DrawerContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
-  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
->(({ className, children, ...props }, ref) => (
+  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> & {
+    /** Full-width, for a panel showing a table or a chart. */
+    wide?: boolean;
+  }
+>(({ className, children, wide = false, ...props }, ref) => (
   <DialogPrimitive.Portal>
     {/* Lighter than the modal scrim: a drawer is somewhere you work
         beside the page, not a question that stops it. */}
@@ -28,11 +31,20 @@ export const DrawerContent = React.forwardRef<
     <DialogPrimitive.Content
       ref={ref}
       className={cn(
-        // 85% of the viewport, with a floor so the panel stays usable on a
-        // phone — a percentage of a 375px screen is a column nothing
-        // reads well in — and never wider than the viewport itself.
-        // This percentage is the one number to change.
-        "fixed inset-y-0 right-0 z-50 flex w-[min(100vw,max(85vw,420px))] flex-col",
+        // Two widths, because the panel does two jobs. Reading an
+        // answer about a claim wants the claim still visible beside it;
+        // reading a table of forty receivables wants the room. Wide was
+        // the only option and it covered the whole page — including the
+        // claim the panel was being asked about.
+        //
+        // Floors on both so the panel stays usable on a phone (a
+        // percentage of a 375px screen is a column nothing reads well
+        // in), and never wider than the viewport itself.
+        "fixed inset-y-0 right-0 z-50 flex flex-col",
+        wide
+          ? "w-[min(100vw,max(85vw,420px))]"
+          : "w-[min(100vw,max(46vw,420px))]",
+        "transition-[width] motion-reduce:transition-none",
         "border-l border-line bg-surface shadow-[-14px_0_44px_rgba(0,0,0,0.18)]",
         "motion-safe:animate-in motion-safe:slide-in-from-right-[100%] motion-safe:duration-200",
         className,

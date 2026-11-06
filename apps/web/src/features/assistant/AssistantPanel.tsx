@@ -50,6 +50,8 @@ const AssistantMarkdown = lazy(() =>
  * a human approved, written by the ordinary services. See
  * docs/adr/0005.
  */
+const WIDE_KEY = "claimflow.assistant.wide";
+
 export function AssistantPanel() {
   const [open, setOpen] = useState(false);
   const { data: status } = useAssistantStatus();
@@ -143,6 +145,15 @@ function AssistantBody({
   const [staged, setStaged] = useState<StagedFile[]>([]);
   const [dragging, setDragging] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  // Remembered, like the sidebar's collapsed state: a desk that
+  // widened the panel to read a table does not want it narrow again
+  // on the next question.
+  const [wide, setWide] = useState(
+    () => localStorage.getItem(WIDE_KEY) === "1",
+  );
+  useEffect(() => {
+    localStorage.setItem(WIDE_KEY, wide ? "1" : "0");
+  }, [wide]);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [openHistoryId, setOpenHistoryId] = useState<string | null>(null);
   const [resolved, setResolved] = useState<Record<string, unknown>>({});
@@ -299,6 +310,7 @@ function AssistantBody({
 
   return (
     <DrawerContent
+      wide={wide}
       onDragOver={(e) => {
         e.preventDefault();
         setDragging(true);
@@ -339,6 +351,21 @@ function AssistantBody({
             onClick={() => setShowHistory((h) => !h)}
           >
             {showHistory ? "Back" : "History"}
+          </Button>
+          {/* Narrow by default, because the commonest question is about
+              the claim on the page behind this panel and the answer is
+              worth little if you cannot see what it is about. Wide is
+              one click away and remembered, for the receivables tables
+              and the charts that genuinely need the room. */}
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            aria-pressed={wide}
+            title={wide ? "Narrow the panel" : "Widen the panel"}
+            onClick={() => setWide((w) => !w)}
+          >
+            {wide ? "Narrow" : "Wide"}
           </Button>
           <DrawerClose asChild>
             <Button type="button" size="sm" variant="outline">

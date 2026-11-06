@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { AppShell } from "../../app/AppShell";
+import { Button } from "@/components/ui/button";
 import { Loader } from "../../components/ui/loader";
 import { QueryCard } from "./QueryCard";
 import { QueryDetailPanel } from "./QueryDetailPanel";
@@ -39,9 +41,29 @@ export function QueryInboxPage() {
       ) : null}
 
       {!isLoading && !isError && queries?.length === 0 ? (
-        <p className="px-1 py-2.5 text-base text-ink-faint">
-          No open queries — the inbox is clear.
-        </p>
+        /*
+          An empty inbox is the normal state, and it was one grey
+          sentence in the corner of a blank page — nothing saying what
+          this screen is, how anything arrives on it, or what to do
+          next. Someone seeing it on their first morning has no way to
+          tell "nothing to do" from "this is broken".
+        */
+        <div className="mx-auto mt-[12vh] max-w-[46ch] text-center">
+          <div className="text-xl font-semibold text-ink">
+            The inbox is clear
+          </div>
+          <p className="mt-2 text-base leading-relaxed text-ink-soft">
+            Queries land here when a TPA writes back asking for something. Paste
+            their email onto the claim it is about —
+            <b className="font-semibold"> Log a query</b> on the claim file —
+            and the reply countdown starts from the deadline they gave.
+          </p>
+          <div className="mt-5 flex justify-center">
+            <Button asChild variant="outline">
+              <Link to="/claims">Go to claims</Link>
+            </Button>
+          </div>
+        </div>
       ) : null}
 
       {queries && queries.length > 0 ? (

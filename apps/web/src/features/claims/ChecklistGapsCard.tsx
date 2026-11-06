@@ -9,16 +9,25 @@ import { useApplyChecklistRules, useRemoveChecklistSlot } from "./api";
 export function ChecklistGapsCard({
   claim,
   gaps,
+  pinned = false,
 }: {
   claim: Claim;
   gaps: ClaimGaps | undefined;
+  /** Held at the top of the page, so a document can be dragged onto it. */
+  pinned?: boolean;
 }) {
   const requiredMissing = gaps?.missing.length ?? 0;
   const applyRules = useApplyChecklistRules(claim.id);
   const removeSlot = useRemoveChecklistSlot(claim.id);
 
   return (
-    <Card>
+    <Card
+      className={
+        pinned
+          ? "sticky top-[var(--rail-top,1.25rem)] z-20 shadow-[0_10px_30px_rgba(0,0,0,0.12)]"
+          : undefined
+      }
+    >
       <CardHeader>
         <CardTitle>Document Checklist · Gaps</CardTitle>
         {gaps ? (

@@ -200,7 +200,7 @@ export function AppShell({
           {subtitle ? `${title} — ${subtitle}` : title}
         </h1>
         <main
-          className={`w-full px-4 pb-12 pt-5 lg:px-8 lg:pb-[60px] lg:pt-7 ${
+          className={`w-full px-4 pb-20 pt-5 lg:px-8 lg:pb-[76px] lg:pt-7 ${
             fill
               ? "flex min-h-0 flex-1 flex-col lg:overflow-hidden lg:pb-7"
               : ""

@@ -83,7 +83,18 @@ export function ClaimDocumentsTab({
       onDragCancel={() => setDragging(null)}
     >
       <div className="flex flex-col gap-[18px]">
-        <ChecklistGapsCard claim={claim} gaps={gaps} />
+        {/* Pinned while a drag is running. The slots are the drop
+            targets and the files are ~700px below them, so by the
+            time you have hold of a grip every target has scrolled
+            off the top — the gesture worked and had nowhere to
+            land. Sticky only during the drag, because a card this
+            tall parked at the top permanently would cost half the
+            viewport for the rest of the time. */}
+        <ChecklistGapsCard
+          claim={claim}
+          gaps={gaps}
+          pinned={dragging !== null}
+        />
         {/* Under the gaps, not above them: it argues for closing those
             specific gaps, so it only makes sense once you've seen which
             ones are open. */}

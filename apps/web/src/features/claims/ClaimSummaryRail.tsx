@@ -32,6 +32,12 @@ function formatDate(iso: string | null) {
  * it. The max-height is the matching half: with seven buttons and the
  * glance card the rail can outgrow a laptop viewport, and a pinned
  * element taller than the screen has a bottom nobody can reach.
+ *
+ * It stops 76px short of the bottom rather than 20, because the
+ * assistant's launcher is fixed down there — 48px plus its 20px
+ * margin. The rail ran under it and put the button on top of the
+ * document gap count, which is the one number the brief says has to be
+ * readable without scrolling.
  */
 export function ClaimSummaryRail({
   claim,
@@ -47,7 +53,7 @@ export function ClaimSummaryRail({
   const doctor = doctorVerdict(approvals);
 
   return (
-    <aside className="static flex flex-col gap-3.5 xl:sticky xl:top-[var(--rail-top,1.25rem)] xl:max-h-[calc(100vh_-_var(--rail-top,1.25rem)_-_20px)] xl:overflow-y-auto xl:overscroll-contain">
+    <aside className="static flex flex-col gap-3.5 xl:sticky xl:top-[var(--rail-top,1.25rem)] xl:max-h-[calc(100vh_-_var(--rail-top,1.25rem)_-_76px)] xl:overflow-y-auto xl:overscroll-contain">
       <Card>
         <CardHeader>
           <CardTitle>What now</CardTitle>
