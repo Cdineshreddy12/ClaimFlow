@@ -1,9 +1,8 @@
 import { Link } from "react-router-dom";
-import { needsAttention } from "@claimflow/contracts";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatDuration } from "../../lib/format";
 import { STATUS_CHIP_VARIANT, STATUS_LABEL } from "../claims/types";
-import type { Claim } from "../claims/types";
+import type { WaitingClaim } from "@claimflow/contracts";
 import { Badge } from "@/components/ui/badge";
 import {
   Table,
@@ -26,19 +25,18 @@ import {
  * the number and the list can't disagree.
  */
 export function NeedsAttentionCard({
-  claims,
+  waiting,
   now,
 }: {
-  claims: Claim[];
+  /**
+   * Already filtered and ordered by the server — the same predicate
+   * the KPI above counts, so the number and the list can't disagree,
+   * and the browser no longer sorts the whole ledger to find eight
+   * rows.
+   */
+  waiting: WaitingClaim[];
   now: number;
 }) {
-  const waiting = claims
-    .filter((claim) => needsAttention(claim.status))
-    .sort(
-      (a, b) =>
-        new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime(),
-    );
-
   return (
     <Card>
       <CardHeader>

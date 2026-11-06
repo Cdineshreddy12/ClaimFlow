@@ -2,7 +2,7 @@ import type { ClaimStatus } from "@claimflow/contracts";
 import { Donut } from "@/components/charts/Donut";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { STATUS_LABEL } from "../claims/types";
-import type { Claim } from "../claims/types";
+import type { StatusCount } from "@claimflow/contracts";
 
 /**
  * Fixed lifecycle order, not sorted by count — a status's color must stay
@@ -20,11 +20,13 @@ const STATUS_ORDER: ClaimStatus[] = [
   "REJECTED",
 ];
 
-export function ClaimsByStatusDonut({ claims }: { claims: Claim[] }) {
-  const counts = new Map<ClaimStatus, number>();
-  for (const claim of claims) {
-    counts.set(claim.status, (counts.get(claim.status) ?? 0) + 1);
-  }
+export function ClaimsByStatusDonut({
+  byStatus,
+}: {
+  /** Counted in the database — the browser no longer tallies the ledger. */
+  byStatus: StatusCount[];
+}) {
+  const counts = new Map(byStatus.map((r) => [r.status, r.count]));
 
   const data = STATUS_ORDER.map((status, i) => ({
     key: status,

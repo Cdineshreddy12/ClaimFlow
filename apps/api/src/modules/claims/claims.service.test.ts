@@ -45,7 +45,10 @@ describe("claims.service", () => {
 
   describe("listClaims", () => {
     it("desk_executive is forced to their own assigned claims, even if scope=all was asked for", async () => {
-      vi.mocked(claimsRepository.listClaims).mockResolvedValue([]);
+      vi.mocked(claimsRepository.listClaims).mockResolvedValue({
+        rows: [],
+        total: 0,
+      });
 
       await import("./claims.service.js").then((m) =>
         m.listClaims(auth("desk_executive"), { scope: "all" }),
@@ -57,7 +60,10 @@ describe("claims.service", () => {
     });
 
     it("desk_head gets the whole org by default", async () => {
-      vi.mocked(claimsRepository.listClaims).mockResolvedValue([]);
+      vi.mocked(claimsRepository.listClaims).mockResolvedValue({
+        rows: [],
+        total: 0,
+      });
 
       await import("./claims.service.js").then((m) =>
         m.listClaims(auth("desk_head"), { scope: "all" }),

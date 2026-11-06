@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { AppShell } from "../../app/AppShell";
 import { Button } from "@/components/ui/button";
 import { Loader } from "../../components/ui/loader";
-import { useClaims } from "../claims/api";
+import { useClaimOverview } from "../claims/api";
 import { useQueryInbox } from "../queries/api";
 import { useDeductionsSummary } from "../deductions/api";
 import { DeductionsByReasonCard } from "./DeductionsByReasonCard";
@@ -12,14 +12,16 @@ import { SlaWatchCard } from "../sla/SlaWatchCard";
 import { KpiRow } from "./KpiRow";
 import { ClaimsByStatusDonut } from "./ClaimsByStatusDonut";
 import { SettledTrendChart } from "./SettledTrendChart";
-import { computeDashboardMetrics } from "./metrics";
+import { dashboardMetrics } from "./metrics";
 
 export function DashboardPage() {
+  // One request for the whole page. It used to be every claim the
+  // hospital had ever opened, looped over five times in the browser.
   const {
-    data: claims,
+    data: overview,
     isLoading: claimsLoading,
     isError: claimsError,
-  } = useClaims();
+  } = useClaimOverview();
   const {
     data: openQueries,
     isLoading: queriesLoading,
@@ -31,9 +33,11 @@ export function DashboardPage() {
   // "time in stage" figures stable while the page sits open.
   const now = useMemo(() => Date.now(), []);
 
+  // The claim side is counted server-side; the query side still comes
+  // from the inbox, which is bounded by the open queries a desk has.
   const metrics = useMemo(
-    () => computeDashboardMetrics(claims ?? [], openQueries ?? [], now),
-    [claims, openQueries, now],
+    () => dashboardMetrics(overview, openQueries ?? [], now),
+    [overview, openQueries, now],
   );
 
   const isLoading = claimsLoading || queriesLoading;
@@ -64,16 +68,16 @@ export function DashboardPage() {
               claims needed the room more than it needed to sit next to
               the clock card. */}
           <div className="mt-5">
-            <NeedsAttentionCard claims={claims ?? []} now={now} />
+            <NeedsAttentionCard waiting={overview?.waiting ?? []} now={now} />
           </div>
           {/* Ratio lives in CSS, not an inline style — an inline
               grid-template-columns outranks every media query, which is
               exactly how this silently stayed 2-up on a phone. */}
           <div className="mt-5 grid grid-cols-1 items-stretch gap-5 lg:grid-cols-2 [&+&]:mt-5 [&>*]:min-w-0 lg:!grid-cols-[1fr_1.5fr]">
-            <ClaimsByStatusDonut claims={claims ?? []} />
+            <ClaimsByStatusDonut byStatus={overview?.byStatus ?? []} />
             <DeductionsByReasonCard summary={deductions} />
           </div>
-          <SettledTrendChart claims={claims ?? []} now={now} />
+          <SettledTrendChart months={overview?.settledTrend ?? []} />
         </>
       ) : null}
     </AppShell>

@@ -1,12 +1,17 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
   ClaimFinancials,
+  ClaimOverview,
   ClaimStatus,
   PreauthReview,
 } from "@claimflow/contracts";
 import { api } from "../../lib/api-client";
 import type { Claim, ClaimGaps, Enhancement } from "./types";
 
+/**
+ * Every claim, for the things that need totals rather than a page —
+ * the dashboard's charts, the assistant's claim matching.
+ */
 export function useClaims() {
   return useQuery({
     queryKey: ["claims"],

@@ -1,157 +1,63 @@
 import { describe, expect, it } from "vitest";
-import type { Claim } from "../claims/types";
+import type { ClaimOverview } from "@claimflow/contracts";
+import { dashboardMetrics } from "./metrics";
 import type { InboxQuery } from "../queries/types";
-import { computeDashboardMetrics } from "./metrics";
 
-const NOW = new Date("2026-11-04T12:00:00Z").getTime();
+const NOW = new Date("2026-11-06T12:00:00Z").getTime();
 
-function claim(overrides: Partial<Claim>): Claim {
+function overview(partial: Partial<ClaimOverview> = {}): ClaimOverview {
   return {
-    id: "c1",
-    reference: "CLM-0001",
-    patientName: "Test Patient",
-    insurerId: "i1",
-    insurerName: "Insurer",
-    procedureId: "p1",
-    procedureName: "Procedure",
-    status: "PRE_AUTH_SENT",
-    assignedTo: null,
-    checklistSnapshot: [],
-    billedAmount: null,
-    sanctionedAmount: null,
-    settledAmount: null,
-    settledOn: null,
-    slaDeadline: null,
-    admittedAt: null,
-    createdAt: new Date(NOW).toISOString(),
-    updatedAt: new Date(NOW).toISOString(),
-    ...overrides,
+    openClaims: 3,
+    needsAttention: 1,
+    avgTimeInStageHours: 9.5,
+    settledThisMonth: { count: 2, value: 330_000 },
+    byStatus: [],
+    settledTrend: [],
+    waiting: [],
+    ...partial,
   };
 }
 
-function query(overrides: Partial<InboxQuery>): InboxQuery {
-  return {
-    id: "q1",
-    claimId: "c1",
-    claimReference: "CLM-0001",
-    tpaRawEmail: null,
-    aiSummary: null,
-    requestedItems: [],
-    summarisedBy: null,
-    deadline: null,
-    deadlineInferred: false,
-    deadlineConfirmedAt: null,
-    replySentAt: null,
-    createdAt: new Date(NOW).toISOString(),
-    claimPatientName: "Test Patient",
-    claimStatus: "QUERY_RAISED",
-    insurerName: "Test Insurer",
-    procedureName: "Test Procedure",
-    ...overrides,
-  };
+function query(deadline: string | null): InboxQuery {
+  return { id: "q", deadline } as unknown as InboxQuery;
 }
 
-describe("computeDashboardMetrics", () => {
-  it("excludes settled/rejected claims from openClaims", () => {
-    const claims = [
-      claim({ status: "SETTLED" }),
-      claim({ status: "REJECTED" }),
-      claim({ status: "PRE_AUTH_SENT" }),
-    ];
-    expect(computeDashboardMetrics(claims, [], NOW).openClaims).toBe(1);
+/**
+ * The claim figures are counted in the database now — their rules are
+ * tested against a real one in claims.repository.integration. What is
+ * left here is the assembly, and the one figure that still depends on
+ * the clock the reader is looking at.
+ */
+describe("dashboardMetrics", () => {
+  it("passes the server's counts through untouched", () => {
+    const m = dashboardMetrics(overview(), [], NOW);
+    expect(m.openClaims).toBe(3);
+    expect(m.needsAttention).toBe(1);
+    expect(m.completedThisMonth).toBe(2);
+    expect(m.settledValueThisMonth).toBe(330_000);
+    expect(m.avgTimeInStageHours).toBe(9.5);
   });
 
-  it("counts query and enhancement claims as needing attention", () => {
-    const claims = [
-      claim({ status: "QUERY_RAISED" }),
-      claim({ status: "ENHANCEMENT_REQUESTED" }),
-      claim({ status: "APPROVED" }),
-    ];
-    expect(computeDashboardMetrics(claims, [], NOW).needsAttention).toBe(2);
+  it("reads as an empty desk while the request is in flight", () => {
+    // Zeroes, not NaN or "—": the KPI row renders before the response
+    // lands and a flash of broken numbers is worse than a flash of nil.
+    const m = dashboardMetrics(undefined, [], NOW);
+    expect(m.openClaims).toBe(0);
+    expect(m.settledValueThisMonth).toBe(0);
+    expect(m.avgTimeInStageHours).toBeNull();
   });
 
   it("flags a query as overdue only once its deadline has passed", () => {
-    const queries = [
-      query({ id: "overdue", deadline: new Date(NOW - 60_000).toISOString() }),
-      query({ id: "future", deadline: new Date(NOW + 60_000).toISOString() }),
-      query({ id: "no-deadline", deadline: null }),
-    ];
-    const metrics = computeDashboardMetrics([], queries, NOW);
-    expect(metrics.openQueries).toBe(3);
-    expect(metrics.overdueQueries).toBe(1);
-  });
-
-  it("averages time-in-stage across open claims only, in hours", () => {
-    const claims = [
-      claim({
-        status: "PRE_AUTH_SENT",
-        updatedAt: new Date(NOW - 2 * 3_600_000).toISOString(),
-      }),
-      claim({
-        status: "QUERY_RAISED",
-        updatedAt: new Date(NOW - 4 * 3_600_000).toISOString(),
-      }),
-      claim({
-        status: "SETTLED",
-        updatedAt: new Date(NOW - 100 * 3_600_000).toISOString(),
-      }),
-    ];
-    expect(computeDashboardMetrics(claims, [], NOW).avgTimeInStageHours).toBe(
-      3,
-    );
-  });
-
-  it("returns null average time-in-stage when there are no open claims", () => {
-    expect(
-      computeDashboardMetrics([claim({ status: "SETTLED" })], [], NOW)
-        .avgTimeInStageHours,
-    ).toBeNull();
-  });
-});
-
-describe("completedThisMonth", () => {
-  const thisMonth = new Date(NOW);
-  thisMonth.setDate(2);
-  const lastMonth = new Date(NOW);
-  lastMonth.setMonth(lastMonth.getMonth() - 1);
-
-  const iso = (d: Date) => d.toISOString().slice(0, 10);
-
-  it("counts claims whose payment landed this month", () => {
-    const metrics = computeDashboardMetrics(
+    const m = dashboardMetrics(
+      overview(),
       [
-        claim({ id: "a", settledOn: iso(thisMonth), settledAmount: "150000" }),
-        claim({ id: "b", settledOn: iso(lastMonth), settledAmount: "90000" }),
-        claim({ id: "c" }),
+        query("2026-11-05T12:00:00Z"),
+        query("2026-11-07T12:00:00Z"),
+        query(null),
       ],
-      [],
       NOW,
     );
-    expect(metrics.completedThisMonth).toBe(1);
-    expect(metrics.settledValueThisMonth).toBe(150000);
-  });
-
-  it("counts on the payment date, not the status", () => {
-    // A claim marked settled in October whose money arrived in November
-    // belongs to November — that's the month the desk gets credit for.
-    const metrics = computeDashboardMetrics(
-      [
-        claim({
-          id: "late",
-          status: "SETTLED",
-          settledOn: iso(lastMonth),
-          settledAmount: "50000",
-        }),
-      ],
-      [],
-      NOW,
-    );
-    expect(metrics.completedThisMonth).toBe(0);
-  });
-
-  it("is zero when nothing has been paid", () => {
-    const metrics = computeDashboardMetrics([claim({ id: "a" })], [], NOW);
-    expect(metrics.completedThisMonth).toBe(0);
-    expect(metrics.settledValueThisMonth).toBe(0);
+    expect(m.openQueries).toBe(3);
+    expect(m.overdueQueries).toBe(1);
   });
 });

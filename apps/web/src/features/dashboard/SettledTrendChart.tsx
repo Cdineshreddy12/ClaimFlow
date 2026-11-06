@@ -1,7 +1,7 @@
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { ColumnChart } from "@/components/charts/ColumnChart";
 import { formatAmount, formatCompactAmount } from "@/lib/format";
-import type { Claim } from "../claims/types";
+import type { SettledMonth } from "@claimflow/contracts";
 
 const MONTH_LABEL = [
   "Jan",
@@ -18,41 +18,21 @@ const MONTH_LABEL = [
   "Dec",
 ];
 
-/** The trailing 6 calendar months, oldest first, including the current one. */
-function trailingMonths(now: number): { year: number; month: number }[] {
-  const anchor = new Date(now);
-  const months: { year: number; month: number }[] = [];
-  for (let i = 5; i >= 0; i--) {
-    const d = new Date(anchor.getFullYear(), anchor.getMonth() - i, 1);
-    months.push({ year: d.getFullYear(), month: d.getMonth() });
-  }
-  return months;
-}
-
 export function SettledTrendChart({
-  claims,
-  now,
+  months,
 }: {
-  claims: Claim[];
-  now: number;
+  /**
+   * Six months, summed in the database and already gap-filled — a
+   * quiet month still gets a column, so the chart reads as a quieter
+   * month rather than a shorter history.
+   */
+  months: SettledMonth[];
 }) {
-  const months = trailingMonths(now);
-
-  const data = months.map(({ year, month }) => {
-    const total = claims
-      .filter((c) => {
-        if (!c.settledOn) return false;
-        const d = new Date(`${c.settledOn}T00:00:00`);
-        return d.getFullYear() === year && d.getMonth() === month;
-      })
-      .reduce((sum, c) => sum + Number(c.settledAmount ?? 0), 0);
-
-    return {
-      key: `${year}-${month}`,
-      label: MONTH_LABEL[month] ?? "",
-      value: total,
-    };
-  });
+  const data = months.map(({ year, month, value }) => ({
+    key: `${year}-${month}`,
+    label: MONTH_LABEL[month] ?? "",
+    value,
+  }));
 
   const hasAny = data.some((d) => d.value > 0);
 
