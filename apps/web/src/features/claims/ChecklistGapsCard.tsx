@@ -17,6 +17,13 @@ export function ChecklistGapsCard({
   pinned?: boolean;
 }) {
   const requiredMissing = gaps?.missing.length ?? 0;
+  /*
+    No rules means nothing can ever be reported missing, so the count
+    reaches zero without a single document being checked. "Complete" on
+    that is true and useless — the pill is what a desk scans, and it
+    would be saying the file is ready on a file nobody vetted.
+  */
+  const noChecklist = claim.checklistSnapshot.length === 0;
   const applyRules = useApplyChecklistRules(claim.id);
   const removeSlot = useRemoveChecklistSlot(claim.id);
 
@@ -31,8 +38,20 @@ export function ChecklistGapsCard({
       <CardHeader>
         <CardTitle>Document Checklist · Gaps</CardTitle>
         {gaps ? (
-          <Badge variant={requiredMissing > 0 ? "critical" : "approved"}>
-            {requiredMissing > 0 ? `${requiredMissing} missing` : "Complete"}
+          <Badge
+            variant={
+              noChecklist
+                ? "pending"
+                : requiredMissing > 0
+                  ? "critical"
+                  : "approved"
+            }
+          >
+            {noChecklist
+              ? "Not checked"
+              : requiredMissing > 0
+                ? `${requiredMissing} missing`
+                : "Complete"}
           </Badge>
         ) : null}
       </CardHeader>

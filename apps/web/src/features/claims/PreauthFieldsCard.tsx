@@ -1,4 +1,5 @@
-import { placementLabel, type PreauthPlacement } from "@claimflow/contracts";
+import { placementLabel } from "@claimflow/contracts";
+import { preauthProgress } from "../preauth/progress";
 import { Button } from "@/components/ui/button";
 import { Loader } from "@/components/ui/loader";
 import {
@@ -40,33 +41,13 @@ export function PreauthFieldsCard({ claim }: { claim: Claim }) {
 
   const rows = data?.fields ?? [];
   const byKey = new Map(rows.map((r) => [r.fieldKey, r]));
-  const values = Object.fromEntries(rows.map((r) => [r.fieldKey, r.value]));
 
-  // Conditional fields key off the raw stored value, never the rendered
-  // label: "Surgical management" is not "surgical_management".
-  function applies(placement: PreauthPlacement): boolean {
-    const condition = placement.definition.conditionalOn;
-    if (!condition) return true;
-    const current = values[condition.fieldKey];
-    if (!current) return true;
-    return current === condition.equals;
-  }
-
-  const sections = (layout?.sections ?? [])
-    .map((section) => ({
-      ...section,
-      placements: section.placements.filter(applies),
-    }))
-    .filter((section) => section.placements.length > 0);
-
-  const applicable = sections.flatMap((section) => section.placements);
-  const confirmedCount = applicable.filter(
-    (p) => byKey.get(p.definition.fieldKey)?.confirmedAt,
-  ).length;
-  const awaiting = applicable.filter((p) => {
-    const row = byKey.get(p.definition.fieldKey);
-    return row?.aiValue && !row.confirmedAt;
-  }).length;
+  const {
+    sections,
+    applicable,
+    confirmed: confirmedCount,
+    awaiting,
+  } = preauthProgress({ layout, fields: data?.fields });
 
   const isBusy = confirm.isPending || clear.isPending || extract.isPending;
 

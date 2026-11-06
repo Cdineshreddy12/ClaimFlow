@@ -3,8 +3,9 @@ import { useParams } from "react-router-dom";
 import { AppShell } from "../../app/AppShell";
 import { Loader } from "../../components/ui/loader";
 import { Tabs, type TabDef } from "../../components/ui/tabs";
-import { PREAUTH_FIELDS } from "@claimflow/contracts";
 import { usePreauthFields } from "../preauth/api";
+import { useClaimLayout } from "../preauth/layout-api";
+import { preauthProgress } from "../preauth/progress";
 import { ClaimDocumentsTab } from "./ClaimDocumentsTab";
 import { DeductionsCard } from "./DeductionsCard";
 import { FormReviewCard } from "./FormReviewCard";
@@ -44,6 +45,7 @@ export function ClaimFilePage() {
   const { data: claim, isLoading, isError } = useClaim(id);
   const { data: gaps } = useClaimGaps(id);
   const { data: preauth } = usePreauthFields(id);
+  const { data: layout, isPending: layoutPending } = useClaimLayout(id);
   const { data: money } = useClaimFinancials(id);
   const [tab, setTab] = useState("documents");
 
@@ -94,19 +96,27 @@ export function ClaimFilePage() {
   }
 
   const missing = gaps?.missing.length ?? 0;
-  const confirmed = (preauth?.fields ?? []).filter((f) => f.confirmedAt).length;
-  const awaiting = (preauth?.fields ?? []).filter(
-    (f) => f.aiValue && !f.confirmedAt,
-  ).length;
+  // The same count the card itself shows, off the claim's own frozen
+  // layout — not the global field catalogue, which ignores whatever the
+  // hospital built in the form builder.
+  const { applicable, confirmed, awaiting } = preauthProgress({
+    layout,
+    fields: preauth?.fields,
+  });
   const admitted = formatDate(claim.admittedAt);
 
   const tabs: TabDef[] = [
     {
       id: "documents",
       label: "Documents",
-      ...(missing > 0
-        ? { badge: `${missing} missing`, badgeTone: "critical" as const }
-        : {}),
+      // A claim with no rules can never report anything missing, so an
+      // absent badge here would read as a clean file rather than an
+      // unchecked one.
+      ...(claim.checklistSnapshot.length === 0
+        ? { badge: "Not checked", badgeTone: "pending" as const }
+        : missing > 0
+          ? { badge: `${missing} missing`, badgeTone: "critical" as const }
+          : {}),
     },
     {
       id: "money",
@@ -125,11 +135,21 @@ export function ClaimFilePage() {
       label: "Pre-auth form",
       // The number that matters changes with the state: unchecked
       // suggestions are urgent, otherwise it's just progress.
-      badge:
-        awaiting > 0
-          ? `${awaiting} to check`
-          : `${confirmed}/${PREAUTH_FIELDS.length}`,
-      badgeTone: awaiting > 0 ? "pending" : "neutral",
+      //
+      // No badge at all until the layout has arrived. The denominator
+      // comes from it, so counting early renders "0/0" on a form that
+      // is 23 of 25 done — a false zero reads as "nothing here", which
+      // is worse than a label that appears a moment later.
+      ...(layoutPending
+        ? {}
+        : {
+            badge:
+              awaiting > 0
+                ? `${awaiting} to check`
+                : `${confirmed}/${applicable.length}`,
+            badgeTone:
+              awaiting > 0 ? ("pending" as const) : ("neutral" as const),
+          }),
     },
   ];
 

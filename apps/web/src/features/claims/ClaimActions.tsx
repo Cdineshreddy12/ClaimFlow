@@ -77,6 +77,12 @@ export function ClaimActions({ claim }: { claim: Claim }) {
   );
 
   const isSettled = claim.status === "SETTLED";
+  /** Money can only have arrived once an insurer has agreed to pay something. */
+  const canHaveBeenPaid =
+    claim.settledAmount !== null ||
+    claim.status === "APPROVED" ||
+    claim.status === "FINAL_BILL_SUBMITTED" ||
+    isSettled;
   const forward = FORWARD[claim.status];
 
   // Forward move first, then the rest, so the eye lands on the common
@@ -162,16 +168,24 @@ export function ClaimActions({ claim }: { claim: Claim }) {
           </Button>
 
           {/* Separate from the above: that is what the insurer agreed
-              to, this is what turned up. */}
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => setRecordPayment(true)}
-          >
-            {claim.settledAmount === null
-              ? "Record payment received"
-              : "Update payment received"}
-          </Button>
+              to, this is what turned up.
+
+              Hidden until the insurer could plausibly have paid. A draft
+              claim hasn't been sent, so "Record payment received" there
+              was offering to book money against something no insurer has
+              seen. An amount already recorded keeps the button whatever
+              the status, so a wrong figure stays correctable. */}
+          {canHaveBeenPaid ? (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setRecordPayment(true)}
+            >
+              {claim.settledAmount === null
+                ? "Record payment received"
+                : "Update payment received"}
+            </Button>
+          ) : null}
 
           {isSettled || claim.status === "FINAL_BILL_SUBMITTED" ? (
             // Only meaningful once an insurer has actually paid something.

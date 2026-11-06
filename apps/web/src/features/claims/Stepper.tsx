@@ -1,4 +1,4 @@
-import type { ClaimStatus } from "@claimflow/contracts";
+import { isTerminal, type ClaimStatus } from "@claimflow/contracts";
 import { X } from "reicon-react";
 import { CheckIcon } from "../../components/icons";
 
@@ -57,6 +57,8 @@ export function Stepper({ status }: { status: ClaimStatus }) {
 
   const currentIdx = STEP_ORDER.indexOf(normalize(status));
   const isQuery = status === "QUERY_RAISED";
+  // Rejected returns above, so this is Settled: the end of the line.
+  const finished = isTerminal(status);
 
   return (
     /*
@@ -76,7 +78,13 @@ export function Stepper({ status }: { status: ClaimStatus }) {
           stepIdx < currentIdx
             ? "done"
             : stepIdx === currentIdx
-              ? "current"
+              ? // A settled claim is finished, not mid-step. Marking the
+                // last one "current" put an amber "In progress" under
+                // "Settled" — the claim is closed and the stepper was
+                // saying there was work left on it.
+                finished
+                ? "done"
+                : "current"
               : "upcoming";
         // The segment to this step's left is complete when everything
         // before it is — which includes the run up to the current step.

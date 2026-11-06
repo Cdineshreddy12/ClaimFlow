@@ -47,6 +47,19 @@ export function MoneyCard({ claim }: { claim: Claim }) {
 
   const advice = money.enhancement;
 
+  /*
+    What the deductions could legitimately be explaining: the part of
+    the bill the insurer hasn't paid. Anything beyond that is
+    double-counted or sitting on the wrong claim. Only checked once a
+    bill exists — before that there is nothing to reconcile against.
+  */
+  const unpaid =
+    money.billedAmount === null
+      ? null
+      : money.billedAmount - Number(claim.settledAmount ?? 0);
+  const overRecorded =
+    unpaid !== null && money.deductedAmount > Math.max(unpaid, 0);
+
   return (
     <Card>
       <CardHeader>
@@ -104,6 +117,28 @@ export function MoneyCard({ claim }: { claim: Claim }) {
           </dd>
         </div>
       </dl>
+
+      {overRecorded ? (
+        /*
+          These five numbers are read together, and nothing was checking
+          that they could all be true at once. A claim billed at
+          ₹1,85,000 was showing ₹2,50,006 of deductions beside it — more
+          than the claim was ever worth — and the panel stated both
+          without comment. Deductions are typed per reason by hand, so
+          the usual cause is one filed against the wrong claim.
+        */
+        <div className="mb-4 rounded-md border border-pending bg-pending-bg px-3 py-2.5 text-base leading-relaxed">
+          <strong className="font-semibold">These don&apos;t add up.</strong>{" "}
+          {formatAmount(money.deductedAmount)} of deductions is recorded against{" "}
+          {formatAmount(money.billedAmount)} billed
+          {claim.settledAmount ? (
+            <> and {formatAmount(claim.settledAmount)} received</>
+          ) : null}
+          , which leaves only {formatAmount(unpaid)} it could be explaining.
+          Check the list below — a deduction filed against the wrong claim looks
+          exactly like this.
+        </div>
+      ) : null}
 
       {/* Utilisation gets a bar because "92% of the ceiling" is a
           position on a line, and a number alone makes the reader do the
