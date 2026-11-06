@@ -74,7 +74,7 @@ export async function createRule(
   } catch (err) {
     if (isUniqueViolation(err)) {
       throw new DuplicateRuleError(
-        `a rule for "${body.documentType}" already exists on this insurer/procedure`,
+        `A rule for "${body.documentType}" already exists on this insurer and procedure`,
       );
     }
     throw err;

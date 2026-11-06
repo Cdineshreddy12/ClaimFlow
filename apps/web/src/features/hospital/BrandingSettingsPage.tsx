@@ -184,7 +184,12 @@ export function BrandingSettingsPage() {
                 />
                 <Input
                   id="brandAccentColor"
-                  placeholder="#1A73E8"
+                  // "e.g." because a bare hex here reads as a value
+                  // that's already set, while the swatch beside it
+                  // shows the near-black the title actually prints in
+                  // when no accent is chosen — two different colours
+                  // claiming to be the current one.
+                  placeholder="e.g. #1A73E8"
                   disabled={!canEdit}
                   aria-invalid={Boolean(errors.brandAccentColor)}
                   {...register("brandAccentColor")}

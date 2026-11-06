@@ -262,7 +262,13 @@ export function ChecklistAdminPage() {
           ) : null}
 
           {data && data.rules.length > 0 ? (
-            <div className="flex flex-col gap-0.5">
+            // Same right gutter as the add row below: every control in
+            // this panel sits hard against the page's right edge, which
+            // is where the assistant launcher floats. Padding only the
+            // add row cleared Add and left the last rule's remove ✕
+            // underneath it — a dead control until you happened to
+            // scroll. The gutter belongs to the panel, not one row of it.
+            <div className="flex flex-col gap-0.5 lg:pr-[72px]">
               {data.rules.map((rule) => (
                 <RuleRow
                   key={rule.id}
@@ -279,7 +285,7 @@ export function ChecklistAdminPage() {
           ) : null}
 
           {canEdit && insurerId && procedureId ? (
-            <form onSubmit={handleAdd} className="mt-3 flex gap-2">
+            <form onSubmit={handleAdd} className="mt-3 flex gap-2 lg:pr-[72px]">
               <Input
                 aria-label="New document requirement"
                 placeholder="Add a document requirement…"
