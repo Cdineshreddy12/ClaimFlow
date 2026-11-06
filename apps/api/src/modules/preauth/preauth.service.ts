@@ -6,6 +6,7 @@ import {
   sortFindings,
   layoutPlacements,
   type PreauthReview,
+  type PreauthTemplate,
 } from "@claimflow/contracts";
 import { getFormAuditor } from "../../integrations/auditor/claude.js";
 import {
@@ -486,6 +487,8 @@ export async function renderPreauthForm(auth: AuthContext, claimId: string) {
       tagline: hospital.tagline,
       footerNote: hospital.documentFooterNote,
       accentColorHex: hospital.brandAccentColor,
+      preauthTemplate: hospital.preauthTemplate as PreauthTemplate | null,
+      preauthOptions: hospital.preauthOptions,
       logo,
     },
     {

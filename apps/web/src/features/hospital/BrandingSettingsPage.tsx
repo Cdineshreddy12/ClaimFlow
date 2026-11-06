@@ -2,7 +2,19 @@ import { useRef } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import type { z } from "zod";
-import { HospitalBrandingStep } from "@claimflow/contracts";
+import {
+  DEFAULT_PREAUTH_DECLARATION,
+  DEFAULT_PREAUTH_TEMPLATE,
+  HospitalBrandingStep,
+  PREAUTH_LOGO_PLACEMENT_LABEL,
+  PREAUTH_TEMPLATE_BLURB,
+  PREAUTH_TEMPLATE_LABEL,
+  PREAUTH_TYPEFACE_LABEL,
+  PreauthLogoPlacement,
+  PreauthTemplate,
+  PreauthTypeface,
+  preauthOptions,
+} from "@claimflow/contracts";
 import { AppShell } from "@/app/AppShell";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
@@ -46,8 +58,19 @@ export function BrandingSettingsPage() {
       brandAccentColor: hospital?.brandAccentColor ?? "",
       tagline: hospital?.tagline ?? "",
       documentFooterNote: hospital?.documentFooterNote ?? "",
+      preauthTemplate:
+        (hospital?.preauthTemplate as PreauthTemplate | undefined) ??
+        DEFAULT_PREAUTH_TEMPLATE,
+      // Parsed rather than read field by field, so a row written before
+      // an option existed still fills the form with that option's
+      // default instead of `undefined`.
+      preauthOptions: preauthOptions(hospital?.preauthOptions),
     },
   });
+
+  const chosenTemplate = watch("preauthTemplate");
+  const chosenTypeface = watch("preauthOptions.typeface");
+  const chosenLogoPlacement = watch("preauthOptions.logoPlacement");
 
   if (isLoading || !hospital) return <Loader label="Loading branding…" />;
 
@@ -185,6 +208,127 @@ export function BrandingSettingsPage() {
               />
             </FormField>
 
+            {/* Chosen before the colours, because it decides what the
+                colours land on. A TPA desk sorts paper by shape before
+                it reads a word, and hospitals disagree about which
+                shape clears fastest. */}
+            <FormField
+              label="Form template"
+              htmlFor="preauthTemplate"
+              hint="Styling only — every template prints the same fields, in the same order"
+              error={errors.preauthTemplate?.message}
+            >
+              <ChoiceRow
+                options={PreauthTemplate.options}
+                value={chosenTemplate}
+                onPick={(next) =>
+                  setValue("preauthTemplate", next, { shouldDirty: true })
+                }
+                label={(option) => PREAUTH_TEMPLATE_LABEL[option]}
+                blurbs={PREAUTH_TEMPLATE_BLURB}
+                disabled={!canEdit}
+              />
+            </FormField>
+
+            <FormField
+              label="Typeface"
+              htmlFor="preauthTypeface"
+              hint="Helvetica reads as modern; Times reads as official"
+            >
+              <ChoiceRow
+                id="preauthTypeface"
+                options={PreauthTypeface.options}
+                value={chosenTypeface}
+                onPick={(next) =>
+                  setValue("preauthOptions.typeface", next, {
+                    shouldDirty: true,
+                  })
+                }
+                label={(option) => PREAUTH_TYPEFACE_LABEL[option]}
+                disabled={!canEdit}
+              />
+            </FormField>
+
+            <FormField
+              label="Logo placement"
+              htmlFor="preauthLogoPlacement"
+              hint="A wide lockup suits going above the name; a square mark suits beside it"
+            >
+              <ChoiceRow
+                id="preauthLogoPlacement"
+                options={PreauthLogoPlacement.options}
+                value={chosenLogoPlacement}
+                onPick={(next) =>
+                  setValue("preauthOptions.logoPlacement", next, {
+                    shouldDirty: true,
+                  })
+                }
+                label={(option) => PREAUTH_LOGO_PLACEMENT_LABEL[option]}
+                disabled={!canEdit}
+              />
+            </FormField>
+
+            <FormField
+              label="Declaration"
+              htmlFor="preauthDeclaration"
+              optional
+              hint="The sentence above the signatures. Blank prints the standard wording."
+              error={errors.preauthOptions?.declaration?.message}
+            >
+              <Textarea
+                id="preauthDeclaration"
+                disabled={!canEdit}
+                rows={2}
+                placeholder={DEFAULT_PREAUTH_DECLARATION}
+                {...register("preauthOptions.declaration")}
+              />
+            </FormField>
+
+            {/* Switches, grouped: each is one line on the page and
+                none of them needs its own heading. */}
+            <fieldset className="m-0 flex flex-col gap-2.5 border-0 p-0">
+              <legend className="mb-1 p-0 text-sm font-semibold text-ink">
+                Also print
+              </legend>
+              {(
+                [
+                  [
+                    "pageNumbers",
+                    "Page numbers",
+                    "“Page 1 of 2” — a long form arrives as loose sheets",
+                  ],
+                  [
+                    "patientSignature",
+                    "Patient signature line",
+                    "A second line beside the doctor's",
+                  ],
+                  [
+                    "accentHeadings",
+                    "Accent on section names",
+                    "Carries the colour past the title",
+                  ],
+                ] as const
+              ).map(([key, title, hint]) => (
+                <label
+                  key={key}
+                  className="flex cursor-pointer items-start gap-2.5"
+                >
+                  <input
+                    type="checkbox"
+                    disabled={!canEdit}
+                    className="mt-1 size-4 shrink-0 accent-accent"
+                    {...register(`preauthOptions.${key}` as const)}
+                  />
+                  <span className="min-w-0">
+                    <span className="block text-base text-ink">{title}</span>
+                    <span className="block text-sm leading-snug text-ink-faint">
+                      {hint}
+                    </span>
+                  </span>
+                </label>
+              ))}
+            </fieldset>
+
             <FormField
               label="Footer note"
               htmlFor="documentFooterNote"
@@ -221,5 +365,67 @@ export function BrandingSettingsPage() {
         </Card>
       </div>
     </AppShell>
+  );
+}
+
+/**
+ * A row of mutually exclusive choices.
+ *
+ * Three of these now — template, typeface, logo placement — and each
+ * shows a name the reader recognises rather than the stored key. A
+ * native <select> would hide two of the three options behind a click
+ * on a page whose whole job is choosing between looks.
+ */
+function ChoiceRow<T extends string>({
+  id,
+  options,
+  value,
+  onPick,
+  label,
+  disabled,
+  blurbs,
+}: {
+  id?: string;
+  options: readonly T[];
+  value: T | undefined;
+  onPick: (next: T) => void;
+  label: (option: T) => string;
+  disabled: boolean;
+  blurbs?: Record<string, string>;
+}) {
+  return (
+    <div
+      id={id}
+      role="radiogroup"
+      className={`grid gap-2 ${options.length > 2 ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}
+    >
+      {options.map((option) => {
+        const selected = value === option;
+        return (
+          <button
+            key={option}
+            type="button"
+            role="radio"
+            aria-checked={selected}
+            disabled={disabled}
+            onClick={() => onPick(option)}
+            className={`cursor-pointer rounded-md border px-3 py-2.5 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+              selected
+                ? "border-accent bg-accent-soft"
+                : "border-line bg-surface-raised hover:border-line-strong"
+            }`}
+          >
+            <span className="block text-base font-semibold text-ink">
+              {label(option)}
+            </span>
+            {blurbs?.[option] ? (
+              <span className="mt-0.5 block text-sm leading-snug text-ink-faint">
+                {blurbs[option]}
+              </span>
+            ) : null}
+          </button>
+        );
+      })}
+    </div>
   );
 }

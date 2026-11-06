@@ -120,6 +120,35 @@ describe("buildPreauthForm", () => {
     expect(doc.getTitle()).toContain("Rajendra Pawar");
   });
 
+  /**
+   * The IRDAI form's labels are sentences — "Room rent per day
+   * (Including nursing, service charges and patient's diet)". They were
+   * drawn unwrapped at the left margin, so they ran straight under
+   * their own values and printed 4,500 on top of the word "charges".
+   *
+   * Wrapping them made every row taller, which tipped the declaration
+   * onto a second, almost-empty page. A pre-auth gets faxed; two sheets
+   * where one is 95% blank is its own defect.
+   */
+  it("fits a fully filled form on one page", async () => {
+    const layout = defaultLayout();
+    const every = layout.sections
+      .flatMap((section) => section.placements)
+      .map((placement) =>
+        confirmed(placement.definition.fieldKey, "Surgical management"),
+      );
+
+    const bytes = await buildPreauthForm(
+      HOSPITAL,
+      CLAIM,
+      layout,
+      every,
+      new Date("2026-11-05T00:00:00Z"),
+    );
+
+    expect((await PDFDocument.load(bytes)).getPageCount()).toBe(1);
+  });
+
   it("renders a wholly empty form without throwing", async () => {
     // Real case: a desk prints the blank form to complete by hand
     // before anything has been extracted.

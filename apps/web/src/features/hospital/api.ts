@@ -47,6 +47,10 @@ export interface Hospital {
   brandAccentColor: string | null;
   tagline: string | null;
   documentFooterNote: string | null;
+  /** Which styling the printed pre-auth form uses. Null is the classic one. */
+  preauthTemplate: string | null;
+  /** The rest of the form switches, as stored. Null reads as all-defaults. */
+  preauthOptions: unknown;
 
   onboardingCompletedAt: string | null;
 }

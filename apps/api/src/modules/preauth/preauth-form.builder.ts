@@ -1,6 +1,11 @@
 import {
+  DEFAULT_PREAUTH_DECLARATION,
   layoutPlacements,
   placementLabel,
+  preauthOptions,
+  preauthTemplateStyle,
+  type PreauthOptions,
+  type PreauthTemplate,
   type PreauthLayout,
   type PreauthPlacement,
 } from "@claimflow/contracts";
@@ -8,7 +13,20 @@ import { PDFDocument, StandardFonts, rgb, type PDFFont } from "pdf-lib";
 
 const A4: [number, number] = [595.28, 841.89];
 const MARGIN = 48;
-const LABEL_W = 190;
+/** Kept clear between the two columns, so a wrapped label never touches its value. */
+const LABEL_GUTTER = 12;
+/**
+ * What the declaration, signatures and footer note actually draw.
+ *
+ * Reserved as one block so the form never breaks between the
+ * confirmation sentence and the signature line it belongs to. The old
+ * figure was 90, which was less than the block draws — so it could
+ * clear the check and then run off the bottom of the page. Measured
+ * rather than guessed: 6 + 18 + 11 to the declaration line, 20 to the
+ * signature rule, 12 for its caption, 34 and a line for the footer
+ * note. 101 worst case, with the rest as headroom.
+ */
+const DECLARATION_H = 112;
 const LOGO_MAX_W = 130;
 const LOGO_MAX_H = 46;
 
@@ -33,6 +51,10 @@ export interface PreauthFormHospital {
   footerNote?: string | null;
   /** "#RRGGBB" — colors the form's title. Falls back to plain ink when unset or unparsable. */
   accentColorHex?: string | null;
+  /** Which styling the hospital chose. Null is the classic form. */
+  preauthTemplate?: PreauthTemplate | null;
+  /** The rest of the form switches, as stored. Null reads as all-defaults. */
+  preauthOptions?: PreauthOptions | unknown;
   /** The letterhead logo, already fetched. Only PNG/JPEG — the two formats pdf-lib can embed. */
   logo?: { bytes: Uint8Array; contentType: "image/png" | "image/jpeg" } | null;
 }
@@ -129,12 +151,42 @@ export async function buildPreauthForm(
   doc.setProducer("ClaimFlow");
   doc.setCreationDate(generatedAt);
 
-  const bold = await doc.embedFont(StandardFonts.HelveticaBold);
-  const regular = await doc.embedFont(StandardFonts.Helvetica);
+  const options = preauthOptions(hospital.preauthOptions);
+
+  // The two faces pdf-lib embeds without shipping a font file. A desk
+  // that has processed typed forms for twenty years reads a serif one
+  // as more official, and hospitals ask for it.
+  const serif = options.typeface === "serif";
+  const bold = await doc.embedFont(
+    serif ? StandardFonts.TimesRomanBold : StandardFonts.HelveticaBold,
+  );
+  const regular = await doc.embedFont(
+    serif ? StandardFonts.TimesRoman : StandardFonts.Helvetica,
+  );
   const ink = rgb(0.11, 0.106, 0.09);
   const faint = rgb(0.56, 0.56, 0.52);
   const rule = rgb(0.82, 0.82, 0.8);
   const accent = hexToColor(hospital.accentColorHex) ?? ink;
+
+  const style = preauthTemplateStyle(hospital.preauthTemplate);
+  // Tints derived rather than hard-coded, so a hospital's accent
+  // carries into the bands instead of a grey that fights it.
+  const band = rgb(0.937, 0.937, 0.925);
+  const hairline = rgb(0.9, 0.9, 0.886);
+  /*
+    The writable column, inside the section box when there is one.
+
+    `valueW` was measured to the page margin while the box was drawn
+    ON that margin, so a wrapped line filled the column exactly and
+    then crossed its own border — "Nausea ++," and "USG" printed over
+    the right-hand rule. The pad is the same on both sides, so a label
+    never touches the box either.
+  */
+  const BOX_PAD = style.sectionBox ? 7 : 0;
+  const contentLeft = MARGIN + BOX_PAD;
+  const contentRight = A4[0] - MARGIN - BOX_PAD;
+  const valueX = MARGIN + style.labelWidth;
+  const valueW = contentRight - valueX;
 
   const lines = formLines(layout, values);
 
@@ -170,6 +222,7 @@ export async function buildPreauthForm(
   // a form that opens with a blank strip of logo-sized whitespace above
   // the hospital's name reads as unfinished, not branded.
   const topY = y;
+  const logoAbove = options.logoPlacement === "above";
   let logoW = 0;
   let logoH = 0;
   if (hospital.logo) {
@@ -184,27 +237,35 @@ export async function buildPreauthForm(
     );
     logoW = embedded.width * scale;
     logoH = embedded.height * scale;
+    // Centred above the name suits a wide lockup, which squeezed the
+    // address into a ribbon when forced into a column beside it.
     page.drawImage(embedded, {
-      x: MARGIN,
+      x: logoAbove ? (A4[0] - logoW) / 2 : MARGIN,
       y: topY - logoH,
       width: logoW,
       height: logoH,
     });
+    if (logoAbove) y = topY - logoH - 14;
   }
-  const textX = logoW > 0 ? MARGIN + logoW + 14 : MARGIN;
+  const textX = logoW > 0 && !logoAbove ? MARGIN + logoW + 14 : MARGIN;
   const textW = A4[0] - MARGIN - textX;
 
+  const centre = (text: string, font: PDFFont, size: number) =>
+    logoAbove && logoW > 0
+      ? (A4[0] - font.widthOfTextAtSize(text, size)) / 2
+      : textX;
+
   page.drawText(hospital.name, {
-    x: textX,
+    x: centre(hospital.name, bold, style.hospitalNameSize),
     y,
-    size: 17,
+    size: style.hospitalNameSize,
     font: bold,
     color: ink,
   });
-  y -= 15;
+  y -= style.hospitalNameSize - 2;
   if (hospital.tagline) {
     page.drawText(hospital.tagline, {
-      x: textX,
+      x: centre(hospital.tagline, regular, 9),
       y,
       size: 9,
       font: regular,
@@ -213,7 +274,13 @@ export async function buildPreauthForm(
     y -= 11;
   }
   for (const line of wrap(hospital.address, regular, 9, textW)) {
-    page.drawText(line, { x: textX, y, size: 9, font: regular, color: faint });
+    page.drawText(line, {
+      x: centre(line, regular, 9),
+      y,
+      size: 9,
+      font: regular,
+      color: faint,
+    });
     y -= 11;
   }
   const ids = [
@@ -222,7 +289,7 @@ export async function buildPreauthForm(
   ].filter(Boolean);
   if (ids.length > 0) {
     page.drawText(ids.join("   ·   "), {
-      x: textX,
+      x: centre(ids.join("   ·   "), regular, 9),
       y,
       size: 9,
       font: regular,
@@ -232,7 +299,7 @@ export async function buildPreauthForm(
   }
   // The logo can be taller than the text block beside it (a square mark
   // next to a one-line address, say) — don't let the title overlap it.
-  if (logoH > 0) y = Math.min(y, topY - logoH - 4);
+  if (logoH > 0 && !logoAbove) y = Math.min(y, topY - logoH - 4);
 
   y -= 12;
   page.drawText("REQUEST FOR CASHLESS HOSPITALISATION", {
@@ -262,60 +329,199 @@ export async function buildPreauthForm(
     const inSection = lines.filter((l) => l.section === sectionName);
     if (inSection.length === 0) continue;
 
-    ensureRoom(40);
-    page.drawText(sectionName.toUpperCase(), {
-      x: MARGIN,
-      y,
-      size: 9,
-      font: bold,
-      color: faint,
+    // How tall this section's rows are, measured before anything is
+    // drawn: a banded or boxed template has to know where the box ends
+    // before it draws the box, and a section that would be split across
+    // a page break looks like two different forms.
+    const rows = inSection.map(({ placement, text }) => {
+      const money = placement.definition.fieldType === "currency";
+      const labelLines = wrap(
+        labelFor(placement),
+        regular,
+        style.labelSize,
+        style.labelWidth - LABEL_GUTTER - BOX_PAD,
+      );
+      // Measured in the font it is DRAWN in. Values print bold, and
+      // bold Helvetica is wider than regular — so a line measured
+      // against the regular face fitted the column by the ruler and
+      // then overran it on the page, crossing the section box's own
+      // border.
+      const valueLines = text
+        ? wrap(text, bold, style.valueSize, valueW)
+        : [""];
+      return {
+        money,
+        labelLines,
+        valueLines,
+        text,
+        height: Math.max(
+          labelLines.length * style.labelLeading,
+          valueLines.length * style.valueLeading,
+        ),
+      };
     });
-    y -= 16;
 
-    for (const { placement, text } of inSection) {
-      const valueW = A4[0] - MARGIN * 2 - LABEL_W;
-      const lines = text ? wrap(text, regular, 10, valueW) : [""];
+    const headerH = style.sectionBand ? 18 : 14;
+    ensureRoom(headerH + rows[0]!.height + style.rowGap + 8);
 
-      ensureRoom(lines.length * 13 + 8);
-
-      page.drawText(labelFor(placement), {
+    if (style.sectionBand) {
+      // The band is the whole point of the ruled template: a TPA sorts
+      // a form by its shape before reading a word of it.
+      page.drawRectangle({
+        x: MARGIN,
+        y: y - 5,
+        width: A4[0] - MARGIN * 2,
+        height: 16,
+        color: band,
+      });
+      page.drawText(sectionName.toUpperCase(), {
+        x: MARGIN + 6,
+        y,
+        size: style.labelSize,
+        font: bold,
+        color: options.accentHeadings ? accent : ink,
+      });
+      y -= headerH;
+    } else {
+      page.drawText(sectionName.toUpperCase(), {
         x: MARGIN,
         y,
-        size: 9,
-        font: regular,
-        color: faint,
+        size: style.labelSize,
+        font: bold,
+        color: options.accentHeadings ? accent : faint,
       });
+      y -= headerH;
+    }
 
-      if (text) {
-        let ly = y;
-        for (const line of lines) {
+    const sectionTop = y + style.labelLeading;
+    // Where the last row's content actually ends, so a boxed section
+    // closes against its own last line instead of trailing a band of
+    // empty box under the total.
+    let sectionBottom = y;
+
+    // A run of amounts ending in one more amount is a total — that is
+    // what the last line of a cost table is, whatever the hospital
+    // named the field. Structural rather than keyed on `totalExpectedCost`,
+    // because the form is configurable and that field can be renamed or
+    // removed.
+    const moneyRows = rows.filter((r) => r.money).length;
+    const totalIndex =
+      moneyRows >= 3 && rows[rows.length - 1]?.money ? rows.length - 1 : -1;
+
+    for (const [index, row] of rows.entries()) {
+      const isTotal = index === totalIndex;
+      ensureRoom(row.height + style.rowGap + 4);
+
+      if (isTotal) {
+        // A rule above it, the way every bill ever printed does it.
+        y -= 4;
+        page.drawLine({
+          start: { x: valueX, y: y + style.valueSize },
+          end: {
+            x: contentRight,
+            y: y + style.valueSize,
+          },
+          thickness: 0.8,
+          color: rule,
+        });
+        y -= 2;
+      }
+
+      let ly = y;
+      for (const line of row.labelLines) {
+        page.drawText(line, {
+          x: contentLeft,
+          y: ly,
+          size: style.labelSize,
+          font: regular,
+          color: faint,
+        });
+        ly -= style.labelLeading;
+      }
+
+      if (row.text) {
+        let vy = y;
+        for (const line of row.valueLines) {
+          // Money right-aligns against the page edge, so a column of
+          // amounts can be read down and added up — which is the first
+          // thing anyone does with an estimate.
+          const size = isTotal ? style.valueSize + 1 : style.valueSize;
+          const w = bold.widthOfTextAtSize(line, size);
+          const x = row.money ? contentRight - w : valueX;
           page.drawText(line, {
-            x: MARGIN + LABEL_W,
-            y: ly,
-            size: 10,
+            x,
+            y: vy,
+            size: isTotal ? style.valueSize + 1 : style.valueSize,
             font: bold,
-            color: ink,
+            color: isTotal ? accent : ink,
           });
-          ly -= 12;
+          vy -= style.valueLeading;
         }
-        y = ly - 4;
       } else {
         // Nothing confirmed: print a rule so the form can be finished
         // by hand rather than silently claiming the field is empty.
         page.drawLine({
-          start: { x: MARGIN + LABEL_W, y: y - 2 },
-          end: { x: A4[0] - MARGIN, y: y - 2 },
+          start: { x: valueX, y: y - 2 },
+          end: { x: contentRight, y: y - 2 },
           thickness: 0.5,
           color: rule,
         });
-        y -= 18;
       }
+
+      const lastRow = index === rows.length - 1;
+
+      if (style.rowRule) {
+        /*
+          Placed against the row it closes, not the gap below it.
+
+          `y` here is the FIRST baseline of the row; the last one is
+          however many lines down the taller column ran. Measuring from
+          the post-decrement `y` put the rule between the next row's
+          baseline and its cap height — straight through the following
+          label, which looked like every field had been struck out.
+        */
+        const lastBaseline = Math.min(
+          y - (row.labelLines.length - 1) * style.labelLeading,
+          y - (row.valueLines.length - 1) * style.valueLeading,
+        );
+        sectionBottom = lastBaseline - 5;
+        // The box's own bottom edge closes the last row. Drawing the
+        // hairline there too prints two lines a point apart.
+        if (!lastRow || !style.sectionBox) {
+          page.drawLine({
+            start: { x: MARGIN, y: sectionBottom },
+            end: { x: A4[0] - MARGIN, y: sectionBottom },
+            thickness: 0.4,
+            color: hairline,
+          });
+        }
+      } else {
+        sectionBottom =
+          Math.min(
+            y - (row.labelLines.length - 1) * style.labelLeading,
+            y - (row.valueLines.length - 1) * style.valueLeading,
+          ) - 5;
+      }
+
+      y -= row.height + style.rowGap;
     }
-    y -= 10;
+
+    if (style.sectionBox) {
+      page.drawRectangle({
+        x: MARGIN,
+        y: sectionBottom,
+        width: A4[0] - MARGIN * 2,
+        height: sectionTop - sectionBottom,
+        borderWidth: 0.6,
+        borderColor: rule,
+      });
+    }
+
+    y -= style.sectionGap;
   }
 
   // --- declaration ------------------------------------------------------
-  ensureRoom(90);
+  ensureRoom(DECLARATION_H);
   y -= 6;
   page.drawLine({
     start: { x: MARGIN, y },
@@ -325,7 +531,7 @@ export async function buildPreauthForm(
   });
   y -= 18;
   for (const line of wrap(
-    "We confirm the particulars above are true and that the patient is under treatment at this hospital.",
+    options.declaration || DEFAULT_PREAUTH_DECLARATION,
     regular,
     9,
     A4[0] - MARGIN * 2,
@@ -333,7 +539,7 @@ export async function buildPreauthForm(
     page.drawText(line, { x: MARGIN, y, size: 9, font: regular, color: faint });
     y -= 11;
   }
-  y -= 26;
+  y -= 20;
   page.drawText("Treating doctor's signature", {
     x: MARGIN,
     y: y - 12,
@@ -361,13 +567,35 @@ export async function buildPreauthForm(
     color: rule,
   });
 
+  // Many hospitals need the patient or attendant on the same sheet. A
+  // form with no space for it gets signed in the margin.
+  if (options.patientSignature) {
+    ensureRoom(40);
+    y -= 34;
+    page.drawText("Patient / attendant signature", {
+      x: MARGIN,
+      y: y - 12,
+      size: 8,
+      font: regular,
+      color: faint,
+    });
+    page.drawLine({
+      start: { x: MARGIN, y },
+      end: { x: MARGIN + 190, y },
+      thickness: 0.5,
+      color: rule,
+    });
+  }
+
   // Bank details, a closing line — whatever the hospital wants on every
   // form without retyping it. Flows after the signature block rather
   // than pinned to the page bottom like the contact line below, since
   // free text has no fixed length to reserve room for.
   if (hospital.footerNote) {
     ensureRoom(34);
-    y -= 24;
+    // Clear of the signature caption, which hangs 12pt below the rule
+    // without moving `y` — at 24 the note read as part of it.
+    y -= 34;
     for (const line of wrap(
       hospital.footerNote,
       regular,
@@ -398,6 +626,24 @@ export async function buildPreauthForm(
       .slice(0, 10)}`,
     { x: MARGIN, y: MARGIN - 16, size: 7.5, font: regular, color: faint },
   );
+
+  // Stamped at the end, when the page count is finally known — and on
+  // every page, unlike the contact line above, which belongs with the
+  // signatures. A long form runs to two sheets and a TPA desk that
+  // receives them loose has no way to tell which is which.
+  if (options.pageNumbers) {
+    const pages = doc.getPages();
+    pages.forEach((p, i) => {
+      const text = `Page ${i + 1} of ${pages.length}`;
+      p.drawText(text, {
+        x: A4[0] - MARGIN - regular.widthOfTextAtSize(text, 7.5),
+        y: MARGIN - 16,
+        size: 7.5,
+        font: regular,
+        color: faint,
+      });
+    });
+  }
 
   return doc.save();
 }

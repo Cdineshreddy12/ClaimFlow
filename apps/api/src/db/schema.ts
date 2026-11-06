@@ -138,6 +138,10 @@ export const hospitalProfile = pgTable("hospital_profile", {
   tagline: text("tagline"),
   /** Free text printed under the declaration, e.g. bank details or a closing note. */
   documentFooterNote: text("document_footer_note"),
+  /** "classic" | "ruled" | "compact" — styling only; every template prints the same fields. */
+  preauthTemplate: text("preauth_template"),
+  /** The rest of the form switches. Null reads as all-defaults — see PreauthOptions. */
+  preauthOptions: jsonb("preauth_options"),
 
   /** Null until the wizard is finished — what the app checks to decide whether to route into onboarding. */
   onboardingCompletedAt: timestamp("onboarding_completed_at", {

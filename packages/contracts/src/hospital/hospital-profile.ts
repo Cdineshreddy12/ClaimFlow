@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { PreauthOptions } from "../claims/preauth-options.js";
+import { PreauthTemplate } from "../claims/preauth-template.js";
 import {
   Gstin,
   HospitalType,
@@ -120,5 +122,9 @@ export const HospitalBrandingStep = z.object({
   tagline: z.string().trim().max(300).optional().or(z.literal("")),
   /** Free text printed under the declaration — bank details, a closing note. */
   documentFooterNote: z.string().trim().max(2000).optional().or(z.literal("")),
+  /** Which styling the printed form uses. Omitted means the classic one. */
+  preauthTemplate: PreauthTemplate.optional(),
+  /** The rest of the form switches — typeface, logo placement, declaration wording. */
+  preauthOptions: PreauthOptions.optional(),
 });
 export type HospitalBrandingStep = z.infer<typeof HospitalBrandingStep>;

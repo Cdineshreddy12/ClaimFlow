@@ -7,6 +7,8 @@ export * from "./claims/preauth.js";
 export * from "./claims/preauth-layout.js";
 export * from "./claims/payment.js";
 export * from "./claims/preauth-review.js";
+export * from "./claims/preauth-options.js";
+export * from "./claims/preauth-template.js";
 export * from "./claims/checklist-learning.js";
 export * from "./documents/classification.js";
 export * from "./auth/roles.js";
