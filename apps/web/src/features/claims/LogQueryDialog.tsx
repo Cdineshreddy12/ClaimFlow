@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { canTransition, type Role } from "@claimflow/contracts";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -7,6 +8,7 @@ import {
   DialogFooter,
   DialogHeader,
 } from "@/components/ui/dialog";
+import { useAuth } from "../auth/AuthProvider";
 import { useLogQuery, useTransitionStatus } from "./api";
 import type { Claim } from "./types";
 
@@ -15,9 +17,16 @@ import type { Claim } from "./types";
  * they're asking for and by when (docs/adr/0003). The email itself is
  * stored verbatim and stays the record — adr 0005.
  *
- * Logging a query also moves the claim to QUERY_RAISED, because those
- * are the same event as far as the desk is concerned. Two buttons for
- * one thing would just be a way to get them out of step.
+ * Logging a query moves the claim to QUERY_RAISED *when that move is
+ * legal* — at the pre-auth stage those are the same event as far as
+ * the desk is concerned, and two buttons for one thing would only be a
+ * way to get them out of step.
+ *
+ * When it isn't legal, the query is still recorded and the claim stays
+ * where it is. A TPA querying the final bill is routine, and sending
+ * that claim back to "query raised" would say it is waiting on a
+ * pre-auth decision it already has. The correspondence is a fact; the
+ * status is where the claim sits. They are not always the same thing.
  */
 export function LogQueryDialog({
   claim,
@@ -28,11 +37,19 @@ export function LogQueryDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
+  const { role } = useAuth();
   const [email, setEmail] = useState("");
   const logQuery = useLogQuery(claim.id);
   const transition = useTransitionStatus(claim.id);
 
   const busy = logQuery.isPending || transition.isPending;
+
+  // The state machine decides, not this dialog — so a status it has
+  // never heard of behaves correctly the day it is added.
+  const movesTheClaim =
+    claim.status !== "QUERY_RAISED" &&
+    Boolean(role) &&
+    canTransition(claim.status, "QUERY_RAISED", role as Role);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -40,7 +57,7 @@ export function LogQueryDialog({
     await logQuery.mutateAsync({ tpaRawEmail: email.trim() });
     // Only after the query is safely stored: if the transition fails,
     // the desk still has the email rather than having lost the paste.
-    if (claim.status !== "QUERY_RAISED") {
+    if (movesTheClaim) {
       await transition.mutateAsync("QUERY_RAISED");
     }
     setEmail("");

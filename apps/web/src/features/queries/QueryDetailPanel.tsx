@@ -189,10 +189,24 @@ export function QueryDetailPanel({
         a TPA query the deadline is the thing the desk reads first.
       */}
       <div className="mb-4 border-b border-line pb-3.5">
+        {/*
+          Who is asking and how much for — not the first thing on the
+          list.
+
+          It used to print `requestedItems[0]` as the heading, which
+          reads as though that one item IS the query. On an email asking
+          for four things it quietly demoted the other three, and on a
+          long first item the heading was a sentence. The count is the
+          useful summary, and the items themselves are listed below
+          under a heading that already says what they are.
+        */}
         <h2 className="m-0 mb-3 text-lg font-semibold tracking-[-0.01em] text-ink">
-          {query.requestedItems.length > 0
-            ? query.requestedItems[0]
-            : "Query on this claim"}
+          {query.insurerName} asked for{" "}
+          {query.requestedItems.length === 0
+            ? "something on this claim"
+            : query.requestedItems.length === 1
+              ? "one thing"
+              : `${query.requestedItems.length} things`}
         </h2>
         <dl className="m-0 grid grid-cols-[68px_1fr] gap-x-3 gap-y-1.5 text-base [&_dd]:m-0 [&_dd]:min-w-0 [&_dd]:text-ink [&_dt]:text-ink-faint">
           <dt>From</dt>

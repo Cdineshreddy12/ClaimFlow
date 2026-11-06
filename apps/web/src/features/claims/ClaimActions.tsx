@@ -92,39 +92,43 @@ export function ClaimActions({ claim }: { claim: Claim }) {
   return (
     <div className="flex flex-col gap-2.5 [&_a]:w-full [&_a]:justify-center [&_button]:w-full [&_button]:justify-center">
       <div className="flex flex-col gap-1.5">
-        {ordered.map((next) =>
-          // A query is logged with its email, not by flipping a status —
-          // the dialog does both, so route that one button to it.
-          next === "QUERY_RAISED" ? (
-            <Button
-              key={next}
-              type="button"
-              variant="outline"
-              onClick={() => setLogQuery(true)}
-            >
-              {ACTION_LABEL[next]}
-            </Button>
-          ) : (
-            <Button
-              key={next}
-              type="button"
-              variant={
-                DESTRUCTIVE.includes(next)
-                  ? "danger"
-                  : next === forward
-                    ? "primary"
-                    : "outline"
-              }
-              disabled={transition.isPending}
-              onClick={() => transition.mutate(next)}
-            >
-              {ACTION_LABEL[next]}
-            </Button>
-          ),
-        )}
+        {ordered.map((next) => (
+          <Button
+            key={next}
+            type="button"
+            variant={
+              DESTRUCTIVE.includes(next)
+                ? "danger"
+                : next === forward
+                  ? "primary"
+                  : "outline"
+            }
+            disabled={transition.isPending}
+            onClick={() => transition.mutate(next)}
+          >
+            {ACTION_LABEL[next]}
+          </Button>
+        ))}
       </div>
 
       <div className="flex flex-col gap-1.5 border-t border-line pt-2.5">
+        {/*
+          Always offered, because a TPA can write at any stage — the
+          final bill is one of the commonest things they query.
+
+          It used to be rendered as the QUERY_RAISED transition button,
+          so it vanished the moment that move became illegal: on a claim
+          at Final bill there was no way to record the email at all,
+          though the API accepted one perfectly well.
+        */}
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => setLogQuery(true)}
+        >
+          Log a query
+        </Button>
+
         <Button
           type="button"
           variant="outline"
