@@ -4,6 +4,8 @@ import { authenticate, requireRole } from "../../middleware/authenticate.js";
 import * as hospitalRepository from "../hospital/hospital.repository.js";
 import * as service from "./reports.service.js";
 import { buildPeriodReportPdf } from "./reports.pdf.js";
+import { fetchLogo } from "../../lib/pdf-letterhead.js";
+import { getObjectBytes } from "../../integrations/storage/s3.js";
 
 /** "2026-10" — a calendar month, the unit the client already reports deductions in. */
 const MonthQuery = z.object({
@@ -93,6 +95,14 @@ export async function registerReportsRoutes(app: FastifyInstance) {
         rohiniId: hospital?.rohiniId ?? null,
         periodLabel: periodLabel(from),
         generatedAt: new Date(),
+        // The same branding the pre-auth form carries. This is the
+        // other document that leaves the building.
+        registrationNumber: hospital?.registrationNumber ?? null,
+        tagline: hospital?.tagline ?? null,
+        accentColorHex: hospital?.brandAccentColor ?? null,
+        footerNote: hospital?.documentFooterNote ?? null,
+        options: hospital?.preauthOptions,
+        logo: await fetchLogo(hospital?.logoFileKey, getObjectBytes),
       },
       report,
     );

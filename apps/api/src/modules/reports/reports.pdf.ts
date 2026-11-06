@@ -5,7 +5,8 @@ import {
   type PDFFont,
   type PDFPage,
 } from "pdf-lib";
-import { DEDUCTION_REASON_LABEL } from "@claimflow/contracts";
+import { DEDUCTION_REASON_LABEL, preauthOptions } from "@claimflow/contracts";
+import { drawLetterhead, wrapText } from "../../lib/pdf-letterhead.js";
 import type { PeriodReport } from "./reports.service.js";
 
 export interface PeriodReportCover {
@@ -15,6 +16,23 @@ export interface PeriodReportCover {
   /** "October 2026" — the calendar month this report covers. */
   periodLabel: string;
   generatedAt: Date;
+  /**
+   * The same branding the pre-auth form carries.
+   *
+   * This report is the other thing a hospital forwards to someone
+   * outside the building, and it had none of it — a desk head who had
+   * set a logo and an accent saw them on one PDF and not the other.
+   */
+  registrationNumber?: string | null;
+  tagline?: string | null;
+  accentColorHex?: string | null;
+  footerNote?: string | null;
+  logo?:
+    | { bytes: Uint8Array; contentType: "image/png" | "image/jpeg" }
+    | null
+    | undefined;
+  /** Typeface and logo placement, as stored. Null reads as all-defaults. */
+  options?: unknown;
 }
 
 /**
@@ -28,6 +46,14 @@ const DECISION_LABEL: Record<string, string> = {
   FINAL_BILL_SUBMITTED: "Discharge authorisation",
   ENHANCEMENT_REQUESTED: "Enhancement decision",
 };
+
+/** "#RRGGBB" → pdf-lib's rgb(), or null for anything that doesn't parse. */
+function hexToColor(hex: string | null | undefined) {
+  const match = hex ? /^#?([0-9a-fA-F]{6})$/.exec(hex.trim()) : null;
+  if (!match?.[1]) return null;
+  const n = parseInt(match[1], 16);
+  return rgb(((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255);
+}
 
 const A4: [number, number] = [595.28, 841.89];
 const MARGIN = 56;
@@ -129,39 +155,38 @@ export async function buildPeriodReportPdf(
   doc.setProducer("ClaimFlow");
   doc.setCreationDate(cover.generatedAt);
 
-  const bold = await doc.embedFont(StandardFonts.HelveticaBold);
-  const regular = await doc.embedFont(StandardFonts.Helvetica);
+  const options = preauthOptions(cover.options);
+  const serif = options.typeface === "serif";
+  const bold = await doc.embedFont(
+    serif ? StandardFonts.TimesRomanBold : StandardFonts.HelveticaBold,
+  );
+  const regular = await doc.embedFont(
+    serif ? StandardFonts.TimesRoman : StandardFonts.Helvetica,
+  );
   const ink = rgb(0.11, 0.106, 0.09);
   const faint = rgb(0.56, 0.56, 0.52);
   const critical = rgb(0.62, 0.17, 0.14);
+  const accent = hexToColor(cover.accentColorHex) ?? ink;
 
   const cursor = makeCursor(doc);
 
-  cursor.page.drawText(cover.hospitalName, {
-    x: MARGIN,
-    y: cursor.y,
-    size: 18,
-    font: bold,
-    color: ink,
-  });
-  cursor.y -= 18;
-  cursor.page.drawText(cover.hospitalAddress, {
-    x: MARGIN,
-    y: cursor.y,
-    size: 9,
-    font: regular,
-    color: faint,
-  });
-  if (cover.rohiniId) {
-    cursor.y -= 12;
-    cursor.page.drawText(`ROHINI ID ${cover.rohiniId}`, {
-      x: MARGIN,
-      y: cursor.y,
-      size: 9,
-      font: regular,
-      color: faint,
-    });
-  }
+  cursor.y = await drawLetterhead(
+    doc,
+    cursor.page,
+    {
+      name: cover.hospitalName,
+      address: cover.hospitalAddress,
+      tagline: cover.tagline,
+      ids: [
+        cover.rohiniId ? `ROHINI ID ${cover.rohiniId}` : null,
+        cover.registrationNumber ? `Reg. ${cover.registrationNumber}` : null,
+      ].filter((id): id is string => id !== null),
+      logo: cover.logo,
+      logoPlacement: options.logoPlacement,
+    },
+    { bold, regular, nameSize: 18 },
+    { margin: MARGIN, pageWidth: A4[0], top: cursor.y },
+  );
 
   cursor.y -= 28;
   cursor.page.drawLine({
@@ -177,7 +202,7 @@ export async function buildPeriodReportPdf(
     y: cursor.y,
     size: 13,
     font: bold,
-    color: ink,
+    color: accent,
   });
   cursor.y -= 10;
   cursor.page.drawText(
@@ -229,17 +254,25 @@ export async function buildPeriodReportPdf(
   });
   cursor.y -= 22;
 
+  /*
+    Right edges, with room between them.
+
+    Count sat left-aligned at +220 and Amount right-aligned at +280 —
+    sixty points apart, which an amount like "INR 2,10,000" eats
+    entirely. It printed as "1INR 2,10,000", the count and the figure
+    on top of each other.
+  */
   const dedCols = [
     { x: MARGIN },
-    { x: MARGIN + 220 },
-    { x: MARGIN + 280, align: "right" as const },
+    { x: MARGIN + 250, align: "right" as const },
+    { x: MARGIN + 370, align: "right" as const },
     { x: A4[0] - MARGIN, align: "right" as const },
   ];
   drawTableHeader(
     cursor,
     [
       { label: "Reason", x: dedCols[0]!.x },
-      { label: "Count", x: dedCols[1]!.x },
+      { label: "Count", x: dedCols[1]!.x, align: "right" },
       { label: "Amount", x: dedCols[2]!.x, align: "right" },
       { label: "Recovered", x: dedCols[3]!.x, align: "right" },
     ],
@@ -260,7 +293,7 @@ export async function buildPeriodReportPdf(
       cursor,
       [
         { text: DEDUCTION_REASON_LABEL[row.reason], x: dedCols[0]!.x },
-        { text: String(row.count), x: dedCols[1]!.x },
+        { text: String(row.count), x: dedCols[1]!.x, align: "right" },
         { text: formatInr(row.total), x: dedCols[2]!.x, align: "right" },
         { text: formatInr(row.recovered), x: dedCols[3]!.x, align: "right" },
       ],
@@ -273,10 +306,6 @@ export async function buildPeriodReportPdf(
     cursor,
     [
       { text: "Total", x: dedCols[0]!.x },
-      {
-        text: `${formatInr(report.deductions.avoidableTotal)} avoidable`,
-        x: dedCols[1]!.x,
-      },
       {
         text: formatInr(report.deductions.total),
         x: dedCols[2]!.x,
@@ -291,6 +320,23 @@ export async function buildPeriodReportPdf(
     bold,
     ink,
   );
+
+  /*
+    The avoidable share is a note about the total, not a column of it.
+
+    It was drawn into the Count cell — a hundred-point string in a
+    sixty-point gap — and printed straight through the amount beside
+    it. It reads better underneath anyway: it is the one number on this
+    page a desk head can actually do something about.
+  */
+  if (report.deductions.total > 0) {
+    cursor.ensure(16);
+    cursor.page.drawText(
+      `of which ${formatInr(report.deductions.avoidableTotal)} avoidable`,
+      { x: MARGIN, y: cursor.y, size: 8.5, font: regular, color: critical },
+    );
+    cursor.y -= 16;
+  }
 
   // --- insurer turnaround ---
   cursor.y -= 22;
@@ -357,6 +403,45 @@ export async function buildPeriodReportPdf(
       regular,
       row.breachRate > 0 ? critical : ink,
     );
+  }
+
+  // Bank details, a closing line — the same note the pre-auth form
+  // carries, on the other document that leaves the building.
+  if (cover.footerNote) {
+    cursor.y -= 24;
+    for (const line of wrapText(
+      cover.footerNote,
+      regular,
+      8,
+      A4[0] - MARGIN * 2,
+    )) {
+      cursor.ensure(10);
+      cursor.page.drawText(line, {
+        x: MARGIN,
+        y: cursor.y,
+        size: 8,
+        font: regular,
+        color: faint,
+      });
+      cursor.y -= 10;
+    }
+  }
+
+  // Stamped at the end, when the page count is known, and on every
+  // page — a report that arrives as loose sheets has no other way to
+  // say which is which.
+  if (options.pageNumbers) {
+    const pages = doc.getPages();
+    pages.forEach((p, i) => {
+      const text = `Page ${i + 1} of ${pages.length}`;
+      p.drawText(text, {
+        x: A4[0] - MARGIN - regular.widthOfTextAtSize(text, 7.5),
+        y: MARGIN - 20,
+        size: 7.5,
+        font: regular,
+        color: faint,
+      });
+    });
   }
 
   return doc.save();

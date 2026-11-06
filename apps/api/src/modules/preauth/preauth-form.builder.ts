@@ -10,6 +10,7 @@ import {
   type PreauthPlacement,
 } from "@claimflow/contracts";
 import { PDFDocument, StandardFonts, rgb, type PDFFont } from "pdf-lib";
+import { drawLetterhead } from "../../lib/pdf-letterhead.js";
 
 const A4: [number, number] = [595.28, 841.89];
 const MARGIN = 48;
@@ -27,8 +28,6 @@ const LABEL_GUTTER = 12;
  * note. 101 worst case, with the rest as headroom.
  */
 const DECLARATION_H = 112;
-const LOGO_MAX_W = 130;
-const LOGO_MAX_H = 46;
 
 /** "#RRGGBB" → pdf-lib's rgb(), or null for anything that doesn't parse — a bad value prints as the default ink rather than throwing. */
 function hexToColor(hex: string | null | undefined) {
@@ -218,88 +217,27 @@ export async function buildPreauthForm(
   }
 
   // --- letterhead -------------------------------------------------------
-  // The logo sits left of the name/address block rather than above it —
-  // a form that opens with a blank strip of logo-sized whitespace above
-  // the hospital's name reads as unfinished, not branded.
-  const topY = y;
-  const logoAbove = options.logoPlacement === "above";
-  let logoW = 0;
-  let logoH = 0;
-  if (hospital.logo) {
-    const embedded =
-      hospital.logo.contentType === "image/png"
-        ? await doc.embedPng(hospital.logo.bytes)
-        : await doc.embedJpg(hospital.logo.bytes);
-    const scale = Math.min(
-      LOGO_MAX_W / embedded.width,
-      LOGO_MAX_H / embedded.height,
-      1,
-    );
-    logoW = embedded.width * scale;
-    logoH = embedded.height * scale;
-    // Centred above the name suits a wide lockup, which squeezed the
-    // address into a ribbon when forced into a column beside it.
-    page.drawImage(embedded, {
-      x: logoAbove ? (A4[0] - logoW) / 2 : MARGIN,
-      y: topY - logoH,
-      width: logoW,
-      height: logoH,
-    });
-    if (logoAbove) y = topY - logoH - 14;
-  }
-  const textX = logoW > 0 && !logoAbove ? MARGIN + logoW + 14 : MARGIN;
-  const textW = A4[0] - MARGIN - textX;
-
-  const centre = (text: string, font: PDFFont, size: number) =>
-    logoAbove && logoW > 0
-      ? (A4[0] - font.widthOfTextAtSize(text, size)) / 2
-      : textX;
-
-  page.drawText(hospital.name, {
-    x: centre(hospital.name, bold, style.hospitalNameSize),
-    y,
-    size: style.hospitalNameSize,
-    font: bold,
-    color: ink,
-  });
-  y -= style.hospitalNameSize - 2;
-  if (hospital.tagline) {
-    page.drawText(hospital.tagline, {
-      x: centre(hospital.tagline, regular, 9),
-      y,
-      size: 9,
-      font: regular,
-      color: faint,
-    });
-    y -= 11;
-  }
-  for (const line of wrap(hospital.address, regular, 9, textW)) {
-    page.drawText(line, {
-      x: centre(line, regular, 9),
-      y,
-      size: 9,
-      font: regular,
-      color: faint,
-    });
-    y -= 11;
-  }
-  const ids = [
-    hospital.rohiniId ? `ROHINI ID ${hospital.rohiniId}` : null,
-    hospital.registrationNumber ? `Reg. ${hospital.registrationNumber}` : null,
-  ].filter(Boolean);
-  if (ids.length > 0) {
-    page.drawText(ids.join("   ·   "), {
-      x: centre(ids.join("   ·   "), regular, 9),
-      y,
-      size: 9,
-      font: regular,
-      color: faint,
-    });
-    y -= 11;
-  }
-  // The logo can be taller than the text block beside it (a square mark
-  // next to a one-line address, say) — don't let the title overlap it.
-  if (logoH > 0 && !logoAbove) y = Math.min(y, topY - logoH - 4);
+  // Shared with the period report: a hospital that set a logo and a
+  // tagline should see them on everything it forwards, not only here.
+  y = await drawLetterhead(
+    doc,
+    page,
+    {
+      name: hospital.name,
+      address: hospital.address,
+      tagline: hospital.tagline,
+      ids: [
+        hospital.rohiniId ? `ROHINI ID ${hospital.rohiniId}` : null,
+        hospital.registrationNumber
+          ? `Reg. ${hospital.registrationNumber}`
+          : null,
+      ].filter((id): id is string => id !== null),
+      logo: hospital.logo,
+      logoPlacement: options.logoPlacement,
+    },
+    { bold, regular, nameSize: style.hospitalNameSize },
+    { margin: MARGIN, pageWidth: A4[0], top: y },
+  );
 
   y -= 12;
   page.drawText("REQUEST FOR CASHLESS HOSPITALISATION", {
