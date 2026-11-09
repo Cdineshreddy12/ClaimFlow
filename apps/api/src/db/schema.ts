@@ -860,3 +860,87 @@ export const assistantConversations = pgTable(
     ),
   ],
 );
+
+/**
+ * Modules a hospital defines for itself — see migration 0034.
+ *
+ * Fields are a table; a record's answers are one jsonb column. Those
+ * are opposite decisions on purpose. Fields are referenced by key from
+ * stored data and need stable ids, so they are rows. A record's shape
+ * isn't known until a desk invents the module, so it is JSON.
+ */
+export const customModules = pgTable("custom_modules", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  name: text("name").notNull(),
+  pluralName: text("plural_name").notNull(),
+  /** The URL segment. Stored, so renaming the module keeps its address. */
+  slug: text("slug").notNull().unique(),
+  description: text("description"),
+  isActive: boolean("is_active").notNull().default(true),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export const customModuleFields = pgTable(
+  "custom_module_fields",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    moduleId: uuid("module_id")
+      .notNull()
+      .references(() => customModules.id, { onDelete: "cascade" }),
+    /** Stable: records are keyed on this, so a renamed label never moves data. */
+    fieldKey: text("field_key").notNull(),
+    label: text("label").notNull(),
+    /** One of LayoutFieldType — the same registry the pre-auth builder uses. */
+    fieldType: text("field_type").notNull(),
+    required: boolean("required").notNull().default(false),
+    options: jsonb("options").$type<string[]>(),
+    helpText: text("help_text"),
+    showInList: boolean("show_in_list").notNull().default(true),
+    sortOrder: integer("sort_order").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("idx_custom_module_fields_module").on(table.moduleId),
+    unique("custom_module_fields_key_unique").on(
+      table.moduleId,
+      table.fieldKey,
+    ),
+  ],
+);
+
+export const customModuleRecords = pgTable(
+  "custom_module_records",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    moduleId: uuid("module_id")
+      .notNull()
+      .references(() => customModules.id, { onDelete: "cascade" }),
+    data: jsonb("data")
+      .$type<Record<string, string>>()
+      .notNull()
+      .default(sql`'{}'::jsonb`),
+    createdBy: uuid("created_by").references(() => members.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("idx_custom_module_records_module").on(
+      table.moduleId,
+      table.createdAt,
+    ),
+  ],
+);

@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import {
+  Box,
   Clock,
   Envelope,
   Grid3,
@@ -19,6 +20,7 @@ import { ROLE_LABEL } from "../lib/roles";
 import { Button } from "../components/ui/button";
 import { BrandMark, BrandName } from "@/components/ui/brand";
 import { AssistantPanel } from "../features/assistant/AssistantPanel";
+import { useCustomModules } from "../features/custom/api";
 
 interface AppShellProps {
   title: string;
@@ -46,6 +48,9 @@ export function AppShell({
 }: AppShellProps) {
   const navigate = useNavigate();
   const { session, role } = useAuth();
+  // Live modules only — hiding one takes it out of the nav, which is
+  // the only place it is reachable from.
+  const { data: customModules } = useCustomModules();
 
   // Remembered across navigations and reloads — a desk that collapsed
   // the nav to see a wide claims table doesn't want it back every time
@@ -133,6 +138,19 @@ export function AppShell({
               Receivables
             </NavItem>
           ) : null}
+          {/* Whatever this hospital invented, under its own name. The
+              nav is the only place a custom module is discoverable, so
+              a hidden one disappears from here and nowhere else. */}
+          {(customModules ?? []).map((module) => (
+            <NavItem
+              key={module.id}
+              to={`/m/${module.slug}`}
+              icon={<Box />}
+              collapsed={collapsed}
+            >
+              {module.pluralName}
+            </NavItem>
+          ))}
           <NavItem to="/checklist" icon={<ShieldCheck />} collapsed={collapsed}>
             Checklist Admin
           </NavItem>

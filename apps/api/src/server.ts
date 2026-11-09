@@ -18,6 +18,7 @@ import { registerHospitalRoutes } from "./modules/hospital/hospital.routes.js";
 import { registerMeRoutes } from "./modules/members/members.routes.js";
 import { registerInsurersAdminRoutes } from "./modules/insurers/insurers.routes.js";
 import { registerPreauthLayoutRoutes } from "./modules/preauth-layouts/preauth-layouts.routes.js";
+import { registerCustomModulesRoutes } from "./modules/custom-modules/custom-modules.routes.js";
 import { registerProceduresRoutes } from "./modules/procedures/procedures.routes.js";
 import { registerReferenceRoutes } from "./modules/reference/reference.routes.js";
 import { registerAuditRoutes } from "./modules/audit/audit.routes.js";
@@ -80,6 +81,9 @@ await app.register(registerHospitalRoutes, { prefix: "/hospital" });
 await app.register(registerMeRoutes, { prefix: "/me" });
 await app.register(registerInsurersAdminRoutes, { prefix: "/insurers" });
 await app.register(registerPreauthLayoutRoutes, { prefix: "/preauth-layout" });
+await app.register(registerCustomModulesRoutes, {
+  prefix: "/custom-modules",
+});
 await app.register(registerProceduresRoutes, { prefix: "/procedures" });
 await app.register(registerReferenceRoutes);
 await app.register(registerAuditRoutes, { prefix: "/audit-log" });

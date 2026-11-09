@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { INSURER_TYPE_LABEL, type InsurerType } from "@claimflow/contracts";
 import { AppShell } from "@/app/AppShell";
 import { Tabs } from "@/components/ui/tabs";
 import { InsurersAdminCard } from "../insurers/InsurersAdminCard";
@@ -7,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Loader } from "@/components/ui/loader";
 import { CoverageCard } from "./CoverageCard";
+import { ModulesAdminCard } from "../custom/ModulesAdminCard";
 import { ProceduresAdminCard } from "./ProceduresAdminCard";
 import { ProposalsCard } from "./ProposalsCard";
 import {
@@ -122,11 +124,14 @@ export function ChecklistAdminPage() {
           { id: "insurers", label: "Insurers & TPAs" },
           { id: "procedures", label: "Procedures" },
           { id: "preauth", label: "Pre-auth form" },
+          { id: "modules", label: "Modules" },
         ]}
         active={tab}
         onChange={setTab}
       >
-        {tab === "preauth" ? (
+        {tab === "modules" ? (
+          <ModulesAdminCard />
+        ) : tab === "preauth" ? (
           // The same insurer the other tabs are on, so one selection
           // drives everything an insurer wants.
           <LayoutEditor
@@ -177,8 +182,13 @@ export function ChecklistAdminPage() {
               <SelectContent>
                 {insurers?.map((insurer) => (
                   <SelectItem key={insurer.id} value={insurer.id}>
+                    {/* The shared map, not a local ternary. This one
+                        predated the scheme payer type and called every
+                        non-TPA an "Insurer", so a government scheme
+                        appeared here under the wrong kind while the
+                        Open-a-claim picker named it correctly. */}
                     {insurer.name} ·{" "}
-                    {insurer.type === "tpa" ? "TPA" : "Insurer"}
+                    {INSURER_TYPE_LABEL[insurer.type as InsurerType]}
                   </SelectItem>
                 ))}
               </SelectContent>

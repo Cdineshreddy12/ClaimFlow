@@ -8,6 +8,8 @@ import { QueryInboxPage } from "../features/queries/QueryInboxPage";
 import { SlaPage } from "../features/sla/SlaPage";
 import { ReceivablesPage } from "../features/receivables/ReceivablesPage";
 import { ChecklistAdminPage } from "../features/checklist/ChecklistAdminPage";
+import { CustomModulePage } from "../features/custom/CustomModulePage";
+import { CustomRecordPage } from "../features/custom/CustomRecordPage";
 import { ReportsPage } from "../features/reports/ReportsPage";
 import { BrandingSettingsPage } from "../features/hospital/BrandingSettingsPage";
 import { DoctorApprovalPage } from "../features/doctor-approval/DoctorApprovalPage";
@@ -56,6 +58,17 @@ export const router: ReturnType<typeof createBrowserRouter> =
                     { path: "/receivables", element: <ReceivablesPage /> },
                     { path: "/checklist", element: <ChecklistAdminPage /> },
                     { path: "/reports", element: <ReportsPage /> },
+                    // One route for every module a hospital invents —
+                    // the page reads its shape from the slug.
+                    { path: "/m/:slug", element: <CustomModulePage /> },
+                    // Ahead of the record id so the intent is obvious
+                    // on reading, though React Router ranks the static
+                    // segment higher either way — same as /claims/new.
+                    { path: "/m/:slug/new", element: <CustomRecordPage /> },
+                    {
+                      path: "/m/:slug/:recordId",
+                      element: <CustomRecordPage />,
+                    },
                     {
                       path: "/settings/branding",
                       element: <BrandingSettingsPage />,

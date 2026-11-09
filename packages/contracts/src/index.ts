@@ -17,6 +17,7 @@ export * from "./documents/classification.js";
 export * from "./auth/roles.js";
 export * from "./hospital/member.js";
 export * from "./hospital/insurer.js";
+export * from "./custom/module.js";
 export * from "./hospital/procedure.js";
 export * from "./hospital/identifiers.js";
 export * from "./hospital/hospital-profile.js";
