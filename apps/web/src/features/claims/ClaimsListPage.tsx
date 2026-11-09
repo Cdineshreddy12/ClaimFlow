@@ -112,8 +112,8 @@ export function ClaimsListPage() {
     offset,
   });
 
-  // Stamped once per mount so the "time in stage" column doesn't tick
-  // while someone is reading it.
+  // Shared with every SLA chip in the table, so the countdowns and the
+  // "time in stage" column are measured from the same instant.
   const now = useNow();
 
   const visible = data?.rows ?? [];
@@ -261,7 +261,7 @@ export function ClaimsListPage() {
                     onClick={() => navigate(`/claims/${claim.id}`)}
                     className="cursor-pointer"
                   >
-                    <TableCell className="font-mono tabular-nums">
+                    <TableCell className="whitespace-nowrap font-mono tabular-nums">
                       <Link
                         to={`/claims/${claim.id}`}
                         className="font-semibold text-accent-ink no-underline hover:underline"

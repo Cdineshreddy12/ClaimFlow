@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
+import type { CustomModule } from "@claimflow/contracts";
 import {
   Box,
   Clock,
@@ -12,12 +13,22 @@ import {
   Wallet,
   ChevronLeft,
   ChevronRight,
+  Menu,
+  X,
 } from "reicon-react";
 import { signOut } from "../features/auth/api";
 import { useAuth } from "../features/auth/AuthProvider";
 import { SignOutIcon } from "../components/icons";
 import { ROLE_LABEL } from "../lib/roles";
 import { Button } from "../components/ui/button";
+import {
+  Drawer,
+  DrawerClose,
+  DrawerContent,
+  DrawerDescription,
+  DrawerTitle,
+  DrawerTrigger,
+} from "../components/ui/drawer";
 import { BrandMark, BrandName } from "@/components/ui/brand";
 import { AssistantPanel } from "../features/assistant/AssistantPanel";
 import { useCustomModules } from "../features/custom/api";
@@ -76,18 +87,33 @@ export function AppShell({
   return (
     /*
       The rail is fixed and the main column is pushed by the same width,
-      so there is one number to change and the two can't drift apart. It
-      becomes a horizontal bar under `lg`. Collapsed state is threaded
-      through as a boolean rather than a parent class, because utilities
-      have no cascade to hang `.is-collapsed .nav-item span` off.
+      so there is one number to change and the two can't drift apart.
+      Collapsed state is threaded through as a boolean rather than a
+      parent class, because utilities have no cascade to hang
+      `.is-collapsed .nav-item span` off.
+
+      Under `lg` the rail is gone entirely and the nav lives in a sheet
+      behind a button. It used to lay the same items out in a row
+      across the top, which at ten destinations was 969px of nav on a
+      390px screen: the page scrolled sideways on every route, the
+      brand wrapped to two lines, and "Sign out" — in a block that was
+      `hidden lg:flex` — was not reachable on a phone at all.
     */
     <div
       className={`flex min-h-screen flex-col lg:flex-row ${
         fill ? "lg:h-screen lg:overflow-hidden" : ""
       }`}
     >
+      <MobileBar
+        title={title}
+        role={role}
+        modules={customModules ?? []}
+        email={session?.user.email}
+        onSignOut={handleSignOut}
+      />
+
       <aside
-        className={`static z-20 flex w-full flex-row items-center gap-4 overflow-visible border-b border-sidebar-border bg-sidebar px-4 py-3 lg:fixed lg:bottom-0 lg:left-0 lg:top-0 lg:flex-col lg:items-stretch lg:gap-7 lg:overflow-y-auto lg:overscroll-contain lg:border-b-0 lg:border-r lg:py-[22px] ${
+        className={`hidden lg:fixed lg:bottom-0 lg:left-0 lg:top-0 lg:z-20 lg:flex lg:flex-col lg:items-stretch lg:gap-7 lg:overflow-y-auto lg:overscroll-contain lg:border-r lg:border-sidebar-border lg:bg-sidebar lg:py-[22px] ${
           collapsed ? "lg:w-16 lg:px-2.5" : "lg:w-[228px] lg:px-3.5"
         }`}
       >
@@ -117,59 +143,11 @@ export function AppShell({
             {collapsed ? null : <BrandName className="text-sidebar-ink" />}
           </div>
         </div>
-        <nav className="mt-1 flex flex-1 flex-row gap-0.5 lg:flex-col">
-          <NavItem to="/" end icon={<Grid3 />} collapsed={collapsed}>
-            Dashboard
-          </NavItem>
-          <NavItem to="/claims" icon={<FileText />} collapsed={collapsed}>
-            Claims
-          </NavItem>
-          <NavItem to="/queries" icon={<Envelope />} collapsed={collapsed}>
-            Query Inbox
-          </NavItem>
-          <NavItem to="/sla" icon={<Clock />} collapsed={collapsed}>
-            Turnaround
-          </NavItem>
-          {/* Finance rather than desk work, and gated server-side to
-              the same roles — a desk executive following this link
-              gets a refusal, so it is not offered to them. */}
-          {role === "org_admin" || role === "desk_head" ? (
-            <NavItem to="/receivables" icon={<Wallet />} collapsed={collapsed}>
-              Receivables
-            </NavItem>
-          ) : null}
-          {/* Whatever this hospital invented, under its own name. The
-              nav is the only place a custom module is discoverable, so
-              a hidden one disappears from here and nowhere else. */}
-          {(customModules ?? []).map((module) => (
-            <NavItem
-              key={module.id}
-              to={`/m/${module.slug}`}
-              icon={<Box />}
-              collapsed={collapsed}
-            >
-              {module.pluralName}
-            </NavItem>
-          ))}
-          <NavItem to="/checklist" icon={<ShieldCheck />} collapsed={collapsed}>
-            Checklist Admin
-          </NavItem>
-          {/* The one screen the API itself 403s a desk_executive out of
-              — the report is a desk-head artifact for forwarding
-              upstream, not a worklist (docs/adr/0018). */}
-          {role === "org_admin" || role === "desk_head" ? (
-            <NavItem to="/reports" icon={<File />} collapsed={collapsed}>
-              Reports
-            </NavItem>
-          ) : null}
-          <NavItem
-            to="/settings/branding"
-            icon={<Palette />}
-            collapsed={collapsed}
-          >
-            Branding
-          </NavItem>
-        </nav>
+        <NavList
+          role={role}
+          modules={customModules ?? []}
+          collapsed={collapsed}
+        />
         <div
           className={`mt-auto hidden flex-col gap-2.5 lg:flex ${collapsed ? "items-center p-0" : "px-2.5"}`}
         >
@@ -236,6 +214,239 @@ export function AppShell({
 }
 
 /**
+ * The phone header, and the nav behind it.
+ *
+ * Sticky, because the way back out of a long claims table should not
+ * be a scroll to the top. It carries the page name too — the rail's
+ * highlighted row said where you were at `lg`, and with the rail gone
+ * nothing else does.
+ *
+ * The sheet comes from the left, the side the rail occupies at every
+ * wider size, and closes on navigation: leaving it open over the page
+ * it just moved to would mean two taps to see the result of one.
+ */
+function MobileBar({
+  title,
+  role,
+  modules,
+  email,
+  onSignOut,
+}: {
+  title: string;
+  role: string | null;
+  modules: CustomModule[];
+  email: string | undefined;
+  onSignOut: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="sticky top-0 z-30 flex items-center gap-3 border-b border-sidebar-border bg-sidebar px-4 py-2.5 lg:hidden">
+      <Drawer open={open} onOpenChange={setOpen}>
+        <DrawerTrigger asChild>
+          <button
+            type="button"
+            className="-ml-1 inline-flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-md border border-transparent bg-transparent p-0 text-sidebar-ink hover:border-sidebar-border hover:bg-sidebar-hover"
+            aria-label="Open the menu"
+          >
+            <Menu size={18} aria-hidden />
+          </button>
+        </DrawerTrigger>
+
+        <DrawerContent
+          side="left"
+          // Wide enough for "Checklist Admin" on one line, and short of
+          // the full screen so the page behind stays visible as the
+          // thing you are navigating within.
+          widthClassName="w-[min(86vw,300px)]"
+          className="border-sidebar-border bg-sidebar"
+        >
+          {/* Its own header rather than `DrawerHeader`, which paints
+              its title in `text-ink` for the light panel — on the
+              sidebar's navy that is dark on dark. Radix still gets a
+              Title and Description, so the dialog keeps its name. */}
+          <div className="flex shrink-0 items-start justify-between gap-3 border-b border-sidebar-border px-4 py-3">
+            <div className="min-w-0">
+              <DrawerTitle className="flex items-baseline gap-2 text-md font-semibold text-sidebar-ink">
+                <BrandMark className="text-sidebar-ink" />
+                <BrandName className="text-sidebar-ink" />
+              </DrawerTitle>
+              {email ? (
+                <DrawerDescription className="mt-1 block truncate text-sm text-sidebar-soft">
+                  {email}
+                </DrawerDescription>
+              ) : (
+                <DrawerDescription className="sr-only">
+                  Main navigation
+                </DrawerDescription>
+              )}
+            </div>
+            <DrawerClose asChild>
+              <button
+                type="button"
+                className="-mr-1 inline-flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-md border border-transparent bg-transparent p-0 text-sidebar-soft hover:border-sidebar-border hover:text-sidebar-ink"
+                aria-label="Close the menu"
+              >
+                <X size={16} aria-hidden />
+              </button>
+            </DrawerClose>
+          </div>
+
+          <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-2.5 py-3">
+            <NavList
+              role={role}
+              modules={modules}
+              collapsed={false}
+              className="flex flex-1 flex-col gap-0.5"
+              onNavigate={() => setOpen(false)}
+            />
+          </div>
+
+          <div className="shrink-0 border-t border-sidebar-border px-3.5 py-3">
+            {role ? (
+              <div className="mb-2 text-sm text-sidebar-faint">
+                {ROLE_LABEL[role] ?? role}
+              </div>
+            ) : null}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="w-full"
+              onClick={onSignOut}
+            >
+              Sign out
+            </Button>
+          </div>
+        </DrawerContent>
+      </Drawer>
+
+      <div className="min-w-0 flex-1">
+        <div className="truncate text-md font-semibold text-sidebar-ink">
+          {title}
+        </div>
+      </div>
+      <BrandMark className="shrink-0 text-sidebar-ink" />
+    </div>
+  );
+}
+
+/**
+ * The nav destinations, once.
+ *
+ * Rendered twice — down the fixed rail at `lg` and up the mobile
+ * sheet below it — and a second copy of this list is how one of them
+ * quietly loses a module or a role gate.
+ */
+function NavList({
+  role,
+  modules,
+  collapsed,
+  className = "mt-1 flex flex-1 flex-col gap-0.5",
+  onNavigate,
+}: {
+  role: string | null;
+  modules: CustomModule[];
+  collapsed: boolean;
+  className?: string;
+  onNavigate?: () => void;
+}) {
+  return (
+    <nav className={className}>
+      <NavItem
+        to="/"
+        end
+        icon={<Grid3 />}
+        collapsed={collapsed}
+        onNavigate={onNavigate}
+      >
+        Dashboard
+      </NavItem>
+      <NavItem
+        to="/claims"
+        icon={<FileText />}
+        collapsed={collapsed}
+        onNavigate={onNavigate}
+      >
+        Claims
+      </NavItem>
+      <NavItem
+        to="/queries"
+        icon={<Envelope />}
+        collapsed={collapsed}
+        onNavigate={onNavigate}
+      >
+        Query Inbox
+      </NavItem>
+      <NavItem
+        to="/sla"
+        icon={<Clock />}
+        collapsed={collapsed}
+        onNavigate={onNavigate}
+      >
+        Turnaround
+      </NavItem>
+      {/* Finance rather than desk work, and gated server-side to
+            the same roles — a desk executive following this link
+            gets a refusal, so it is not offered to them. */}
+      {role === "org_admin" || role === "desk_head" ? (
+        <NavItem
+          to="/receivables"
+          icon={<Wallet />}
+          collapsed={collapsed}
+          onNavigate={onNavigate}
+        >
+          Receivables
+        </NavItem>
+      ) : null}
+      {/* Whatever this hospital invented, under its own name. The
+            nav is the only place a custom module is discoverable, so
+            a hidden one disappears from here and nowhere else. */}
+      {modules.map((module) => (
+        <NavItem
+          key={module.id}
+          to={`/m/${module.slug}`}
+          icon={<Box />}
+          collapsed={collapsed}
+          onNavigate={onNavigate}
+        >
+          {module.pluralName}
+        </NavItem>
+      ))}
+      <NavItem
+        to="/checklist"
+        icon={<ShieldCheck />}
+        collapsed={collapsed}
+        onNavigate={onNavigate}
+      >
+        Checklist Admin
+      </NavItem>
+      {/* The one screen the API itself 403s a desk_executive out of
+            — the report is a desk-head artifact for forwarding
+            upstream, not a worklist (docs/adr/0018). */}
+      {role === "org_admin" || role === "desk_head" ? (
+        <NavItem
+          to="/reports"
+          icon={<File />}
+          collapsed={collapsed}
+          onNavigate={onNavigate}
+        >
+          Reports
+        </NavItem>
+      ) : null}
+      <NavItem
+        to="/settings/branding"
+        icon={<Palette />}
+        collapsed={collapsed}
+        onNavigate={onNavigate}
+      >
+        Branding
+      </NavItem>
+    </nav>
+  );
+}
+
+/**
  * One nav row. Collapsed hides the label and centres the icon — the
  * old rule did this with `.is-collapsed .nav-item span { display:none }`,
  * which utilities can't express, so the label is simply not rendered.
@@ -258,12 +469,15 @@ function NavItem({
   end,
   icon,
   collapsed,
+  onNavigate,
   children,
 }: {
   to: string;
   end?: boolean;
   icon: ReactNode;
   collapsed: boolean;
+  /** Closes the mobile sheet — on the rail there is nothing to close. */
+  onNavigate?: (() => void) | undefined;
   children: string;
 }) {
   return (
@@ -271,6 +485,7 @@ function NavItem({
       to={to}
       end={end ?? false}
       title={collapsed ? children : undefined}
+      onClick={onNavigate}
       className={({ isActive }) => navItem(isActive, collapsed)}
     >
       {icon}

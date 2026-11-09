@@ -165,20 +165,20 @@ export function ClaimFilePage() {
             </div>
             {/* Said once, here. The old "Claim details" strip below
                 repeated all of this and added only the billed amount. */}
-            <div className="mt-2 flex flex-wrap gap-4 text-base text-ink-soft [&_b]:font-semibold [&_b]:text-ink">
+            {/* The separator belongs to the item after it, not between
+                them as its own box. Standalone it was a flex child like
+                any other, so on a phone the row wrapped and left a "·"
+                hanging at the end of a line with nothing after it. */}
+            <div className="mt-2 flex flex-wrap items-center gap-y-1 text-base text-ink-soft [&>*+*]:before:mx-2.5 [&>*+*]:before:text-ink-faint [&>*+*]:before:content-['\00B7'] [&_b]:font-semibold [&_b]:text-ink">
               <span>{claim.procedureName}</span>
-              <span aria-hidden>·</span>
               <span>
                 <b>{claim.insurerName}</b>
               </span>
               {admitted ? (
-                <>
-                  <span aria-hidden>·</span>
-                  <span>
-                    Admitted{" "}
-                    <span className="font-mono tabular-nums">{admitted}</span>
-                  </span>
-                </>
+                <span>
+                  Admitted{" "}
+                  <span className="font-mono tabular-nums">{admitted}</span>
+                </span>
               ) : null}
             </div>
           </div>

@@ -14,6 +14,13 @@ import { cn } from "@/lib/utils";
  */
 
 export const Drawer = DialogPrimitive.Root;
+/**
+ * Exported so a panel on a dark surface can compose its own header.
+ * `DrawerHeader` paints for the light drawer, and Radix still wants a
+ * titled dialog either way.
+ */
+export const DrawerTitle = DialogPrimitive.Title;
+export const DrawerDescription = DialogPrimitive.Description;
 export const DrawerTrigger = DialogPrimitive.Trigger;
 export const DrawerClose = DialogPrimitive.Close;
 
@@ -22,39 +29,66 @@ export const DrawerContent = React.forwardRef<
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> & {
     /** Full-width, for a panel showing a table or a chart. */
     wide?: boolean;
+    /**
+     * Which edge it comes from. Right is the work panel beside the
+     * page; left is navigation, which belongs on the side the rail
+     * occupies at every wider size — a nav that flies in from the
+     * opposite edge to the one it lives on reads as a different thing.
+     */
+    side?: "left" | "right";
+    /** A nav sheet wants to be thumb-width, not half the screen. */
+    widthClassName?: string;
   }
->(({ className, children, wide = false, ...props }, ref) => (
-  <DialogPrimitive.Portal>
-    {/* Lighter than the modal scrim: a drawer is somewhere you work
+>(
+  (
+    {
+      className,
+      children,
+      wide = false,
+      side = "right",
+      widthClassName,
+      ...props
+    },
+    ref,
+  ) => (
+    <DialogPrimitive.Portal>
+      {/* Lighter than the modal scrim: a drawer is somewhere you work
         beside the page, not a question that stops it. */}
-    <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/25 motion-safe:animate-in motion-safe:fade-in" />
-    <DialogPrimitive.Content
-      ref={ref}
-      className={cn(
-        // Two widths, because the panel does two jobs. Reading an
-        // answer about a claim wants the claim still visible beside it;
-        // reading a table of forty receivables wants the room. Wide was
-        // the only option and it covered the whole page — including the
-        // claim the panel was being asked about.
-        //
-        // Floors on both so the panel stays usable on a phone (a
-        // percentage of a 375px screen is a column nothing reads well
-        // in), and never wider than the viewport itself.
-        "fixed inset-y-0 right-0 z-50 flex flex-col",
-        wide
-          ? "w-[min(100vw,max(85vw,420px))]"
-          : "w-[min(100vw,max(46vw,420px))]",
-        "transition-[width] motion-reduce:transition-none",
-        "border-l border-line bg-surface shadow-[-14px_0_44px_rgba(0,0,0,0.18)]",
-        "motion-safe:animate-in motion-safe:slide-in-from-right-[100%] motion-safe:duration-200",
-        className,
-      )}
-      {...props}
-    >
-      {children}
-    </DialogPrimitive.Content>
-  </DialogPrimitive.Portal>
-));
+      <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/25 motion-safe:animate-in motion-safe:fade-in" />
+      <DialogPrimitive.Content
+        ref={ref}
+        className={cn(
+          // Two widths, because the panel does two jobs. Reading an
+          // answer about a claim wants the claim still visible beside it;
+          // reading a table of forty receivables wants the room. Wide was
+          // the only option and it covered the whole page — including the
+          // claim the panel was being asked about.
+          //
+          // Floors on both so the panel stays usable on a phone (a
+          // percentage of a 375px screen is a column nothing reads well
+          // in), and never wider than the viewport itself.
+          "fixed inset-y-0 z-50 flex flex-col",
+          side === "left" ? "left-0" : "right-0",
+          widthClassName ??
+            (wide
+              ? "w-[min(100vw,max(85vw,420px))]"
+              : "w-[min(100vw,max(46vw,420px))]"),
+          "transition-[width] motion-reduce:transition-none",
+          side === "left"
+            ? "border-r border-line bg-surface shadow-[14px_0_44px_rgba(0,0,0,0.18)]"
+            : "border-l border-line bg-surface shadow-[-14px_0_44px_rgba(0,0,0,0.18)]",
+          side === "left"
+            ? "motion-safe:animate-in motion-safe:slide-in-from-left-[100%] motion-safe:duration-200"
+            : "motion-safe:animate-in motion-safe:slide-in-from-right-[100%] motion-safe:duration-200",
+          className,
+        )}
+        {...props}
+      >
+        {children}
+      </DialogPrimitive.Content>
+    </DialogPrimitive.Portal>
+  ),
+);
 DrawerContent.displayName = "DrawerContent";
 
 /**
@@ -68,7 +102,7 @@ export function DrawerHeader({
   children,
 }: {
   title: string;
-  description?: string;
+  description?: string | undefined;
   children?: React.ReactNode;
 }) {
   return (
