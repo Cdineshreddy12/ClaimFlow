@@ -56,6 +56,20 @@ export function residencyFindings(
  * Loud but non-fatal elsewhere, because local development legitimately
  * runs against LocalStack, MinIO or a throwaway bucket, and a hard stop
  * there would only teach people to delete the check.
+ *
+ * `DATA_RESIDENCY_ACK` is the one way past it in production, and it
+ * costs something to use: the value has to be a sentence saying why,
+ * and that sentence is logged at error level on every single boot
+ * alongside the finding it is excusing. There is deliberately no flag
+ * that just says `true` — an acknowledgement nobody had to write is an
+ * acknowledgement nobody read.
+ *
+ * It exists for the case this was built for: a demo on synthetic
+ * records, where the database is somewhere a real deployment could not
+ * put it. It is not a configuration option. A server holding real
+ * patient data outside India is unlawful under the DPDP Act 2023
+ * whatever this variable says, and the log line is the evidence that
+ * someone chose it.
  */
 export function assertDataResidency(
   env: NodeJS.ProcessEnv = process.env,
@@ -70,6 +84,15 @@ export function assertDataResidency(
     `sensitive personal data under the DPDP Act 2023 — use ap-south-1 ` +
     `(Mumbai) or ap-south-2 (Hyderabad).`;
 
-  if (env.NODE_ENV === "production") throw new Error(message);
+  const ack = env.DATA_RESIDENCY_ACK?.trim();
+  if (env.NODE_ENV === "production" && !ack) throw new Error(message);
+
+  if (ack) {
+    log(
+      `DATA RESIDENCY OVERRIDDEN — ${message} Acknowledged: "${ack}". ` +
+        `This server must not hold real patient data.`,
+    );
+    return;
+  }
   log(`WARNING — ${message}`);
 }

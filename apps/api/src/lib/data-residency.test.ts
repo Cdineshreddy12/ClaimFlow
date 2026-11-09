@@ -89,3 +89,57 @@ describe("data residency", () => {
     expect(log).not.toHaveBeenCalled();
   });
 });
+
+/**
+ * The override is a compliance control with a hole deliberately cut in
+ * it, so the shape of the hole is worth pinning down.
+ */
+describe("DATA_RESIDENCY_ACK", () => {
+  const outside = {
+    NODE_ENV: "production",
+    DATABASE_URL:
+      "postgres://u:p@aws-0-ap-northeast-1.pooler.supabase.com:6543/postgres",
+  } as NodeJS.ProcessEnv;
+
+  it("still refuses production with no acknowledgement", () => {
+    expect(() => assertDataResidency(outside, () => {})).toThrow(
+      /outside India/,
+    );
+  });
+
+  it("lets a reasoned acknowledgement through, and says so every boot", () => {
+    const lines: string[] = [];
+    assertDataResidency(
+      { ...outside, DATA_RESIDENCY_ACK: "demo on synthetic records" },
+      (m) => lines.push(m),
+    );
+
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toContain("DATA RESIDENCY OVERRIDDEN");
+    // The reason given, quoted back — the log line is the evidence.
+    expect(lines[0]).toContain("demo on synthetic records");
+    expect(lines[0]).toContain("must not hold real patient data");
+  });
+
+  it("treats whitespace as no acknowledgement at all", () => {
+    // Otherwise DATA_RESIDENCY_ACK=" " is a silent bypass, which is the
+    // one thing this must not be.
+    expect(() =>
+      assertDataResidency({ ...outside, DATA_RESIDENCY_ACK: "   " }, () => {}),
+    ).toThrow(/outside India/);
+  });
+
+  it("stays quiet when the regions are in India, acknowledged or not", () => {
+    const lines: string[] = [];
+    assertDataResidency(
+      {
+        NODE_ENV: "production",
+        AWS_REGION: "ap-south-1",
+        DATA_RESIDENCY_ACK: "not needed",
+      } as NodeJS.ProcessEnv,
+      (m) => lines.push(m),
+    );
+
+    expect(lines).toEqual([]);
+  });
+});
