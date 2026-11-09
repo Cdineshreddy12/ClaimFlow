@@ -79,19 +79,46 @@ Phone layout — same screens, stacked nav behind a hamburger menu:
   <img src="docs/screenshots/claim-file-mobile.jpg" alt="Claim File on mobile" width="280" />
 </p>
 
+### Claim lifecycle
+
+The Claim File above was mid-way through (Final bill). Same screen, three
+more points in the same state machine:
+
+|                                                                                             |                                                                                                        |
+| ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| **Draft** — before pre-auth is even sent; empty timeline, "Expected cost" instead of billed | **Rejected** — its own banner and action set, with deduction risk flagged against this payer's history |
+| ![Claim in Draft stage](docs/screenshots/claim-stage-draft.jpg)                             | ![Claim in Rejected stage](docs/screenshots/claim-stage-rejected.jpg)                                  |
+
+**Settled** — the timeline closed out end to end, billed and received reconciled:
+
+![Claim in Settled stage](docs/screenshots/claim-stage-settled.jpg)
+
+### Custom forms & modules
+
+A hospital isn't limited to what ships in the box. Checklist Admin lets an
+org admin extend both the pre-auth form and the schema itself, per
+insurer, without a code change:
+
+|                                                                                                                 |                                                                                                                   |
+| --------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| **Pre-auth form builder** — drag fields (text, date, amount, file upload…) into sections, shared or per-insurer | **Custom modules** — add a table the product doesn't ship, like a ward-round log, each with its own page and form |
+| ![Custom pre-auth form builder](docs/screenshots/custom-preauth-form-builder.jpg)                               | ![Custom modules admin](docs/screenshots/custom-modules-admin.jpg)                                                |
+
+**Ward rounds** — one such module in actual use, its own nav entry, route, and CRUD — not a mockup of the idea:
+
+![Ward rounds custom module](docs/screenshots/custom-module-ward-rounds.jpg)
+
 ### AI in action
 
-Three places Claude actually runs, including what happens when it's
+Four places Claude actually runs, including what happens when it's
 unsure or catches something wrong — not screenshots of a happy path only.
 
-|                                                                                |                                                                                                        |
-| ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------ |
-| **Desk assistant** — asked a real question, reads live claim data to answer it | **Document classification** — confidence per file, and two that got no claim match                     |
-| ![Desk assistant answering a question](docs/screenshots/ai-desk-assistant.jpg) | ![Document classification confidence and abstentions](docs/screenshots/ai-document-classification.jpg) |
-
-**Pre-auth consistency check** — flags a named surgery whose line of treatment doesn't match, before the desk sends it to an insurer:
-
-![Pre-auth form consistency check catching a mismatch](docs/screenshots/ai-preauth-consistency-check.jpg)
+|                                                                                                                                      |                                                                                                                                                        |
+| ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Desk assistant** — asked a real question, reads live claim data to answer it                                                       | **Document classification** — confidence per file, and two that got no claim match                                                                     |
+| ![Desk assistant answering a question](docs/screenshots/ai-desk-assistant.jpg)                                                       | ![Document classification confidence and abstentions](docs/screenshots/ai-document-classification.jpg)                                                 |
+| **Pre-auth consistency check** — flags a named surgery whose line of treatment doesn't match, before the desk sends it to an insurer | **Checklist rules learned from queries** — an insurer kept asking for a document the checklist didn't require; the system noticed and offers to add it |
+| ![Pre-auth form consistency check catching a mismatch](docs/screenshots/ai-preauth-consistency-check.jpg)                            | ![Checklist rule suggested from repeated TPA queries](docs/screenshots/ai-checklist-learned-rules.jpg)                                                 |
 
 ## Status
 
