@@ -61,7 +61,19 @@ export const CLAIM_TRANSITIONS: Record<ClaimStatus, Transition> = {
   },
   QUERY_RAISED: { to: ["PRE_AUTH_SENT"] },
   ENHANCEMENT_REQUESTED: { to: ["PRE_AUTH_SENT", "APPROVED", "REJECTED"] },
-  APPROVED: { to: ["FINAL_BILL_SUBMITTED"] },
+  /*
+    An approved claim can still need more money, and usually that is
+    exactly when it does: the sanction is agreed on admission and the
+    overrun is discovered mid-stay, when the patient deteriorates. The
+    table used to allow only the final bill from here, so the
+    enhancement flow wrote its own status change straight to the
+    repository and skipped this table altogether — the one structure
+    that is supposed to guarantee a claim cannot move illegally.
+
+    Permitting it here is what makes that bypass unnecessary. Before
+    approval there is nothing to enhance; you revise the pre-auth.
+  */
+  APPROVED: { to: ["ENHANCEMENT_REQUESTED", "FINAL_BILL_SUBMITTED"] },
   /*
     Settling is the one irreversible money transition, so it is held
     back from a desk executive. It listed only `desk_head`, which

@@ -1,4 +1,5 @@
 import {
+  canTransition,
   slaDeadlineFor,
   type DecideEnhancementBody,
   type RequestEnhancementBody,
@@ -66,19 +67,31 @@ export async function requestEnhancement(
   );
   if (!created) throw new ClaimNotFoundError(claimId);
 
-  // The claim's own status follows the request, when the state machine
-  // allows it. It deliberately doesn't throw if it can't: a claim that
-  // is already APPROVED can still need more money, and refusing to
-  // record the request because the claim moved on would lose the fact
-  // that matters most here.
-  await claimsRepository
-    .recordStatusChange(
+  /*
+    The claim's own status follows the request, through the state
+    machine rather than around it.
+
+    This used to write straight to the repository and swallow any
+    failure, with a comment explaining that an approved claim can still
+    need more money. That was true, and the fix belonged in the
+    transition table — which now permits it — rather than in a bypass.
+    Writing the status without consulting `canTransition` meant the one
+    structure guaranteeing a claim cannot move illegally had a door in
+    the back of it.
+
+    Still never fatal: a claim at final bill or already settled can
+    legitimately have an enhancement recorded against it for the
+    history, and losing that record because the claim has moved on
+    would discard the fact that matters most here.
+  */
+  if (canTransition(claim.status, "ENHANCEMENT_REQUESTED", auth.role)) {
+    await claimsRepository.recordStatusChange(
       claimId,
       "ENHANCEMENT_REQUESTED",
       memberId,
       created.slaDeadline ?? undefined,
-    )
-    .catch(() => undefined);
+    );
+  }
 
   await auditService.record(auth, {
     action: "enhancement.requested",

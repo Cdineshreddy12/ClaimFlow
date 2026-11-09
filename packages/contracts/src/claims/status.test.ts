@@ -27,6 +27,22 @@ describe("canTransition", () => {
     ).toBe(false);
   });
 
+  it("lets an approved claim ask for more cover", () => {
+    // The usual moment for an enhancement: the sanction is agreed on
+    // admission and the overrun shows up mid-stay. Forbidding it here
+    // is why the enhancement flow used to write the status change
+    // straight to the repository and skip this table entirely.
+    expect(
+      canTransition("APPROVED", "ENHANCEMENT_REQUESTED", "desk_executive"),
+    ).toBe(true);
+  });
+
+  it("still won't send an approved claim back to a document query", () => {
+    // Approved means the insurer has decided. A missing document after
+    // that is a final-bill problem, not a pre-auth one.
+    expect(canTransition("APPROVED", "QUERY_RAISED", "desk_head")).toBe(false);
+  });
+
   it("restricts settlement to the desk head", () => {
     expect(
       canTransition("FINAL_BILL_SUBMITTED", "SETTLED", "desk_executive"),

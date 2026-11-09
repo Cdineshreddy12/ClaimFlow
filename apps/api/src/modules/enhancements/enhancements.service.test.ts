@@ -85,21 +85,48 @@ describe("enhancements.service", () => {
       expect(repo.create).not.toHaveBeenCalled();
     });
 
-    it("still records the request when the claim can't legally move", async () => {
-      // An APPROVED claim can still need more money. Losing the request
-      // because the status machine won't budge would lose the fact that
-      // matters most.
-      vi.mocked(claimsRepository.recordStatusChange).mockRejectedValue(
-        new Error("illegal transition"),
-      );
+    it("moves an approved claim, which is when the overrun usually shows up", async () => {
+      // The sanction is agreed on admission; the patient deteriorates
+      // mid-stay. This used to be forbidden by the transition table and
+      // happen anyway, because the status was written straight to the
+      // repository without consulting it.
+      vi.mocked(claimsRepository.getClaimById).mockResolvedValue({
+        id: CLAIM_ID,
+        status: "APPROVED",
+      } as never);
 
       const { requestEnhancement } = await import("./enhancements.service.js");
-      const created = await requestEnhancement(auth, CLAIM_ID, {
+      await requestEnhancement(auth, CLAIM_ID, {
         requestedAmount: 80_000,
         reason: "Sepsis, extended stay",
       });
 
+      expect(claimsRepository.recordStatusChange).toHaveBeenCalledWith(
+        CLAIM_ID,
+        "ENHANCEMENT_REQUESTED",
+        MEMBER_ID,
+        expect.any(Date),
+      );
+    });
+
+    it("records the request without moving a claim that can't legally move", async () => {
+      // A settled claim can still have an enhancement recorded against
+      // it for the history. Losing that record would lose the fact that
+      // matters most — but neither does it get to drag a closed claim
+      // back open behind the state machine's back.
+      vi.mocked(claimsRepository.getClaimById).mockResolvedValue({
+        id: CLAIM_ID,
+        status: "SETTLED",
+      } as never);
+
+      const { requestEnhancement } = await import("./enhancements.service.js");
+      const created = await requestEnhancement(auth, CLAIM_ID, {
+        requestedAmount: 80_000,
+        reason: "Late claim from the insurer",
+      });
+
       expect(created.id).toBe(ENH_ID);
+      expect(claimsRepository.recordStatusChange).not.toHaveBeenCalled();
     });
 
     it("raises ClaimNotFoundError for a claim that doesn't exist", async () => {
