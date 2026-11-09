@@ -24,6 +24,13 @@
 # Port 6543 is transaction mode, which forbids prepared statements —
 # `apps/api/src/db/client.ts` already passes `prepare: false`, so it
 # works unchanged.
+#
+# The `default` network below is IPv6-enabled, which is the other way
+# out: where the machine running Docker has IPv6 to Supabase — a
+# laptop usually does — the direct URL works here unchanged. That is a
+# convenience for running this locally and not a substitute for the
+# pooler, because the managed host you deploy to probably has no IPv6
+# at all.
 
 services:
   # Not started by `up` — it is a task, not a service:
@@ -76,3 +83,10 @@ services:
       # before its first API call either way.
       - api
     restart: unless-stopped
+
+networks:
+  default:
+    enable_ipv6: true
+    ipam:
+      config:
+        - subnet: fd00:c1a1:f107::/48

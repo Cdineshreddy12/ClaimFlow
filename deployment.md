@@ -196,6 +196,12 @@ Port 6543 is transaction mode, which forbids prepared statements.
 `apps/api/src/db/client.ts` already passes `prepare: false`, so nothing
 else has to change.
 
+For running the stack locally, `docker-compose.yml` enables IPv6 on its
+default network instead, so the direct URL works unchanged on a machine
+that has IPv6 to Supabase — a laptop usually does. That is a
+convenience and not a substitute: the managed host you deploy to
+probably has no IPv6 at all, which is what the pooler is for.
+
 ---
 
 ## Deploying
