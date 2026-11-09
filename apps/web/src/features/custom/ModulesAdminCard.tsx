@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
+import { Add, Search, X } from "reicon-react";
 import {
   CUSTOM_FIELD_TYPES,
   CUSTOM_FIELD_TYPE_BY_KEY,
@@ -16,13 +17,6 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
 import { Loader } from "@/components/ui/loader";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import {
   useAddField,
   useCreateModule,
@@ -264,19 +258,36 @@ export function ModulesAdminCard() {
   );
 }
 
-/** A module's fields: what its form asks for, and what its table shows. */
+/**
+ * A module's fields: what its form asks for, and what its table shows.
+ *
+ * Laid out as the pre-auth builder next door is, and for the same
+ * reason — a palette of types on the left, the form it is building on
+ * the right. Picking the type first is the way round that matches what
+ * a desk is actually thinking ("I need a date on here"), and it puts
+ * the whole catalogue in front of them instead of hiding fourteen
+ * options inside a closed dropdown.
+ *
+ * It stops short of the builder's drag-to-reorder: a module's fields
+ * have a sort order but no endpoint to change it, and a handle that
+ * looks draggable and isn't is worse than no handle.
+ */
 function FieldEditor({ module }: { module: CustomModule }) {
   const add = useAddField(module.slug);
   const removeField = useRemoveField(module.slug);
 
+  // Set by the palette, and the only thing that opens the naming row —
+  // so a field's type is decided before it is named, never changed
+  // underneath a name already typed.
+  const [drafting, setDrafting] = useState<CustomFieldType | null>(null);
   const [label, setLabel] = useState("");
-  const [fieldType, setFieldType] = useState<CustomFieldType>("text");
   const [required, setRequired] = useState(false);
   const [options, setOptions] = useState("");
+  const [search, setSearch] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState<string | null>(null);
 
-  const needsOptions = takesOptions(fieldType);
+  const needsOptions = drafting !== null && takesOptions(drafting);
   const optionList = options
     .split(",")
     .map((o) => o.trim())
@@ -284,18 +295,39 @@ function FieldEditor({ module }: { module: CustomModule }) {
   const canAdd =
     label.trim().length > 0 && (!needsOptions || optionList.length > 0);
 
+  const palette = CUSTOM_FIELD_TYPES.filter((t) =>
+    t.label.toLowerCase().includes(search.trim().toLowerCase()),
+  );
+
+  function startDraft(fieldType: CustomFieldType) {
+    setError(null);
+    setDrafting(fieldType);
+    setLabel("");
+    setOptions("");
+    setRequired(false);
+  }
+
+  function cancelDraft() {
+    setDrafting(null);
+    setLabel("");
+    setOptions("");
+    setRequired(false);
+  }
+
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (!canAdd) return;
+    if (!canAdd || !drafting) return;
     setError(null);
     try {
       await add.mutateAsync({
         label: label.trim(),
-        fieldType,
+        fieldType: drafting,
         required,
         showInList: true,
         ...(needsOptions ? { options: optionList } : {}),
       });
+      // Type kept, name cleared: several fields of one kind in a row is
+      // the common case when a desk is laying a form out.
       setLabel("");
       setOptions("");
       setRequired(false);
@@ -305,13 +337,7 @@ function FieldEditor({ module }: { module: CustomModule }) {
   }
 
   return (
-    <div className="mt-3 border-t border-line pt-3">
-      {error ? (
-        <div className="mb-2 rounded-md border border-critical bg-critical-bg px-3 py-2 text-sm font-medium text-critical">
-          {error}
-        </div>
-      ) : null}
-
+    <div className="mt-3 grid gap-3 border-t border-line pt-3 lg:grid-cols-[210px_minmax(0,1fr)]">
       <ConfirmDialog
         open={confirming !== null}
         onOpenChange={(open) => !open && setConfirming(null)}
@@ -327,102 +353,167 @@ function FieldEditor({ module }: { module: CustomModule }) {
         }
       />
 
-      {module.fields.length === 0 ? (
-        <p className="m-0 mb-2 text-sm text-ink-faint">
-          No fields yet — the form is empty until one exists.
-        </p>
-      ) : (
-        <ul className="m-0 mb-3 flex list-none flex-col gap-1 p-0">
-          {module.fields.map((field) => (
-            <li
-              key={field.id}
-              className="flex items-center justify-between gap-3 rounded-sm bg-surface-sunken px-2.5 py-1.5 text-sm"
+      <aside className="self-start overflow-hidden rounded-lg border border-line bg-surface-raised">
+        <div className="relative border-b border-line px-2.5 py-2 text-ink-faint [&_input]:h-8 [&_input]:w-full [&_input]:rounded-md [&_input]:border [&_input]:border-line [&_input]:bg-surface [&_input]:py-0 [&_input]:pl-[30px] [&_input]:pr-2.5 [&_input]:font-[inherit] [&_input]:text-sm [&_input]:text-ink [&_input]:outline-none [&_input:focus-visible]:outline [&_input:focus-visible]:outline-2 [&_input:focus-visible]:outline-offset-1 [&_input:focus-visible]:outline-accent [&_svg]:pointer-events-none [&_svg]:absolute [&_svg]:left-[19px] [&_svg]:top-1/2 [&_svg]:size-3 [&_svg]:-translate-y-1/2">
+          <Search aria-hidden />
+          <input
+            type="text"
+            placeholder="Search types…"
+            aria-label="Search field types"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+
+        <div className="px-3 pb-1.5 pt-3 text-2xs font-semibold uppercase tracking-[0.08em] text-ink-faint [&_span]:font-medium">
+          New fields <span>({palette.length})</span>
+        </div>
+        {/* One per row rather than the pre-auth builder's two columns:
+            its eight types are all short, and these fourteen include
+            "Multiple choice" and "Decimal number", which wrapped to two
+            lines in a half-width cell and broke the list's rhythm. */}
+        <div className="flex flex-col border-t border-line">
+          {palette.map((type) => (
+            <button
+              key={type.type}
+              type="button"
+              className={`flex w-full cursor-pointer items-center gap-1.5 whitespace-nowrap border-0 border-b border-line bg-transparent px-2.5 py-[9px] text-left font-[inherit] text-sm last:border-b-0 enabled:hover:bg-accent-soft disabled:cursor-default disabled:opacity-45 ${
+                drafting === type.type
+                  ? "bg-accent-soft font-semibold text-accent-ink"
+                  : "text-ink"
+              }`}
+              disabled={add.isPending}
+              title={`Add a ${type.label.toLowerCase()} field`}
+              onClick={() => startDraft(type.type)}
             >
-              <span className="min-w-0">
-                <b className="font-semibold">{field.label}</b>
-                <span className="ml-2 text-ink-faint">
+              <Add size={11} className="shrink-0 text-ink-faint" aria-hidden />
+              {type.label}
+            </button>
+          ))}
+        </div>
+        {palette.length === 0 ? (
+          <p className="m-0 px-3 py-3 text-sm text-ink-faint">
+            No type by that name.
+          </p>
+        ) : null}
+      </aside>
+
+      <div className="min-w-0">
+        {error ? (
+          <div className="mb-2 rounded-md border border-critical bg-critical-bg px-3 py-2 text-sm font-medium text-critical">
+            {error}
+          </div>
+        ) : null}
+
+        <div className="overflow-hidden rounded-lg border border-line">
+          {module.fields.length === 0 ? (
+            <p className="m-0 px-[13px] py-4 text-base text-ink-faint">
+              No fields yet. Pick a type on the left — the form is empty until
+              one exists.
+            </p>
+          ) : (
+            module.fields.map((field) => (
+              <div
+                key={field.id}
+                className="flex items-center gap-[9px] border-b border-line bg-surface-raised px-[13px] py-2.5 last:border-b-0"
+              >
+                <span className="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-base">
+                  {field.label}
+                </span>
+                {/* A label, not a control: there is no endpoint to make
+                    a field required after the fact, so it must not look
+                    like something that can be pressed. */}
+                <span
+                  className={`shrink-0 rounded-xs border px-[7px] py-0.5 text-2xs font-semibold uppercase tracking-[0.03em] ${
+                    field.required
+                      ? "border-critical bg-critical-bg text-critical"
+                      : "border-line text-ink-faint"
+                  }`}
+                >
+                  {field.required ? "Required" : "Optional"}
+                </span>
+                <span className="shrink-0 text-xs text-ink-faint">
                   {CUSTOM_FIELD_TYPE_BY_KEY[field.fieldType]?.label ??
                     field.fieldType}
-                  {field.required ? " · required" : ""}
                 </span>
-              </span>
-              <button
-                type="button"
-                className="cursor-pointer border-0 bg-transparent p-0 font-[inherit] text-sm text-ink-faint hover:text-critical"
-                onClick={() => setConfirming(field.id)}
-              >
-                Remove
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-
-      <form className="flex flex-wrap items-end gap-2" onSubmit={submit}>
-        <FormField
-          label="Field name"
-          htmlFor={`new-field-${module.id}`}
-          className="mb-0 flex-[2_1_180px]"
-        >
-          <Input
-            id={`new-field-${module.id}`}
-            value={label}
-            onChange={(e) => setLabel(e.target.value)}
-            placeholder="e.g. Consultant"
-          />
-        </FormField>
-        <FormField
-          label="Type"
-          htmlFor={`new-field-type-${module.id}`}
-          className="mb-0 flex-[0_1_175px]"
-        >
-          <Select
-            value={fieldType}
-            onValueChange={(v) => setFieldType(v as CustomFieldType)}
-          >
-            <SelectTrigger
-              id={`new-field-type-${module.id}`}
-              aria-label="Field type"
-            >
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {CUSTOM_FIELD_TYPES.map((t) => (
-                <SelectItem key={t.type} value={t.type}>
-                  {t.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </FormField>
-        {needsOptions ? (
-          <FormField
-            label="Options"
-            htmlFor={`new-options-${module.id}`}
-            hint="Comma separated"
-            className="mb-0 flex-[2_1_200px]"
-          >
-            <Input
-              id={`new-options-${module.id}`}
-              value={options}
-              onChange={(e) => setOptions(e.target.value)}
-              placeholder="Morning, Evening, Night"
-            />
-          </FormField>
-        ) : null}
-        <label className="flex cursor-pointer items-center gap-2 pb-2 text-sm text-ink-soft">
-          <Checkbox
-            checked={required}
-            onCheckedChange={(ticked) => setRequired(ticked === true)}
-          />
-          Required
-        </label>
-        <div className="pb-[2px]">
-          <Button type="submit" size="sm" disabled={!canAdd || add.isPending}>
-            {add.isPending ? "Adding…" : "Add field"}
-          </Button>
+                <button
+                  type="button"
+                  className="inline-flex size-[26px] cursor-pointer items-center justify-center rounded-sm border border-transparent bg-transparent text-sm leading-none text-ink-soft enabled:hover:border-line-strong enabled:hover:text-ink disabled:cursor-default disabled:opacity-30"
+                  aria-label={`Take ${field.label} off the form`}
+                  title="Take off the form"
+                  onClick={() => setConfirming(field.id)}
+                >
+                  <X size={13} aria-hidden />
+                </button>
+              </div>
+            ))
+          )}
         </div>
-      </form>
+
+        {drafting ? (
+          <form
+            className="mt-2 flex flex-wrap items-end gap-2 rounded-lg border border-accent bg-accent-soft p-3"
+            onSubmit={submit}
+          >
+            <FormField
+              label={`New ${(
+                CUSTOM_FIELD_TYPE_BY_KEY[drafting]?.label ?? drafting
+              ).toLowerCase()} field`}
+              htmlFor={`new-field-${module.id}`}
+              className="mb-0 flex-[2_1_180px]"
+            >
+              <Input
+                id={`new-field-${module.id}`}
+                autoFocus
+                value={label}
+                onChange={(e) => setLabel(e.target.value)}
+                placeholder="e.g. Consultant"
+              />
+            </FormField>
+            {needsOptions ? (
+              <FormField
+                label="Options"
+                htmlFor={`new-options-${module.id}`}
+                // No "comma separated" hint: the placeholder shows the
+                // commas, and a hint under one of two side-by-side
+                // fields lifts its input off the other's baseline.
+                className="mb-0 flex-[2_1_200px]"
+              >
+                <Input
+                  id={`new-options-${module.id}`}
+                  value={options}
+                  onChange={(e) => setOptions(e.target.value)}
+                  placeholder="Morning, Evening, Night"
+                />
+              </FormField>
+            ) : null}
+            <label className="flex cursor-pointer items-center gap-2 pb-2 text-sm text-ink-soft">
+              <Checkbox
+                checked={required}
+                onCheckedChange={(ticked) => setRequired(ticked === true)}
+              />
+              Required
+            </label>
+            <div className="flex gap-1.5 pb-[2px]">
+              <Button
+                type="submit"
+                size="sm"
+                disabled={!canAdd || add.isPending}
+              >
+                {add.isPending ? "Adding…" : "Add field"}
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={cancelDraft}
+              >
+                Done
+              </Button>
+            </div>
+          </form>
+        ) : null}
+      </div>
     </div>
   );
 }
