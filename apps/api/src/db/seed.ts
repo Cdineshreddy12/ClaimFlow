@@ -1,12 +1,19 @@
+import { and, eq } from "drizzle-orm";
+import type { ClaimStatus } from "@claimflow/contracts";
 import { db } from "./client.js";
 import {
   checklistRules,
+  claimPreauthFields,
+  claimStatusEvents,
   claims,
   insurers,
   hospitalProfile,
   procedures,
   queries,
 } from "./schema.js";
+
+const DAY = 24 * 60 * 60 * 1000;
+const ago = (days: number) => new Date(Date.now() - days * DAY);
 
 /**
  * Local/dev seed: the three sample claims from the product brief. Run
@@ -25,6 +32,29 @@ function must<T>(value: T | undefined, what: string): T {
 }
 
 async function seed() {
+  // Running this twice used to mean two of every insurer, every
+  // procedure and every claim, with no way back short of emptying the
+  // database by hand.
+  const reset = process.argv.includes("--reset");
+  const [existing] = await db.select().from(hospitalProfile).limit(1);
+  if (existing && !reset) {
+    console.log(
+      "Already seeded. Re-run with --reset to start from scratch.\n" +
+        "That deletes every claim, rule, insurer and procedure this script owns.",
+    );
+    process.exit(0);
+  }
+  if (existing) {
+    // Claims cascade to their events, documents, queries, deductions
+    // and pre-auth fields; rules have to go before what they point at.
+    await db.delete(claims);
+    await db.delete(checklistRules);
+    await db.delete(insurers);
+    await db.delete(procedures);
+    await db.delete(hospitalProfile);
+    console.log("reset: cleared the previous seed");
+  }
+
   const [hospitalRow] = await db
     .insert(hospitalProfile)
     .values({ name: "City General Hospital" })
@@ -98,52 +128,189 @@ async function seed() {
     },
   ]);
 
-  const [gallBladderClaimRow] = await db
-    .insert(claims)
-    .values({
-      patientName: "Rajendra Pawar",
-      insurerId: paramount.id,
-      procedureId: gallBladder.id,
-      status: "QUERY_RAISED",
-      billedAmount: "185000",
-      admittedAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000),
-      // Normally frozen onto the claim by claims.service.createClaim at
-      // open time (docs/adr/0001) — inlined here since this seed inserts
-      // the row directly rather than going through that service.
-      checklistSnapshot: [
-        { documentType: "Pre-authorization form", required: true },
-        { documentType: "Treating doctor's note", required: true },
-        { documentType: "Ultrasound report (abdomen)", required: true },
-        { documentType: "Photo ID proof", required: true },
-        { documentType: "Policy / e-card copy", required: true },
-        { documentType: "Previous treatment records", required: false },
-      ],
-    })
-    .returning();
-  const gallBladderClaim = must(gallBladderClaimRow, "Rajendra Pawar's claim");
+  /*
+    The other two pairings. Only the gall bladder had rules before, so
+    the knee replacement and the dengue claim froze an empty checklist
+    and their files opened on "this claim has no checklist" — on a
+    seed whose whole job is to show the checklist working.
+  */
+  await db.insert(checklistRules).values([
+    ...[
+      ["Pre-authorization form", true],
+      ["Treating doctor's note", true],
+      ["Photo ID proof", true],
+      ["Policy / e-card copy", true],
+      ["Investigation reports", true],
+      ["Implant sticker / invoice", true],
+      ["Previous treatment records", false],
+    ].map(([documentType, required]) => ({
+      insurerId: nivaBupa.id,
+      procedureId: kneeReplacement.id,
+      documentType: documentType as string,
+      required: required as boolean,
+    })),
+    ...[
+      ["Pre-authorization form", true],
+      ["Treating doctor's note", true],
+      ["Photo ID proof", true],
+      ["Policy / e-card copy", true],
+      ["Serial platelet count chart", true],
+      ["Previous treatment records", false],
+    ].map(([documentType, required]) => ({
+      insurerId: vidal.id,
+      procedureId: dengue.id,
+      documentType: documentType as string,
+      required: required as boolean,
+    })),
+  ]);
 
-  const [, dengueClaimRow] = await db
-    .insert(claims)
-    .values([
-      {
-        patientName: "Sunita Deshmukh",
-        insurerId: nivaBupa.id,
-        procedureId: kneeReplacement.id,
-        status: "PRE_AUTH_SENT",
-        billedAmount: "320000",
-        admittedAt: new Date(Date.now() - 60 * 60 * 1000),
-      },
-      {
-        patientName: "Imran Shaikh",
-        insurerId: vidal.id,
-        procedureId: dengue.id,
-        status: "ENHANCEMENT_REQUESTED",
-        billedAmount: "95000",
-        admittedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
-      },
-    ])
-    .returning();
-  const dengueClaim = must(dengueClaimRow, "Imran Shaikh's claim");
+  /**
+   * One claim, with the things a claim has: the checklist frozen from
+   * the rules above (docs/adr/0001), and the chain of statuses it
+   * moved through. Without the chain the stepper has nothing to draw
+   * and turnaround has nothing to measure, which is how the first
+   * version of this seed left all three.
+   */
+  async function openClaim(opts: {
+    patientName: string;
+    insurerId: string;
+    procedureId: string;
+    status: ClaimStatus;
+    billedAmount?: string;
+    sanctionedAmount?: string;
+    admittedDaysAgo: number;
+    chain: {
+      status: ClaimStatus;
+      daysAgo: number;
+    }[];
+  }) {
+    const admittedAt = ago(opts.admittedDaysAgo);
+    const snapshot = await db
+      .select({
+        documentType: checklistRules.documentType,
+        required: checklistRules.required,
+      })
+      .from(checklistRules)
+      .where(
+        and(
+          eq(checklistRules.insurerId, opts.insurerId),
+          eq(checklistRules.procedureId, opts.procedureId),
+        ),
+      );
+
+    const [row] = await db
+      .insert(claims)
+      .values({
+        patientName: opts.patientName,
+        insurerId: opts.insurerId,
+        procedureId: opts.procedureId,
+        status: opts.status,
+        ...(opts.billedAmount ? { billedAmount: opts.billedAmount } : {}),
+        ...(opts.sanctionedAmount
+          ? { sanctionedAmount: opts.sanctionedAmount }
+          : {}),
+        admittedAt,
+        createdAt: admittedAt,
+        updatedAt: ago(opts.chain[opts.chain.length - 1]!.daysAgo),
+        checklistSnapshot: snapshot,
+      })
+      .returning();
+    const claim = must(row, `${opts.patientName}'s claim`);
+
+    for (const step of opts.chain) {
+      await db.insert(claimStatusEvents).values({
+        claimId: claim.id,
+        status: step.status,
+        actorId: null,
+        slaDeadline: null,
+        createdAt: ago(step.daysAgo),
+      });
+    }
+    return claim;
+  }
+
+  const gallBladderClaim = await openClaim({
+    patientName: "Rajendra Pawar",
+    insurerId: paramount.id,
+    procedureId: gallBladder.id,
+    status: "QUERY_RAISED",
+    billedAmount: "185000",
+    admittedDaysAgo: 5,
+    chain: [
+      { status: "DRAFT", daysAgo: 5 },
+      { status: "PRE_AUTH_SENT", daysAgo: 4.8 },
+      { status: "QUERY_RAISED", daysAgo: 2 },
+    ],
+  });
+
+  const kneeClaim = await openClaim({
+    patientName: "Sunita Deshmukh",
+    insurerId: nivaBupa.id,
+    procedureId: kneeReplacement.id,
+    status: "PRE_AUTH_SENT",
+    billedAmount: "320000",
+    admittedDaysAgo: 1,
+    chain: [
+      { status: "DRAFT", daysAgo: 1 },
+      { status: "PRE_AUTH_SENT", daysAgo: 0.9 },
+    ],
+  });
+
+  const dengueClaim = await openClaim({
+    patientName: "Imran Shaikh",
+    insurerId: vidal.id,
+    procedureId: dengue.id,
+    status: "ENHANCEMENT_REQUESTED",
+    billedAmount: "95000",
+    sanctionedAmount: "72000",
+    admittedDaysAgo: 2,
+    chain: [
+      { status: "DRAFT", daysAgo: 2 },
+      { status: "PRE_AUTH_SENT", daysAgo: 1.9 },
+      { status: "APPROVED", daysAgo: 1.5 },
+      { status: "ENHANCEMENT_REQUESTED", daysAgo: 0.4 },
+    ],
+  });
+
+  /*
+    The knee replacement carries a filled form, because it is the one
+    a pre-auth demo opens and "0 of 25 confirmed" on a claim already
+    sent to an insurer is a contradiction. The costing lines sum to the
+    total they declare — a pre-auth that does not is the first thing a
+    TPA sends back.
+  */
+  await db.insert(claimPreauthFields).values(
+    Object.entries({
+      treatingDoctorName: "Dr. Rameshwar Joshi",
+      treatingDoctorRegistrationNo: "MMC/2004/41208",
+      illnessWithComplaints:
+        "Severe bilateral knee pain, unable to climb stairs for 8 months",
+      clinicalFindings:
+        "Grade IV osteoarthritis, varus deformity, ROM 10-90 degrees",
+      ailmentDurationDays: "240",
+      firstConsultationDate: ago(34).toISOString().slice(0, 10),
+      provisionalDiagnosis: "Primary osteoarthritis of knee",
+      icd10Code: "M17.0",
+      lineOfTreatment: "Surgical management",
+      surgeryName: "Total knee replacement",
+      admissionDate: ago(1).toISOString().slice(0, 10),
+      admissionTime: "09:20",
+      admissionType: "Planned",
+      expectedStayDays: "5",
+      roomType: "Single private room",
+      roomRentPerDay: "14000",
+      investigationCost: "38400",
+      otCharges: "57600",
+      professionalFees: "76800",
+      medicinesConsumables: "77200",
+      totalExpectedCost: "320000",
+    }).map(([fieldKey, value]) => ({
+      claimId: kneeClaim.id,
+      fieldKey,
+      value,
+      confirmedAt: ago(0.95),
+    })),
+  );
 
   await db.insert(queries).values([
     {

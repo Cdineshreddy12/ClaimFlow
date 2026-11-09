@@ -49,6 +49,7 @@ cp .env.example .env          # then fill it in — see the table below
 pnpm --filter @claimflow/api db:migrate
 pnpm --filter @claimflow/api db:seed
 pnpm --filter @claimflow/api db:seed:demo   # six months of history, optional
+pnpm --filter @claimflow/api db:verify      # assert the data is coherent
 pnpm dev
 ```
 
@@ -226,6 +227,27 @@ the reasoning for each grant in `infra/iam/README.md`.
 **CORS on the API** is `origin: true`, which reflects whatever origin
 asks. That is fine for a demo and worth pinning to the web domain for
 anything else.
+
+### The demo data is reproducible
+
+```bash
+pnpm --filter @claimflow/api db:migrate
+pnpm --filter @claimflow/api db:seed        # the brief's three claims
+pnpm --filter @claimflow/api db:seed:demo   # six months of history
+pnpm --filter @claimflow/api db:verify      # 9 checks, exits non-zero on any failure
+```
+
+Those four commands against an empty database produce the demo. Both
+seeds refuse to run twice and take `--reset`; running them repeatedly
+used to mean two of every insurer and a dashboard counting everything
+twice.
+
+`db:verify` exists because every rule in it is one that was broken and
+then found by hand: a claim settled the day before it was admitted,
+deductions totalling more than the bill they came out of, a pre-auth
+form whose lines did not sum to the total it declared, claims carrying
+an empty checklist. Finding those at a terminal one query at a time is
+a bad way to find out and a worse way to find out twice.
 
 ### Migrations
 
