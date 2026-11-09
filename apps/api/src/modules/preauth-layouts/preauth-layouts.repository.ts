@@ -186,6 +186,27 @@ export async function createSection(
   return row;
 }
 
+/**
+ * Every section of a cloned layout in one statement.
+ *
+ * Cloning the shared form into an insurer's own used to insert these a
+ * row at a time — three sections, three column updates and
+ * twenty-five placements, each its own round trip to a Postgres that
+ * is not on this machine. That is about thirty sequential trips, and
+ * it took the endpoint fourteen seconds.
+ */
+export async function createSections(
+  rows: {
+    layoutId: string;
+    name: string;
+    displayOrder: number;
+    columnCount: number;
+  }[],
+) {
+  if (rows.length === 0) return [];
+  return db.insert(preauthSections).values(rows).returning();
+}
+
 export async function renameSection(id: string, name: string) {
   const [row] = await db
     .update(preauthSections)
@@ -208,6 +229,12 @@ type PlacementInsert = typeof preauthPlacements.$inferInsert;
 export async function createPlacement(values: PlacementInsert) {
   const [row] = await db.insert(preauthPlacements).values(values).returning();
   return row;
+}
+
+/** The matching bulk insert — see `createSections` for why. */
+export async function createPlacements(rows: PlacementInsert[]) {
+  if (rows.length === 0) return [];
+  return db.insert(preauthPlacements).values(rows).returning();
 }
 
 export async function updatePlacement(

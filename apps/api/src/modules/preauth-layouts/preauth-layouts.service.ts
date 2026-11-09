@@ -120,25 +120,39 @@ export async function customiseForInsurer(
   const created = await repo.createLayout(source.name, insurerId);
   if (!created) throw new LayoutNotFoundError(insurerId);
 
-  for (const section of source.sections) {
-    const copy = await repo.createSection(
-      created.id,
-      section.name,
-      section.displayOrder,
-    );
-    if (!copy) continue;
-    await repo.setSectionColumns(copy.id, section.columnCount);
-    for (const placement of section.placements) {
-      await repo.createPlacement({
+  /*
+    Two statements, not thirty-one.
+
+    This cloned the shared form a row at a time — a section, then its
+    column count, then each of its placements, every one its own
+    awaited round trip to a Postgres that is not on this machine. The
+    endpoint took fourteen seconds, which on screen is a button that
+    looks broken. The sections come back in insert order, so each one
+    keeps its own placements.
+  */
+  const copies = await repo.createSections(
+    source.sections.map((section) => ({
+      layoutId: created.id,
+      name: section.name,
+      displayOrder: section.displayOrder,
+      columnCount: section.columnCount,
+    })),
+  );
+
+  await repo.createPlacements(
+    source.sections.flatMap((section, i) => {
+      const copy = copies[i];
+      if (!copy) return [];
+      return section.placements.map((placement) => ({
         sectionId: copy.id,
         fieldDefinitionId: placement.definition.id,
         displayOrder: placement.displayOrder,
         columnPosition: placement.columnPosition,
         labelOverride: placement.labelOverride,
         required: placement.required,
-      });
-    }
-  }
+      }));
+    }),
+  );
 
   await auditService.record(auth, {
     action: "preauth_layout.updated",
