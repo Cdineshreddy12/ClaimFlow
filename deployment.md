@@ -48,6 +48,7 @@ pnpm install
 cp .env.example .env          # then fill it in — see the table below
 pnpm --filter @claimflow/api db:migrate
 pnpm --filter @claimflow/api db:seed
+pnpm --filter @claimflow/api db:seed:demo   # six months of history, optional
 pnpm dev
 ```
 

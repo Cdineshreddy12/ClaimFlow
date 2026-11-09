@@ -15,7 +15,8 @@
     "db:seed": "tsx src/db/seed.ts",
     "dev:token": "tsx scripts/mint-dev-token.ts",
     "db:migrate:status": "tsx src/db/migrate.ts --status",
-    "db:baseline": "tsx src/db/migrate.ts --baseline"
+    "db:baseline": "tsx src/db/migrate.ts --baseline",
+    "db:seed:demo": "tsx src/db/seed-demo.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.4.0",
