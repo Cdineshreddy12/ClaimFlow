@@ -1,3 +1,4 @@
+import { inflateSync } from "node:zlib";
 import { PDFDocument } from "pdf-lib";
 import { describe, expect, it } from "vitest";
 import type { PeriodReport } from "./reports.service.js";
@@ -48,5 +49,67 @@ describe("buildPeriodReportPdf", () => {
     const bytes = await buildPeriodReportPdf(COVER, manyInsurers);
     const doc = await PDFDocument.load(bytes);
     expect(doc.getPageCount()).toBeGreaterThan(1);
+  });
+
+  /*
+    This report carried the hospital's logo, tagline and accent but
+    ignored `accentHeadings`, so a desk that turned the accent on got
+    teal section names on the pre-auth form and black ones here — the
+    exact one-PDF-not-the-other mismatch this builder exists to end.
+
+    Counting fill-colour operators rather than reading pixels: the
+    accent is set once for the title whatever the setting, and again
+    for each section name only when it is on.
+  */
+  /** Every flate stream in the file, inflated — pdf-lib compresses them. */
+  const contentOf = (bytes: Uint8Array): string => {
+    const buf = Buffer.from(bytes);
+    let out = "";
+    for (let i = 0; ;) {
+      const start = buf.indexOf("stream", i);
+      if (start === -1) break;
+      const end = buf.indexOf("endstream", start);
+      if (end === -1) break;
+      let from = start + "stream".length;
+      while (buf[from] === 0x0d || buf[from] === 0x0a) from++;
+      try {
+        out += `${inflateSync(buf.subarray(from, end)).toString("latin1")}\n`;
+      } catch {
+        // Not a flate stream — an embedded font or image. Skip it.
+      }
+      i = end + "endstream".length;
+    }
+    return out;
+  };
+
+  /** #0E7C86 as a PDF fill-colour operator, at pdf-lib's precision. */
+  const TEAL_FILL = `${0x0e / 255} ${0x7c / 255} ${0x86 / 255} rg`;
+  const accentFills = (bytes: Uint8Array): number =>
+    contentOf(bytes).split(TEAL_FILL).length - 1;
+
+  it("colours the section names only when accentHeadings is on", async () => {
+    const teal = { ...COVER, accentColorHex: "#0E7C86" };
+
+    const off = await buildPeriodReportPdf(
+      { ...teal, options: { accentHeadings: false } },
+      EMPTY_REPORT,
+    );
+    const on = await buildPeriodReportPdf(
+      { ...teal, options: { accentHeadings: true } },
+      EMPTY_REPORT,
+    );
+
+    // The title takes the accent either way, so neither is zero.
+    expect(accentFills(off)).toBeGreaterThan(0);
+    // "Deductions by reason" and "Insurer turnaround" add two more.
+    expect(accentFills(on)).toBe(accentFills(off) + 2);
+  });
+
+  it("leaves the headings alone when no accent is set", async () => {
+    const bytes = await buildPeriodReportPdf(
+      { ...COVER, options: { accentHeadings: true } },
+      EMPTY_REPORT,
+    );
+    expect(accentFills(bytes)).toBe(0);
   });
 });

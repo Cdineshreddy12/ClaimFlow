@@ -167,6 +167,10 @@ export async function buildPeriodReportPdf(
   const faint = rgb(0.56, 0.56, 0.52);
   const critical = rgb(0.62, 0.17, 0.14);
   const accent = hexToColor(cover.accentColorHex) ?? ink;
+  // The same switch the pre-auth form reads, so a desk that turns the
+  // accent on gets it on both documents rather than on whichever one
+  // happened to be written second.
+  const headings = options.accentHeadings ? accent : ink;
 
   const cursor = makeCursor(doc);
 
@@ -250,7 +254,7 @@ export async function buildPeriodReportPdf(
     y: cursor.y,
     size: 11,
     font: bold,
-    color: ink,
+    color: headings,
   });
   cursor.y -= 22;
 
@@ -346,7 +350,7 @@ export async function buildPeriodReportPdf(
     y: cursor.y,
     size: 11,
     font: bold,
-    color: ink,
+    color: headings,
   });
   cursor.y -= 22;
 
