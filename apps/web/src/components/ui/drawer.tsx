@@ -106,7 +106,13 @@ export function DrawerHeader({
   children?: React.ReactNode;
 }) {
   return (
-    <div className="flex shrink-0 items-start justify-between gap-3 border-b border-line px-4 py-3">
+    /*
+      Stacked under `sm`. Side by side, the actions are `shrink-0` and
+      the title takes what is left — on a phone that was 131px, enough
+      to wrap "Desk assistant" onto two lines and its description onto
+      three, for a header taller than the answer it sat above.
+    */
+    <div className="flex shrink-0 flex-col gap-2 border-b border-line px-4 py-3 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
       <div className="min-w-0">
         <DialogPrimitive.Title className="text-md font-semibold text-ink">
           {title}

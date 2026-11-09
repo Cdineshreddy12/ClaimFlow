@@ -356,11 +356,16 @@ function AssistantBody({
               the claim on the page behind this panel and the answer is
               worth little if you cannot see what it is about. Wide is
               one click away and remembered, for the receivables tables
-              and the charts that genuinely need the room. */}
+              and the charts that genuinely need the room.
+
+              Not offered under `sm`: there the panel is already the
+              whole screen, so the button changed nothing while taking
+              a quarter of a header that had no room to spare. */}
           <Button
             type="button"
             size="sm"
             variant="outline"
+            className="hidden sm:inline-flex"
             aria-pressed={wide}
             title={wide ? "Narrow the panel" : "Widen the panel"}
             onClick={() => setWide((w) => !w)}

@@ -115,12 +115,22 @@ export function AssistantMarkdown({ children }: { children: string }) {
             <div className="mb-1 mt-2 font-semibold first:mt-0">{children}</div>
           ),
           hr: () => <hr className="my-2.5 border-0 border-t border-line" />,
-          // The drawer is narrow and a table is the one thing that
-          // cannot be made to fit; it scrolls inside itself rather than
-          // pushing the panel sideways.
+          /*
+            The drawer is narrow and a table is the one thing that
+            cannot be made to fit; it scrolls inside itself rather than
+            pushing the panel sideways.
+
+            `w-full` alone never triggered that scroll — the table
+            simply shrank to whatever it was given, and on a phone the
+            columns collapsed until the container's `overflow-wrap:
+            anywhere` shattered the words inside them: a header reading
+            "Clai / m", a cell reading "Not conteste / d". The minimum
+            is what makes the overflow real, and the cells opt out of
+            anywhere-breaking because they now have somewhere to go.
+          */
           table: ({ children }) => (
             <div className="mb-2 overflow-x-auto last:mb-0">
-              <table className="w-full border-collapse text-sm">
+              <table className="w-full min-w-[28rem] border-collapse text-sm [overflow-wrap:normal]">
                 {children}
               </table>
             </div>
