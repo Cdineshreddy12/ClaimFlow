@@ -11,17 +11,23 @@ both import. Postgres and auth are Supabase; document storage is S3.
 One hospital per install, so these three accounts all belong to the same
 desk and differ only by role. Sign in at the web app's `/login`.
 
-| Role           | Email                              | Sees                                                          |
-| -------------- | ---------------------------------- | ------------------------------------------------------------- |
-| Org Admin      | `desk.admin@claimflow.example.com` | Everything, including Checklist Admin and inviting colleagues |
-| Desk Head      | `desk.head@claimflow.example.com`  | All claims on the desk; can settle a claim                    |
-| Desk Executive | `desk.exec@claimflow.example.com`  | Only claims assigned to them; cannot settle                   |
+| Role           | Email                              | Password         | Sees                                                          |
+| -------------- | ---------------------------------- | ---------------- | ------------------------------------------------------------- |
+| Org Admin      | `desk.admin@claimflow.example.com` | `2rlkhx0RrFTLtq` | Everything, including Checklist Admin and inviting colleagues |
+| Desk Head      | `desk.head@claimflow.example.com`  | `g7umiUKhkLmLkp` | All claims on the desk; can settle a claim                    |
+| Desk Executive | `desk.exec@claimflow.example.com`  | `6ILBjZSGrP1uhh` | Only claims assigned to them; cannot settle                   |
 
-The passwords are not in this file and will not be. A password written
-down in a public repository is a password anyone can read, and rotating
-it does not un-publish the old one — so it does not go in a tracked
-file, a screenshot, or a commit message. Ask whoever runs the demo, or
-set your own from Supabase → Authentication → Users.
+**These are for demo purposes only.** A password written down in a
+public repository is a password anyone can read, and rotating it
+afterward doesn't un-publish the commit that had the old one — normally
+that's reason enough to keep credentials out of a tracked file entirely.
+They're here anyway because the brief this project was built against
+asks for demo login details in this file, for a reviewer who needs to
+sign in without a side channel. What makes that an acceptable trade and
+not just a convenient one is further down this page: these accounts
+hold no real data, and they'll be rotated (or the project taken down)
+once the review period that needed them in writing is over. Don't reuse
+this pattern for anything that isn't a disposable demo.
 
 The role split is worth exercising — it's enforced in the API, not just
 hidden in the UI. Signing in as **Desk Executive** shows one claim
