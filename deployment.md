@@ -132,32 +132,107 @@ API refuses dev-signed tokens when `NODE_ENV=production` regardless.
 
 ---
 
+## Containers
+
+Both halves build as images from the repository root, because each is
+one package in a pnpm workspace and the lockfile that pins it lives at
+the top.
+
+```bash
+docker compose up --build       # web :8080, api :4200
+```
+
+`compose` reads `.env` for the API and passes the three `VITE_*` values
+in as **build arguments** — Vite inlines them into the bundle, so a
+container started with a different `VITE_API_URL` still calls the old
+one. Changing where the web app points means rebuilding it, not
+restarting it.
+
+Built separately:
+
+```bash
+docker build -f apps/api/Dockerfile -t claimflow-api .
+
+docker build -f apps/web/Dockerfile \
+  --build-arg VITE_API_URL=https://api.example.com \
+  --build-arg VITE_SUPABASE_URL=https://xyz.supabase.co \
+  --build-arg VITE_SUPABASE_ANON_KEY=... \
+  -t claimflow-web .
+```
+
+The API image is ~335MB and carries the bundle plus production
+dependencies: no pnpm, no TypeScript, no source. It runs as `node`
+rather than root and has a `HEALTHCHECK` against the `/health` route
+the app already serves. The web image is ~78MB of nginx, configured to
+fall back to `index.html` so a reload on `/claims/<id>` is not a 404.
+
+Only the Supabase **anon** key belongs in the web build. It is public
+by design — the browser sends it on every request — which is why
+Docker's `SecretsUsedInArgOrEnv` warning on that line is noise. The
+service role key is not public and the web app never needs it.
+
+### `DATABASE_URL` must be the pooler, not the direct connection
+
+This is the one that will catch you, and it is not a Docker problem:
+
+```
+$ dig +short A    db.<ref>.supabase.co     # → nothing
+$ dig +short AAAA db.<ref>.supabase.co     # → 2406:da14:...
+```
+
+Supabase's direct database host publishes **no A record**. A container
+on Docker's default bridge has no IPv6 route, so it fails with
+`ENETUNREACH` — and it fails _late_: the API starts, reports healthy,
+serves `/health`, and only dies when something actually queries. Most
+managed hosts have the same gap.
+
+Use the Supavisor pooler, which answers on IPv4:
+
+```
+postgres://postgres.<ref>:<password>@aws-0-<region>.pooler.supabase.com:6543/postgres
+```
+
+Port 6543 is transaction mode, which forbids prepared statements.
+`apps/api/src/db/client.ts` already passes `prepare: false`, so nothing
+else has to change.
+
+---
+
 ## Deploying
 
-Not currently deployed. The pieces and what each needs:
+**API** — any Node 20 host that can run a container (Fly, Railway,
+Render). Needs every `api` variable, `NODE_ENV=production`, and the
+pooler `DATABASE_URL` above. Avoid free tiers that sleep on idle: a
+cold start of roughly a minute lands on whoever opens the link.
 
-**API** — a Node 20 host (Fly, Railway, Render, a container).
-`pnpm --filter @claimflow/api build` then `node apps/api/dist/server.js`.
-Needs every `api` variable above, plus `NODE_ENV=production`. It talks
-to Postgres directly over `DATABASE_URL`, so the host needs outbound
-access to Supabase.
-
-**Web** — a static host (Vercel, Netlify, S3+CloudFront).
-`pnpm --filter @claimflow/web build` emits `apps/web/dist`. Needs the
-`VITE_*` variables at **build** time, since Vite inlines them. Serve
-`index.html` for unknown paths — it's a client-routed SPA.
-
-**Database** — run `db:migrate` against the target before the API
-starts. Migrations are ordered and idempotent where it matters; `0015`
-deletes rows belonging to any non-oldest organization as part of
-collapsing the old multi-tenant schema, so read it before running it on
-data you care about.
+**Web** — the nginx image, or `apps/web/dist` on any static host
+(Vercel, Netlify, S3+CloudFront). The `VITE_*` values are needed at
+**build** time.
 
 **S3** — the browser uploads straight to S3 with a pre-signed URL, so
-the bucket needs a CORS rule allowing `PUT` and `GET` from the web app's
-origin. That rule lives on the bucket, not in this repo. The IAM policy
-the API needs is in `infra/iam/claimflow-api-policy.json`, with the
-reasoning for each grant in `infra/iam/README.md`.
+the bucket needs a CORS rule allowing `PUT` and `GET` from the web
+app's origin. That rule lives on the bucket, not in this repo. The IAM
+policy the API needs is in `infra/iam/claimflow-api-policy.json`, with
+the reasoning for each grant in `infra/iam/README.md`.
+
+**CORS on the API** is `origin: true`, which reflects whatever origin
+asks. That is fine for a demo and worth pinning to the web domain for
+anything else.
+
+### Migrations are not yet runnable from the image
+
+`pnpm --filter @claimflow/api db:migrate` runs drizzle-kit against
+`src/db/migrations`, and **the journal it reads is 24 migrations behind
+the directory**: `meta/_journal.json` ends at `0011`, while the folder
+goes to `0035`. Everything from `0012_claim_preauth_fields` onward —
+including the pre-auth layouts and the custom modules — was applied as
+raw SQL without a journal entry.
+
+So on a fresh database that command produces a schema missing half the
+tables, silently and successfully. The SQL files are copied into the
+image at `/app/migrations` so a runner has something to run, but
+deciding what that runner is comes before pointing it at a database
+anyone cares about.
 
 ### Without an Anthropic key
 

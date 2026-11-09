@@ -1,0 +1,30 @@
+# Everything the build should fetch or produce itself rather than
+# inherit from whatever happens to be on the machine that ran it.
+node_modules
+**/node_modules
+dist
+**/dist
+*.tsbuildinfo
+**/*.tsbuildinfo
+
+# Secrets. The image takes its configuration from the environment it
+# runs in; a .env baked into a layer is a secret in the registry.
+.env
+.env.*
+!.env.example
+
+.git
+.github
+.husky
+coverage
+**/coverage
+.vscode
+.idea
+.DS_Store
+*.log
+
+# Docs and design assets — none of it is read at build or run time.
+docs
+infra
+*.md
+!deployment.md

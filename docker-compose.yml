@@ -1,0 +1,60 @@
+# Both halves of ClaimFlow, locally, as they are built for deployment.
+#
+#     docker compose up --build
+#
+#     Web  http://localhost:8080
+#     API  http://localhost:4200
+#
+# Postgres is not a service here. The database is Supabase and the data
+# lives there; standing a throwaway Postgres up beside these two would
+# be a different application with an empty schema.
+#
+# -----------------------------------------------------------------
+# DATABASE_URL must be the pooler, not the direct connection
+# -----------------------------------------------------------------
+# `db.<ref>.supabase.co` publishes no A record — it is IPv6-only — and
+# a container on Docker's default bridge has no IPv6 route, so it fails
+# with ENETUNREACH after the API has already started and reported
+# healthy. Most managed hosts have the same gap.
+#
+# Use the Supavisor pooler instead, which answers on IPv4:
+#
+#     postgres://postgres.<ref>:<password>@aws-0-<region>.pooler.supabase.com:6543/postgres
+#
+# Port 6543 is transaction mode, which forbids prepared statements —
+# `apps/api/src/db/client.ts` already passes `prepare: false`, so it
+# works unchanged.
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    # Everything the API reads is an environment variable; the file is
+    # never copied into the image.
+    env_file: .env
+    environment:
+      NODE_ENV: production
+      PORT: 4200
+    ports:
+      - "4200:4200"
+    restart: unless-stopped
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        # The browser makes this call, not the container, so it has to
+        # be an address the host can reach — `http://api:4200` resolves
+        # only inside the compose network and would fail from a tab.
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:4200}
+        VITE_SUPABASE_URL: ${VITE_SUPABASE_URL}
+        VITE_SUPABASE_ANON_KEY: ${VITE_SUPABASE_ANON_KEY}
+    ports:
+      - "8080:8080"
+    depends_on:
+      # Only that the container started. The SPA loads and renders
+      # before its first API call either way.
+      - api
+    restart: unless-stopped
