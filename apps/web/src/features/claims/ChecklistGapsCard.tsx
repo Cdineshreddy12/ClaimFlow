@@ -68,8 +68,36 @@ export function ChecklistGapsCard({
             This claim has no checklist.
           </strong>{" "}
           No document rules existed for this insurer and procedure when it was
-          opened, so nothing will be flagged as missing. Add rules in Checklist
-          Admin for the next one, and check this claim&apos;s documents by hand.
+          opened, so nothing will be flagged as missing.
+          {/*
+            The way out, rather than only the diagnosis. Rule changes
+            never reach back into a claim that already has a checklist
+            (docs/adr/0001), which is why this appears here and only
+            here — there is nothing to overwrite.
+          */}
+          <div className="mt-2.5 flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              size="sm"
+              disabled={applyRules.isPending}
+              onClick={() => applyRules.mutate()}
+            >
+              {applyRules.isPending ? "Applying…" : "Apply the current rules"}
+            </Button>
+            <span className="text-sm text-ink-soft">
+              Or check this claim&apos;s documents by hand.
+            </span>
+          </div>
+          {applyRules.isError ? (
+            /*
+              The server says why: 422 when the pairing still has no
+              rules to apply, which is a trip to Checklist Admin rather
+              than a retry.
+            */
+            <div className="mt-2 text-sm font-medium text-critical">
+              {(applyRules.error as Error).message}
+            </div>
+          ) : null}
         </div>
       ) : (
         <div className="flex flex-col gap-0.5">

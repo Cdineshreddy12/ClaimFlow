@@ -53,12 +53,16 @@ describe("documents.service", () => {
       const result = await requestUploadUrl(auth(), CLAIM_ID, {
         fileName: "report.pdf",
         contentType: "application/pdf",
+        sizeBytes: 1_200_000,
       });
 
       expect(s3.buildObjectKey).toHaveBeenCalledWith(CLAIM_ID, "report.pdf");
+      // The size reaches S3, where it is signed into the URL as the
+      // only Content-Length that link will accept.
       expect(s3.getUploadUrl).toHaveBeenCalledWith(
         "organizations/x/claims/y/key.pdf",
         "application/pdf",
+        1_200_000,
       );
       expect(result).toEqual({
         uploadUrl: "https://s3.example/signed-put",

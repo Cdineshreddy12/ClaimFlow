@@ -64,9 +64,24 @@ export function buildHospitalLogoKey(fileName: string): string {
 }
 
 /** Pre-signed PUT URL the frontend uploads directly to — the API never streams file bytes through itself. */
+/**
+ * A link that will accept exactly one file, of exactly this size.
+ *
+ * `ContentLength` is signed, so it becomes a condition of the URL
+ * rather than a hint: S3 refuses a PUT whose body is any other
+ * length. Without it the signature constrained the key and the content
+ * type and nothing else, and a link handed out for a 2MB scan would
+ * equally have accepted two gigabytes — on a bucket billed to the
+ * hospital.
+ *
+ * The browser sets `Content-Length` itself from the body it sends, so
+ * an honest client needs to do nothing; a dishonest one gets a 403
+ * from S3 before a byte is stored.
+ */
 export async function getUploadUrl(
   key: string,
   contentType: string,
+  sizeBytes: number,
   expiresInSeconds = 300,
 ): Promise<string> {
   const { client: s3, bucket: bucketName } = getClient();
@@ -74,8 +89,13 @@ export async function getUploadUrl(
     Bucket: bucketName,
     Key: key,
     ContentType: contentType,
+    ContentLength: sizeBytes,
   });
-  return getSignedUrl(s3, command, { expiresIn: expiresInSeconds });
+  return getSignedUrl(s3, command, {
+    expiresIn: expiresInSeconds,
+    // Signed rather than left to the client, which is the whole point.
+    signableHeaders: new Set(["content-length", "content-type"]),
+  });
 }
 
 /** Pre-signed GET URL — the bucket is private, so viewing a document always goes through this, never a public URL. */

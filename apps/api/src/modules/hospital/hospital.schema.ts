@@ -28,5 +28,11 @@ export type UpdateProfileBody = z.infer<typeof UpdateProfileBody>;
 export const RequestLogoUploadUrlBody = z.object({
   fileName: z.string().trim().min(1).max(200),
   contentType: z.enum(["image/png", "image/jpeg"]),
+  /** A logo that needs more than this is the wrong asset for a letterhead. */
+  sizeBytes: z.coerce
+    .number()
+    .int()
+    .positive("that file is empty")
+    .max(2 * 1024 * 1024, "logos are limited to 2MB"),
 });
 export type RequestLogoUploadUrlBody = z.infer<typeof RequestLogoUploadUrlBody>;

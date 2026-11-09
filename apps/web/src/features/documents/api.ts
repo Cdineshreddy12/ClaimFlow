@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { uploadRejection } from "@claimflow/contracts";
 import { api } from "../../lib/api-client";
 import type { ClaimDocument } from "./types";
 
@@ -24,17 +25,24 @@ export function useUploadDocument(claimId: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (file: File) => {
+      // Refused here as well as on the server, so a 90MB video fails
+      // in front of the person who chose it rather than after they
+      // have waited for it to upload.
+      const rejection = uploadRejection(file);
+      if (rejection) throw new Error(rejection);
+
       const { uploadUrl, key } = await api.post<{
         uploadUrl: string;
         key: string;
       }>(`/claims/${claimId}/documents/upload-url`, {
         fileName: file.name,
-        contentType: file.type || "application/octet-stream",
+        contentType: file.type,
+        sizeBytes: file.size,
       });
 
       const putRes = await fetch(uploadUrl, {
         method: "PUT",
-        headers: { "Content-Type": file.type || "application/octet-stream" },
+        headers: { "Content-Type": file.type },
         body: file,
       });
       if (!putRes.ok) throw new Error("upload to storage failed");
@@ -42,7 +50,7 @@ export function useUploadDocument(claimId: string) {
       return api.post<ClaimDocument>(`/claims/${claimId}/documents`, {
         key,
         fileName: file.name,
-        contentType: file.type || "application/octet-stream",
+        contentType: file.type,
       });
     },
     onSuccess: () => {

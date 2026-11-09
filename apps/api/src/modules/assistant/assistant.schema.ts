@@ -1,11 +1,25 @@
 import { z } from "zod";
+import {
+  UPLOAD_MAX_BYTES,
+  formatUploadLimit,
+  isAllowedUploadType,
+} from "@claimflow/contracts";
 import { PROPOSAL_KINDS } from "./assistant.tools.js";
 
 export const AttachmentIdParams = z.object({ id: z.string().uuid() });
 
 export const RequestAttachmentUploadBody = z.object({
   fileName: z.string().min(1).max(255),
-  contentType: z.string().min(1).max(127),
+  contentType: z
+    .string()
+    .min(1)
+    .max(127)
+    .refine(isAllowedUploadType, "attach a PDF or a scan"),
+  sizeBytes: z.coerce
+    .number()
+    .int()
+    .positive("that file is empty")
+    .max(UPLOAD_MAX_BYTES, `files are limited to ${formatUploadLimit()}`),
 });
 export type RequestAttachmentUploadBody = z.infer<
   typeof RequestAttachmentUploadBody
@@ -14,7 +28,11 @@ export type RequestAttachmentUploadBody = z.infer<
 export const RegisterAttachmentBody = z.object({
   key: z.string().min(1),
   fileName: z.string().min(1).max(255),
-  contentType: z.string().min(1).max(127),
+  contentType: z
+    .string()
+    .min(1)
+    .max(127)
+    .refine(isAllowedUploadType, "attach a PDF or a scan"),
 });
 export type RegisterAttachmentBody = z.infer<typeof RegisterAttachmentBody>;
 

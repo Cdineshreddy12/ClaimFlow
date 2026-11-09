@@ -74,7 +74,7 @@ export async function getHospital() {
 /** Step 1 of the logo upload flow — same shape as the per-claim document upload (docs/adr/0003). */
 export async function requestLogoUploadUrl(body: RequestLogoUploadUrlBody) {
   const key = buildHospitalLogoKey(body.fileName);
-  const uploadUrl = await getUploadUrl(key, body.contentType);
+  const uploadUrl = await getUploadUrl(key, body.contentType, body.sizeBytes);
   return { uploadUrl, key };
 }
 

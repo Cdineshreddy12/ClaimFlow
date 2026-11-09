@@ -43,7 +43,7 @@ export async function requestUploadUrl(
   body: RequestUploadUrlBody,
 ) {
   const key = buildObjectKey(claimId, body.fileName);
-  const uploadUrl = await getUploadUrl(key, body.contentType);
+  const uploadUrl = await getUploadUrl(key, body.contentType, body.sizeBytes);
   return { uploadUrl, key };
 }
 

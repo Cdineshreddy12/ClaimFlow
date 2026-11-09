@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../lib/api-client";
+import { uploadRejection } from "@claimflow/contracts";
 import { API_URL, authHeader } from "../../lib/api-client";
 import type {
   AssistantAttachment,
@@ -78,13 +79,17 @@ export async function uploadAttachment(
     progress?: number;
   }) => void,
 ): Promise<AssistantAttachment> {
-  const contentType = file.type || "application/octet-stream";
+  const rejection = uploadRejection(file);
+  if (rejection) throw new Error(rejection);
+
+  const contentType = file.type;
   const { uploadUrl, key } = await api.post<{
     uploadUrl: string;
     key: string;
   }>("/assistant/attachments/upload-url", {
     fileName: file.name,
     contentType,
+    sizeBytes: file.size,
   });
 
   onStage({ state: "uploading", progress: 0 });

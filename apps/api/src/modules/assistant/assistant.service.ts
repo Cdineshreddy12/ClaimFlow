@@ -60,7 +60,7 @@ export async function requestAttachmentUpload(
   body: RequestAttachmentUploadBody,
 ) {
   const key = buildStagingKey(body.fileName);
-  const uploadUrl = await getUploadUrl(key, body.contentType);
+  const uploadUrl = await getUploadUrl(key, body.contentType, body.sizeBytes);
   return { uploadUrl, key };
 }
 

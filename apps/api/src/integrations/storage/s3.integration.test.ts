@@ -17,15 +17,33 @@ const hasAwsCreds = Boolean(
 
 /** Hits the real S3 bucket in AWS_S3_BUCKET. Skips when AWS creds aren't set (e.g. in CI). */
 describe.skipIf(!hasAwsCreds)("s3 (integration)", () => {
+  it("refuses a body larger than the size the URL was signed for", async () => {
+    // The point of signing ContentLength: a link handed out for a
+    // small scan cannot be used to push a large file into the bucket.
+    const key = buildObjectKey("test-claim", "oversized.txt");
+    const uploadUrl = await getUploadUrl(key, "text/plain", 10);
+
+    const response = await fetch(uploadUrl, {
+      method: "PUT",
+      headers: { "Content-Type": "text/plain" },
+      body: "this body is comfortably longer than ten bytes",
+    });
+
+    expect(response.ok).toBe(false);
+  });
+
   it("round-trips an object through pre-signed PUT and GET URLs", async () => {
     const key = buildObjectKey("test-claim", "report.txt");
     expect(key).toContain("claims/test-claim/");
 
-    const uploadUrl = await getUploadUrl(key, "text/plain");
+    const content = "claimflow integration test content";
+    const size = new TextEncoder().encode(content).length;
+
+    const uploadUrl = await getUploadUrl(key, "text/plain", size);
     const putResponse = await fetch(uploadUrl, {
       method: "PUT",
       headers: { "Content-Type": "text/plain" },
-      body: "claimflow integration test content",
+      body: content,
     });
     expect(putResponse.ok).toBe(true);
 
