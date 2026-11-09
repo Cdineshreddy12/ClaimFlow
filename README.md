@@ -32,29 +32,38 @@
 
 ## The problem
 
-A hospital's insurance desk handles cashless admissions across 20+ insurers
-and TPAs, each with its own document format. Today that means typing
-pre-authorization forms, scanning doctors' notes, emailing them out,
-tracking status in spreadsheets, and chasing queries and doctors over
-email and WhatsApp. Hospitals lose money to avoidable deductions —
-documents missing at submission, not treatment errors — and patients wait
-longer than necessary for discharge approval while the desk tracks
-everything by hand.
+A hospital's insurance desk deals with cashless admissions across 20+
+insurers and TPAs, and each one wants its paperwork a little differently.
+In practice that means retyping the same pre-authorization details for
+every insurer, scanning doctors' notes, emailing everything out, and
+tracking where each claim stands in a spreadsheet. Queries from the
+insurer and follow-ups with the doctor happen over email and WhatsApp,
+with nobody keeping one record of who asked for what.
+
+Most of what a hospital loses on these claims isn't bad treatment — it's
+a document that wasn't there when the claim went out. And because the
+desk is doing all of this by hand, patients often end up waiting longer
+for discharge than the actual approval takes.
 
 ## What ClaimFlow does
 
-- **One claim file per admission** with a live status timeline (pre-auth →
-  query/enhancement → approved → final bill → settled).
-- **A checklist of what's missing**, configured per insurer and procedure
-  by the hospital's own admin, computed live — never stale.
-- **AI-assisted document sorting and field pre-fill** — every AI result
-  shows its source and stays unconfirmed until a human clicks it.
-  Misclassified documents are draggable to the right slot. Nothing is
-  ever sent to an insurer or TPA automatically.
-- **A query inbox** that summarizes what a TPA wants and by when, with the
-  original email always visible underneath the summary.
-- **Multi-tenant from the ground up** — every hospital that signs up is an
-  isolated organization on one shared deployment, not a one-off install.
+- **One claim file per admission.** A live status timeline carries it
+  through pre-auth, query/enhancement, approval, final bill and
+  settlement, so nobody has to ask "where's this claim right now."
+- **A checklist that's actually current.** Set per insurer and procedure
+  by the hospital's own admin, computed fresh each time rather than
+  copied off a PDF someone printed last year.
+- **AI helps, but doesn't decide.** It sorts incoming documents and
+  pre-fills form fields, and every suggestion shows where it came from
+  and sits unconfirmed until a person clicks it. Got one wrong? Drag it
+  to the right slot. Nothing reaches an insurer or TPA without a human
+  in the loop.
+- **A query inbox that cuts to the point.** It summarizes what a TPA is
+  actually asking for and by when, with the original email sitting
+  right underneath if you want to check the summary against it.
+- **Multi-tenant from day one.** Every hospital that signs up gets its
+  own isolated organization on the same deployment — this was never
+  built as a one-off for a single client.
 
 ## Screenshots
 
@@ -186,31 +195,34 @@ see [Scripts](#scripts). For what's deliberately not built yet, see
 ## Architecture
 
 ```mermaid
-flowchart LR
-    subgraph Client
-        Web["React app<br/>(apps/web)"]
-    end
+flowchart TD
+    Web["React app<br/>apps/web"]
 
-    subgraph Server
-        API["Fastify API<br/>(apps/api)"]
+    subgraph Server["Server"]
+        direction LR
+        API["Fastify API<br/>apps/api"]
         Workers["Async workers<br/>OCR → AI classify → match"]
     end
 
-    subgraph Data
+    subgraph External["External services"]
+        direction LR
+        AI["Claude<br/>classify · extract · summarize"]
+        Razorpay["Razorpay<br/>billing"]
+    end
+
+    subgraph Data["Data"]
+        direction LR
         PG[("Postgres<br/>Supabase, Mumbai")]
         S3[("S3<br/>scanned docs, PDF packets")]
     end
-
-    AI["Claude<br/>classify · extract · summarize"]
-    Razorpay["Razorpay<br/>billing"]
 
     Web -- "HTTPS, RBAC-scoped" --> API
     API -- "Drizzle ORM" --> PG
     API --> S3
     API --> Workers
+    API --> Razorpay
     Workers --> AI
     Workers --> PG
-    API --> Razorpay
 ```
 
 Every tenant-scoped table carries `organization_id`. Tenant isolation is
