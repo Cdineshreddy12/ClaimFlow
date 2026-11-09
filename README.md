@@ -2,7 +2,7 @@
 
 # ClaimFlow
 
-**Multi-tenant SaaS for hospital insurance claims desks.**
+**A hospital's own insurance claims desk — one deployment per hospital.**
 
 [![CI](https://github.com/Cdineshreddy12/ClaimFlow/actions/workflows/ci.yml/badge.svg)](https://github.com/Cdineshreddy12/ClaimFlow/actions/workflows/ci.yml) ![Node](https://img.shields.io/badge/node-%3E%3D20-339933?logo=node.js&logoColor=white) ![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?logo=typescript&logoColor=white) ![pnpm](https://img.shields.io/badge/pnpm-workspace-F69220?logo=pnpm&logoColor=white) ![License](https://img.shields.io/badge/license-proprietary-lightgrey)
 
@@ -61,9 +61,12 @@ for discharge than the actual approval takes.
 - **A query inbox that cuts to the point.** It summarizes what a TPA is
   actually asking for and by when, with the original email sitting
   right underneath if you want to check the summary against it.
-- **Multi-tenant from day one.** Every hospital that signs up gets its
-  own isolated organization on the same deployment — this was never
-  built as a one-off for a single client.
+- **One hospital per install, by construction.** Earlier builds were
+  multi-tenant, with an `organization_id` on every table; that was
+  dropped at the client's request in favor of one deployment per
+  hospital ([`adr 0002`](docs/adr/0002-authorization-and-tenant-isolation.md)).
+  There's no tenant column left to filter correctly or forget — a whole
+  class of cross-tenant bugs simply isn't possible in this schema.
 
 ## Screenshots
 
@@ -147,9 +150,12 @@ unsure or catches something wrong — not screenshots of a happy path only.
 Postgres database, and a real S3 bucket — not mocked, and not just styled.**
 
 - **Auth & RBAC** — Supabase JWT verification with a Custom Access Token
-  hook that stamps `organization_id`/role onto the token. Three roles
-  (org_admin, desk_head, desk_executive), enforced in Fastify middleware
-  on every route — not just hidden in the UI.
+  hook that stamps a role onto the token at sign-in, checked in Fastify
+  middleware on every route, not just hidden in the UI. Five roles exist
+  in the schema; the desk signs in as org_admin, desk_head or
+  desk_executive, platform_admin has no console to use yet (see
+  [What's not built yet](#whats-not-built-yet)), and doctor never gets
+  an account at all — it approves through the phone link instead.
 - **Claims** — one file per admission, a status timeline bound to the
   shared state machine, desk executives scoped to their own assigned
   claims.
@@ -198,16 +204,12 @@ see [Scripts](#scripts). For what's deliberately not built yet, see
 flowchart TD
     Web["React app<br/>apps/web"]
 
-    subgraph Server["Server"]
-        direction LR
-        API["Fastify API<br/>apps/api"]
-        Workers["Async workers<br/>OCR → AI classify → match"]
-    end
+    API["Fastify API<br/>apps/api<br/>document processing runs inline — no queue, no worker tier"]
 
     subgraph External["External services"]
         direction LR
-        AI["Claude<br/>classify · extract · summarize"]
-        Razorpay["Razorpay<br/>billing"]
+        AI["Claude + Textract OCR<br/>classify · extract · summarize"]
+        Razorpay["Razorpay<br/>billing — decided, not wired up"]
     end
 
     subgraph Data["Data"]
@@ -219,17 +221,17 @@ flowchart TD
     Web -- "HTTPS, RBAC-scoped" --> API
     API -- "Drizzle ORM" --> PG
     API --> S3
-    API --> Workers
-    API --> Razorpay
-    Workers --> AI
-    Workers --> PG
+    API --> AI
+    API -.-> Razorpay
 ```
 
-Every tenant-scoped table carries `organization_id`. Tenant isolation is
-enforced in the Fastify route layer, not by database RLS — see
-[Security model](#security-model) for exactly why, and
-[`docs/adr/0002`](docs/adr/0002-authorization-and-tenant-isolation.md) for
-the full reasoning.
+One hospital per install — there's no tenant column on any table.
+`hospital_profile` holds the one hospital's identity as a single
+enforced row, and access within it is controlled by role, not by
+filtering rows that belong to someone else. See
+[Security model](#security-model) for what that does and doesn't buy
+you, and [`docs/adr/0002`](docs/adr/0002-authorization-and-tenant-isolation.md)
+for the full reasoning, including the multi-tenant design this replaced.
 
 ## Tech stack
 
@@ -250,12 +252,21 @@ this table is the summary, not the reasoning.
 
 ```
 apps/
-  web/            React app — feature-based (src/features/*)
-  api/            Fastify app
-    src/modules/      Domain modules (claims, checklist, documents, queries, auth, audit)
-    src/workers/      Async document processing
-    src/integrations/ External services (storage, ocr, ai, email)
-    src/db/           Drizzle schema, migrations, seed
+  web/            React app — feature-based (src/features/*), one
+                   directory per domain: claims, checklist, documents,
+                   queries, assistant, doctor-approval, reports, and more
+  api/             Fastify app
+    src/modules/       Domain modules, same split as web — claims,
+                       checklist, documents, queries, assistant,
+                       doctor-approval, enhancements, deductions,
+                       reports, sla, onboarding, hospital, and more.
+                       No workers tier — document processing runs
+                       inline within the request, not as a background
+                       job (see Architecture)
+    src/integrations/  External calls, one directory per capability
+                       (storage, ocr, classifier, preauth extraction,
+                       summariser, assistant, recogniser)
+    src/db/            Drizzle schema, migrations, seed
 packages/
   contracts/      Zod schemas shared by both apps — API shapes, not DB models
 supabase/         Auth/Studio config for local dev (schema lives in apps/api/src/db/)
@@ -263,6 +274,7 @@ docs/
   ARCHITECTURE.md
   adr/            Decision records for the hard calls
   design/         Reviewed UI mockup
+  screenshots/    What actually shipped, from the live deployment
 ```
 
 ## Getting started
@@ -282,7 +294,7 @@ Schema lives in `apps/api/src/db/schema.ts`; migrations in
 cd apps/api
 pnpm db:generate   # generate a migration from schema.ts changes
 pnpm db:migrate    # apply pending migrations
-pnpm db:seed       # seed the pilot tenant's sample claims
+pnpm db:seed       # seed this hospital's sample claims
 pnpm db:studio     # browse the database
 ```
 
@@ -322,13 +334,20 @@ Patient records count as sensitive personal data under India's DPDP Act
 2023, so two things here are worth spelling out rather than leaving
 implicit.
 
-RLS policies are in the schema, but they don't actually protect the API.
-Drizzle connects as the `postgres` superuser, and Postgres superusers
-bypass Row-Level Security no matter what the policies say — that's
-documented Postgres behavior, not something that got missed. The real
-tenant boundary is **Fastify RBAC**: every tenant-scoped query in
-`apps/api/src/modules/*` has to filter by `organization_id` by hand, and
-that's enforced for every request. Full reasoning in
+Access is controlled by **role, and only role** — org_admin, desk_head,
+desk_executive, doctor, checked by `requireRole` in Fastify middleware
+on every route. There's nothing left to scope by tenant: this install
+is one hospital, `hospital_profile` holds its identity as a single
+enforced row, and RLS policies exist only as `auth.role() =
+'authenticated'`, there so a non-superuser connection isn't wide open
+by default — Drizzle itself connects as the `postgres` superuser, which
+bypasses RLS regardless. Within a role, scoping still matters: a
+desk_executive only sees claims where `assigned_to` is them, a
+desk_head sees all of them. That scoping lives in the service layer,
+which is also the thing to watch — a route that takes a bare `claimId`
+from a URL and skips straight to a repository call has no authorization
+check left to rely on. Full reasoning, including the multi-tenant
+design this replaced at the client's request, in
 [`docs/adr/0002`](docs/adr/0002-authorization-and-tenant-isolation.md).
 
 Checklist rules are also versioned, so editing a hospital's checklist only
@@ -343,8 +362,11 @@ See [`docs/adr/0001`](docs/adr/0001-checklist-engine.md).
   ([`adr 0007`](docs/adr/0007-onboarding-flow.md)) — nobody's card
   actually gets charged when the trial runs out.
 - There's no platform super-admin console with audited break-glass
-  access yet. Helping a stuck tenant today means someone running a
-  direct database query, not clicking through a screen.
+  access yet — the role exists in the schema (`platform_admin`), but
+  nothing uses it. Each install is already its own isolated hospital, so
+  this would be for the vendor to get emergency, logged access into a
+  specific one for support; today that means a direct database query,
+  not clicking through a screen.
 - OCR confidence and classification confidence collapse into one number.
   Textract feeds the classifier, but a desk can't yet tell "the scan was
   blurry" apart from "the document type itself is unclear."
