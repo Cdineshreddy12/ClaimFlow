@@ -8,6 +8,15 @@ import type { Role } from "../auth/roles.js";
  * distinct workflow from a document query — different data, different SLA
  * clock — and must never collapse into QUERY_RAISED.
  *
+ * `DISCHARGE_AUTHORISED` is there for the same reason. The final bill
+ * goes to the insurer and two different things come back: permission to
+ * discharge the patient, which IRDAI gives them three hours for, and the
+ * money, which takes weeks and no regulation times. With only
+ * `SETTLED` after `FINAL_BILL_SUBMITTED`, turnaround measured the gap to
+ * payment against the three-hour window and reported every insurer as
+ * 100% past target — a patient waiting on a bed and an invoice waiting
+ * on a bank transfer counted as the same delay.
+ *
  * See docs/adr/0004-claim-state-machine.md for the full rationale.
  */
 export const ClaimStatus = z.enum([
@@ -17,6 +26,7 @@ export const ClaimStatus = z.enum([
   "ENHANCEMENT_REQUESTED",
   "APPROVED",
   "FINAL_BILL_SUBMITTED",
+  "DISCHARGE_AUTHORISED",
   "SETTLED",
   "REJECTED",
 ]);
@@ -38,6 +48,7 @@ export const CLAIM_STATUS_LABEL: Record<ClaimStatus, string> = {
   ENHANCEMENT_REQUESTED: "enhancement requested",
   APPROVED: "approved",
   FINAL_BILL_SUBMITTED: "final bill submitted",
+  DISCHARGE_AUTHORISED: "discharge authorised",
   SETTLED: "settled",
   REJECTED: "rejected",
 };
@@ -86,7 +97,18 @@ export const CLAIM_TRANSITIONS: Record<ClaimStatus, Transition> = {
     claim at all, which is the last step of every claim that goes
     right.
   */
-  FINAL_BILL_SUBMITTED: { to: ["SETTLED"], roles: ["org_admin", "desk_head"] },
+  /*
+    Recording that the insurer authorised discharge is not a money
+    move — the patient can leave, nothing has been paid — so any desk
+    user may do it. It is also the step a desk is most likely to be
+    recording with a patient standing at the counter, which is a poor
+    moment to discover you lack the role.
+  */
+  FINAL_BILL_SUBMITTED: { to: ["DISCHARGE_AUTHORISED"] },
+  DISCHARGE_AUTHORISED: {
+    to: ["SETTLED"],
+    roles: ["org_admin", "desk_head"],
+  },
   SETTLED: { to: [] },
   REJECTED: { to: [] },
 };

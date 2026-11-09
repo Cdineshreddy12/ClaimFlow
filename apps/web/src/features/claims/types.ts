@@ -67,6 +67,7 @@ export const STATUS_LABEL: Record<ClaimStatus, string> = {
   ENHANCEMENT_REQUESTED: "Enhancement",
   APPROVED: "Approved",
   FINAL_BILL_SUBMITTED: "Final bill",
+  DISCHARGE_AUTHORISED: "Discharged",
   SETTLED: "Settled",
   REJECTED: "Rejected",
 };
@@ -81,6 +82,7 @@ export const STATUS_CHIP_VARIANT: Record<
   ENHANCEMENT_REQUESTED: "pending",
   APPROVED: "approved",
   FINAL_BILL_SUBMITTED: "approved",
+  DISCHARGE_AUTHORISED: "approved",
   SETTLED: "approved",
   REJECTED: "critical",
 };

@@ -38,11 +38,29 @@ export const SLA_WINDOWS: Partial<Record<ClaimStatus, SlaWindow>> = {
     owedBy: "insurer",
     basis: "IRDAI: cashless decision within 1 hour of request",
   },
+  /*
+    The clock starts when the bill goes over and stops when the insurer
+    authorises the discharge — which is a claim's own event now, so this
+    window finally measures what it is named after.
+
+    It used to be answered by `SETTLED`, the only thing that could
+    follow, and settlement is payment. Every insurer came out at 100%
+    past a three-hour target on averages of five to seven hundred hours,
+    because the number was the wait for a bank transfer wearing the
+    label of a patient waiting on a bed.
+  */
   FINAL_BILL_SUBMITTED: {
     hours: 3,
     owedBy: "insurer",
     basis: "IRDAI: discharge authorisation within 3 hours",
   },
+  /*
+    Deliberately absent: `DISCHARGE_AUTHORISED`. What follows it is the
+    money, and no regulation puts a clock on that — payment terms are
+    the contract's business, and how long it is taking is the ageing
+    report's. Giving it a window here would re-create the conflation
+    this state was added to end.
+  */
   /**
    * No regulation names a window for an enhancement. It is the same
    * class of request as a pre-auth — an authorisation decision while a
@@ -89,6 +107,10 @@ export const STATUS_HELD_BY: Partial<Record<ClaimStatus, SlaOwner>> = {
   // Authorised, waiting on us to bill it.
   APPROVED: "desk",
   FINAL_BILL_SUBMITTED: "insurer",
+  // They have let the patient go and still owe the money. No SLA window
+  // — see SLA_WINDOWS — but the claim is unmistakably on their side of
+  // the table, and the ageing report is the one that counts the days.
+  DISCHARGE_AUTHORISED: "insurer",
 };
 
 export function heldBy(status: ClaimStatus): SlaOwner | null {

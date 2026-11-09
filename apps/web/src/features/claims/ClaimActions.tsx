@@ -29,6 +29,7 @@ const ACTION_LABEL: Record<ClaimStatus, string> = {
   ENHANCEMENT_REQUESTED: "Request enhancement",
   APPROVED: "Mark approved",
   FINAL_BILL_SUBMITTED: "Submit final bill",
+  DISCHARGE_AUTHORISED: "Record discharge authorisation",
   SETTLED: "Mark settled",
   REJECTED: "Mark rejected",
 };
@@ -51,7 +52,8 @@ const FORWARD: Partial<Record<ClaimStatus, ClaimStatus>> = {
   QUERY_RAISED: "PRE_AUTH_SENT",
   ENHANCEMENT_REQUESTED: "APPROVED",
   APPROVED: "FINAL_BILL_SUBMITTED",
-  FINAL_BILL_SUBMITTED: "SETTLED",
+  FINAL_BILL_SUBMITTED: "DISCHARGE_AUTHORISED",
+  DISCHARGE_AUTHORISED: "SETTLED",
 };
 
 export function ClaimActions({ claim }: { claim: Claim }) {
@@ -82,6 +84,7 @@ export function ClaimActions({ claim }: { claim: Claim }) {
     claim.settledAmount !== null ||
     claim.status === "APPROVED" ||
     claim.status === "FINAL_BILL_SUBMITTED" ||
+    claim.status === "DISCHARGE_AUTHORISED" ||
     isSettled;
   const forward = FORWARD[claim.status];
 
@@ -187,7 +190,9 @@ export function ClaimActions({ claim }: { claim: Claim }) {
             </Button>
           ) : null}
 
-          {isSettled || claim.status === "FINAL_BILL_SUBMITTED" ? (
+          {isSettled ||
+          claim.status === "FINAL_BILL_SUBMITTED" ||
+          claim.status === "DISCHARGE_AUTHORISED" ? (
             // Only meaningful once an insurer has actually paid something.
             <Button
               type="button"

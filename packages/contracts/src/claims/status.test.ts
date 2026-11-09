@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  CLAIM_TRANSITIONS,
   ClaimStatus,
   canTransition,
   isTerminal,
@@ -45,9 +46,9 @@ describe("canTransition", () => {
 
   it("restricts settlement to the desk head", () => {
     expect(
-      canTransition("FINAL_BILL_SUBMITTED", "SETTLED", "desk_executive"),
+      canTransition("DISCHARGE_AUTHORISED", "SETTLED", "desk_executive"),
     ).toBe(false);
-    expect(canTransition("FINAL_BILL_SUBMITTED", "SETTLED", "desk_head")).toBe(
+    expect(canTransition("DISCHARGE_AUTHORISED", "SETTLED", "desk_head")).toBe(
       true,
     );
   });
@@ -90,10 +91,10 @@ describe("terminal statuses", () => {
  */
 describe("settling", () => {
   it("is open to both roles that administer the desk", () => {
-    expect(canTransition("FINAL_BILL_SUBMITTED", "SETTLED", "org_admin")).toBe(
+    expect(canTransition("DISCHARGE_AUTHORISED", "SETTLED", "org_admin")).toBe(
       true,
     );
-    expect(canTransition("FINAL_BILL_SUBMITTED", "SETTLED", "desk_head")).toBe(
+    expect(canTransition("DISCHARGE_AUTHORISED", "SETTLED", "desk_head")).toBe(
       true,
     );
   });
@@ -102,7 +103,41 @@ describe("settling", () => {
     // The point of the restriction: settling is irreversible and is
     // where the money stops moving.
     expect(
-      canTransition("FINAL_BILL_SUBMITTED", "SETTLED", "desk_executive"),
+      canTransition("DISCHARGE_AUTHORISED", "SETTLED", "desk_executive"),
     ).toBe(false);
+  });
+});
+
+/*
+  The final bill used to go straight to SETTLED, which made the gap
+  between them the wait for payment — and that gap was then measured
+  against IRDAI's three-hour discharge window. Letting the patient go
+  and paying the bill are separate answers to the same submission, and
+  only the first one is on a regulator's clock.
+*/
+describe("discharge authorisation", () => {
+  it("sits between the final bill and the money", () => {
+    expect(CLAIM_TRANSITIONS.FINAL_BILL_SUBMITTED.to).toEqual([
+      "DISCHARGE_AUTHORISED",
+    ]);
+    expect(CLAIM_TRANSITIONS.DISCHARGE_AUTHORISED.to).toEqual(["SETTLED"]);
+  });
+
+  it("cannot be skipped on the way to settlement", () => {
+    expect(canTransition("FINAL_BILL_SUBMITTED", "SETTLED", "org_admin")).toBe(
+      false,
+    );
+  });
+
+  it("is open to a desk executive, because nothing has been paid yet", () => {
+    // Recorded with a patient at the counter waiting to leave, which is
+    // a poor moment to find out you lack the role.
+    expect(
+      canTransition(
+        "FINAL_BILL_SUBMITTED",
+        "DISCHARGE_AUTHORISED",
+        "desk_executive",
+      ),
+    ).toBe(true);
   });
 });

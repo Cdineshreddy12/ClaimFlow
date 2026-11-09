@@ -68,8 +68,9 @@ export const CLAIM_STATUS_ORDER: Record<ClaimStatus, number> = {
   ENHANCEMENT_REQUESTED: 3,
   APPROVED: 4,
   FINAL_BILL_SUBMITTED: 5,
-  SETTLED: 6,
-  REJECTED: 7,
+  DISCHARGE_AUTHORISED: 6,
+  SETTLED: 7,
+  REJECTED: 8,
 };
 
 /** A page a desk can actually scroll. Capped so a caller can't ask for everything by accident. */

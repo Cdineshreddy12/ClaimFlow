@@ -10,7 +10,20 @@ describe("Stepper", () => {
     render(<Stepper status="SETTLED" />);
 
     expect(screen.queryByText("In progress")).toBeNull();
-    expect(screen.getAllByText("Done")).toHaveLength(5);
+    // Every step on the track, which is the assertion — not the number,
+    // which moved when discharge authorisation became its own step.
+    expect(screen.getAllByText("Done")).toHaveLength(
+      screen.getAllByRole("listitem").length,
+    );
+  });
+
+  it("shows the discharge as its own step between the bill and the money", () => {
+    // They are two different answers to the same submission, and only
+    // the first is on IRDAI's clock — see CLAIM_TRANSITIONS.
+    render(<Stepper status="DISCHARGE_AUTHORISED" />);
+
+    expect(screen.getByText("Discharged")).toBeInTheDocument();
+    expect(screen.getByText("In progress")).toBeInTheDocument();
   });
 
   it("still shows the live step as in progress", () => {

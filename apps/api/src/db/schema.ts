@@ -48,6 +48,7 @@ export const claimStatus = pgEnum("claim_status", [
   "ENHANCEMENT_REQUESTED",
   "APPROVED",
   "FINAL_BILL_SUBMITTED",
+  "DISCHARGE_AUTHORISED",
   "SETTLED",
   "REJECTED",
 ]);

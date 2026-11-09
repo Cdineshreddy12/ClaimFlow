@@ -482,6 +482,7 @@ async function main(): Promise<void> {
     awaitingPayment = 0,
     inFlight = 0,
     awaitingDecision = 0,
+    awaitingDischarge = 0,
     rejected = 0;
   let deductionRows = 0;
 
@@ -702,11 +703,44 @@ async function main(): Promise<void> {
 
     events.push({ status: "FINAL_BILL_SUBMITTED", at: billedAt });
 
+    /*
+      How long the insurer takes to let the patient go, which is the
+      answer IRDAI gives them three hours for — and the thing the final
+      bill's SLA window has always named and never measured, because
+      settlement used to be the only event that could follow it.
+
+      Hours, not the weeks that the money takes. A payer quick on a
+      cashless request tends to be quick here too, so the same rate
+      decides it and the two columns of the turnaround report agree
+      with each other about who is slow.
+    */
+    const authorisedInTime =
+      rand() < (ANSWERS_WITHIN_THE_HOUR[payer.name] ?? 0.35);
+    const authorisedAt = new Date(
+      billedAt.getTime() +
+        (authorisedInTime
+          ? between(20, 170) * 60_000
+          : between(4, 30) * 3_600_000),
+    );
+
+    // The bill is in and the patient is still on the ward waiting to be
+    // let go. A few hours wide, so only a claim billed today is here.
+    if (authorisedAt.getTime() > Date.now()) {
+      await finish(claim.id, "FINAL_BILL_SUBMITTED", events, {
+        billedAmount: String(billed),
+        sanctionedAmount: String(sanctioned),
+      });
+      awaitingDischarge++;
+      continue;
+    }
+
+    events.push({ status: "DISCHARGE_AUTHORISED", at: authorisedAt });
+
     if (roll < 0.38) {
-      // Billed and waiting on the insurer. These are the rows the
+      // Discharged and waiting on the money. These are the rows the
       // ageing report is built from, so they are spread deliberately
       // across its buckets rather than all landing in "0–30 days".
-      await finish(claim.id, "FINAL_BILL_SUBMITTED", events, {
+      await finish(claim.id, "DISCHARGE_AUTHORISED", events, {
         billedAmount: String(billed),
         sanctionedAmount: String(sanctioned),
       });
@@ -715,9 +749,11 @@ async function main(): Promise<void> {
     }
 
     // --- settled, with whatever the insurer cut on the way ----------
-    const settledOn = new Date(billedAt.getTime() + between(12, 48) * DAY);
+    // Payment follows the discharge, not the bill: the patient has been
+    // gone for weeks by the time the transfer lands.
+    const settledOn = new Date(authorisedAt.getTime() + between(12, 48) * DAY);
     if (settledOn.getTime() > Date.now()) {
-      await finish(claim.id, "FINAL_BILL_SUBMITTED", events, {
+      await finish(claim.id, "DISCHARGE_AUTHORISED", events, {
         billedAmount: String(billed),
         sanctionedAmount: String(sanctioned),
       });
@@ -799,6 +835,7 @@ async function main(): Promise<void> {
       `  ${awaitingPayment} billed, awaiting payment\n` +
       `  ${inFlight} approved, still in flight\n` +
       `  ${awaitingDecision} sent, awaiting the insurer\n` +
+      `  ${awaitingDischarge} billed, awaiting discharge authorisation\n` +
       `  ${rejected} rejected`,
   );
 }

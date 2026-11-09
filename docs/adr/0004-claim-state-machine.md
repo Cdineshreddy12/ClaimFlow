@@ -16,8 +16,24 @@ Collapsing the two would be a real modeling bug, not a simplification.
 
 ```
 DRAFT → PRE_AUTH_SENT ⇄ (QUERY_RAISED | ENHANCEMENT_REQUESTED) → APPROVED
-                     ↘ REJECTED                                → FINAL_BILL_SUBMITTED → SETTLED
+                     ↘ REJECTED                                → FINAL_BILL_SUBMITTED
+                                                                → DISCHARGE_AUTHORISED → SETTLED
 ```
+
+`DISCHARGE_AUTHORISED` is here for the same reason enhancement is kept
+apart from query. One submission — the final bill — gets two different
+answers back: permission to discharge the patient, which IRDAI gives the
+insurer three hours for, and the money, which takes weeks and which no
+regulation times.
+
+With `SETTLED` as the only thing that could follow the final bill, the
+gap between them was the wait for payment, and the three-hour window was
+measured against it. Every insurer came out at 100% past target on
+averages of five to seven hundred hours: a bank transfer wearing the
+label of a patient waiting on a bed. Separated, the same report reads in
+hours against the hours it is named after, and the wait for money is
+left to the ageing report, which counts in days and claims no deadline
+it cannot cite.
 
 Implemented as a plain declarative transition table
 (`packages/contracts/src/claims/status.ts`), not a state-machine library

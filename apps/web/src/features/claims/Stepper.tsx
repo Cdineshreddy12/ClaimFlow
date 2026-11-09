@@ -8,14 +8,19 @@ const STEP_ORDER = [
   "QUERY_OR_ENHANCEMENT",
   "APPROVED",
   "FINAL_BILL_SUBMITTED",
+  "DISCHARGE_AUTHORISED",
   "SETTLED",
 ] as const;
 
+// "Discharged" rather than "Discharge authorised": on the line it sits
+// between the bill and the money, where the only thing it can mean is
+// that the insurer let the patient go.
 const STEPS: { key: (typeof STEP_ORDER)[number]; name: string }[] = [
   { key: "PRE_AUTH_SENT", name: "Pre-auth sent" },
   { key: "QUERY_OR_ENHANCEMENT", name: "Query / Enhancement" },
   { key: "APPROVED", name: "Approved" },
   { key: "FINAL_BILL_SUBMITTED", name: "Final bill" },
+  { key: "DISCHARGE_AUTHORISED", name: "Discharged" },
   { key: "SETTLED", name: "Settled" },
 ];
 

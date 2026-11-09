@@ -99,6 +99,21 @@ const CHECKS: Check[] = [
         and e.sla_deadline is null`,
   },
   {
+    /*
+      Nobody pays for a discharge they never authorised. The state
+      machine enforces the order going forward; this catches rows that
+      predate it, which is how the turnaround report came to read a
+      weeks-long wait for money as a three-hour discharge decision.
+    */
+    name: "a settled claim was discharged before it was paid",
+    offenders: `
+      select c.reference from claims c
+      where c.status = 'SETTLED'
+        and not exists (
+          select 1 from claim_status_events e
+          where e.claim_id = c.id and e.status = 'DISCHARGE_AUTHORISED')`,
+  },
+  {
     name: "a claim an insurer approved was not approved against a blank form",
     offenders: `
       select c.reference from claims c
