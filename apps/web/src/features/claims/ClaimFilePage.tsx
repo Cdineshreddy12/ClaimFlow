@@ -72,7 +72,7 @@ export function ClaimFilePage() {
 
   if (isLoading) {
     return (
-      <AppShell title="Claim File">
+      <AppShell title="Claim File" back={{ to: "/claims", label: "Claims" }}>
         <Loader label="Loading claim…" />
       </AppShell>
     );
@@ -80,7 +80,7 @@ export function ClaimFilePage() {
 
   if (isError || !claim) {
     return (
-      <AppShell title="Claim File">
+      <AppShell title="Claim File" back={{ to: "/claims", label: "Claims" }}>
         <div className="mb-3 flex items-center justify-between gap-3 rounded-md border border-critical bg-critical-bg px-3.5 py-2.5 text-base font-medium text-critical">
           Couldn&apos;t load this claim.
         </div>
@@ -147,7 +147,11 @@ export function ClaimFilePage() {
   ];
 
   return (
-    <AppShell title="Claim File" subtitle={claim.reference}>
+    <AppShell
+      title="Claim File"
+      subtitle={claim.reference}
+      back={{ to: "/claims", label: "Claims" }}
+    >
       {/* Pinned: which patient, which insurer and what stage are the
           facts you need while scrolling a long document list or a
           twenty-four-field form. */}
@@ -165,11 +169,13 @@ export function ClaimFilePage() {
             </div>
             {/* Said once, here. The old "Claim details" strip below
                 repeated all of this and added only the billed amount. */}
-            {/* The separator belongs to the item after it, not between
-                them as its own box. Standalone it was a flex child like
-                any other, so on a phone the row wrapped and left a "·"
-                hanging at the end of a line with nothing after it. */}
-            <div className="mt-2 flex flex-wrap items-center gap-y-1 text-base text-ink-soft [&>*+*]:before:mx-2.5 [&>*+*]:before:text-ink-faint [&>*+*]:before:content-['\00B7'] [&_b]:font-semibold [&_b]:text-ink">
+            {/* One fact per line on a phone, with no separators at all:
+                three of these never fit on one line at 360px, and a
+                wrapped row leaves a "·" stranded — trailing one line or
+                leading the next, both of which read as a typo. From
+                `sm` the row fits, and the separator rides on the item
+                after it so a wrap still can't orphan one. */}
+            <div className="mt-2 flex flex-col gap-1 text-base text-ink-soft sm:flex-row sm:flex-wrap sm:items-center sm:[&>*+*]:before:mx-2.5 sm:[&>*+*]:before:text-ink-faint sm:[&>*+*]:before:content-['\00B7'] [&_b]:font-semibold [&_b]:text-ink">
               <span>{claim.procedureName}</span>
               <span>
                 <b>{claim.insurerName}</b>

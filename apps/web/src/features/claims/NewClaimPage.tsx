@@ -90,6 +90,7 @@ export function NewClaimPage() {
     <AppShell
       title="Open a claim"
       subtitle="The insurer and procedure decide which document checklist applies"
+      back={{ to: "/claims", label: "Claims" }}
     >
       <form className="mx-auto w-full max-w-[620px]" onSubmit={submit}>
         <div className="rounded-lg border border-line bg-surface-raised p-[18px] shadow-card">

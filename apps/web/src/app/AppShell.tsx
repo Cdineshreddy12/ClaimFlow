@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { NavLink, useNavigate } from "react-router-dom";
+import { Link, NavLink, useNavigate } from "react-router-dom";
 import type { CustomModule } from "@claimflow/contracts";
 import {
   Box,
@@ -33,9 +33,25 @@ import { BrandMark, BrandName } from "@/components/ui/brand";
 import { AssistantPanel } from "../features/assistant/AssistantPanel";
 import { useCustomModules } from "../features/custom/api";
 
+/** Where this page was reached from, and what to call it. */
+export interface BackTo {
+  to: string;
+  /**
+   * The destination, named. Rendered as "Back to {label}", so it is a
+   * place — "Claims", "Ward rounds", "the list" — and never the word
+   * "Back" itself, which reads out as "Back to Back".
+   */
+  label: string;
+}
+
 interface AppShellProps {
   title: string;
   subtitle?: string;
+  /**
+   * Set by pages that sit under another one. A route reachable from
+   * the nav has nowhere to go back to and leaves this off.
+   */
+  back?: BackTo;
   /**
    * For screens that are a workspace rather than a document — the query
    * inbox's two panes each scroll themselves, so the page must not also
@@ -54,6 +70,7 @@ const COLLAPSED_KEY = "claimflow.sidebar.collapsed";
 export function AppShell({
   title,
   subtitle,
+  back,
   fill = false,
   children,
 }: AppShellProps) {
@@ -106,6 +123,7 @@ export function AppShell({
     >
       <MobileBar
         title={title}
+        back={back}
         role={role}
         modules={customModules ?? []}
         email={session?.user.email}
@@ -202,6 +220,19 @@ export function AppShell({
               : ""
           }`}
         >
+          {/* The phone has this as a chevron in the bar. At `lg` the bar
+              is gone, and the rail highlights the section rather than
+              the page — so a claim opened from the list had nothing on
+              screen pointing back to it. */}
+          {back ? (
+            <Link
+              to={back.to}
+              className="mb-3 hidden items-center gap-1 text-sm font-medium text-ink-soft no-underline hover:text-accent-ink lg:inline-flex"
+            >
+              <ChevronLeft size={13} aria-hidden />
+              Back to {back.label}
+            </Link>
+          ) : null}
           {children}
         </main>
       </div>
@@ -221,18 +252,28 @@ export function AppShell({
  * highlighted row said where you were at `lg`, and with the rail gone
  * nothing else does.
  *
- * The sheet comes from the left, the side the rail occupies at every
- * wider size, and closes on navigation: leaving it open over the page
- * it just moved to would mean two taps to see the result of one.
+ * The sheet comes from the right, on the same edge as the button that
+ * opens it — a panel that flies in from the opposite side to the
+ * control you just pressed reads as something else arriving. That edge
+ * is also the reachable one on a phone held in either hand, which is
+ * the half of the screen a thumb actually covers. It closes on
+ * navigation: leaving it open over the page it just moved to would
+ * mean two taps to see the result of one.
+ *
+ * The left slot carries the way back. On a detail page that is a
+ * chevron to wherever this page was reached from; on a top-level one
+ * there is nowhere to go back to, so it is the brand.
  */
 function MobileBar({
   title,
+  back,
   role,
   modules,
   email,
   onSignOut,
 }: {
   title: string;
+  back: BackTo | undefined;
   role: string | null;
   modules: CustomModule[];
   email: string | undefined;
@@ -241,12 +282,30 @@ function MobileBar({
   const [open, setOpen] = useState(false);
 
   return (
-    <div className="sticky top-0 z-30 flex items-center gap-3 border-b border-sidebar-border bg-sidebar px-4 py-2.5 lg:hidden">
+    <div className="sticky top-0 z-30 flex items-center gap-2.5 border-b border-sidebar-border bg-sidebar px-4 py-2.5 lg:hidden">
+      {back ? (
+        <Link
+          to={back.to}
+          aria-label={`Back to ${back.label}`}
+          className="-ml-2 inline-flex size-9 shrink-0 items-center justify-center rounded-md border border-transparent text-sidebar-ink no-underline hover:border-sidebar-border hover:bg-sidebar-hover"
+        >
+          <ChevronLeft size={18} aria-hidden />
+        </Link>
+      ) : (
+        <BrandMark className="shrink-0 text-sidebar-ink" />
+      )}
+
+      <div className="min-w-0 flex-1">
+        <div className="truncate text-md font-semibold text-sidebar-ink">
+          {title}
+        </div>
+      </div>
+
       <Drawer open={open} onOpenChange={setOpen}>
         <DrawerTrigger asChild>
           <button
             type="button"
-            className="-ml-1 inline-flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-md border border-transparent bg-transparent p-0 text-sidebar-ink hover:border-sidebar-border hover:bg-sidebar-hover"
+            className="-mr-1 inline-flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-md border border-transparent bg-transparent p-0 text-sidebar-ink hover:border-sidebar-border hover:bg-sidebar-hover"
             aria-label="Open the menu"
           >
             <Menu size={18} aria-hidden />
@@ -254,7 +313,7 @@ function MobileBar({
         </DrawerTrigger>
 
         <DrawerContent
-          side="left"
+          side="right"
           // Wide enough for "Checklist Admin" on one line, and short of
           // the full screen so the page behind stays visible as the
           // thing you are navigating within.
@@ -320,13 +379,6 @@ function MobileBar({
           </div>
         </DrawerContent>
       </Drawer>
-
-      <div className="min-w-0 flex-1">
-        <div className="truncate text-md font-semibold text-sidebar-ink">
-          {title}
-        </div>
-      </div>
-      <BrandMark className="shrink-0 text-sidebar-ink" />
     </div>
   );
 }

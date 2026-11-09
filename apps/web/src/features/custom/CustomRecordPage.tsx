@@ -31,7 +31,7 @@ export function CustomRecordPage() {
 
   if (isLoading) {
     return (
-      <AppShell title="Loading…">
+      <AppShell title="Loading…" back={{ to: `/m/${slug}`, label: "the list" }}>
         <Loader label="Loading the form…" />
       </AppShell>
     );
@@ -44,7 +44,10 @@ export function CustomRecordPage() {
 
   if (isError || !module || (recordId && !existing)) {
     return (
-      <AppShell title="Not found">
+      <AppShell
+        title="Not found"
+        back={{ to: `/m/${slug}`, label: "the list" }}
+      >
         <div className="py-10 text-center">
           <h1 className="text-xl font-semibold">That isn&apos;t here</h1>
           <p className="mx-auto mt-2 max-w-sm text-base text-ink-soft">
@@ -112,6 +115,7 @@ export function CustomRecordPage() {
           : `New ${module.name.toLowerCase()}`
       }
       subtitle={module.pluralName}
+      back={{ to: `/m/${slug}`, label: module.pluralName }}
     >
       {/* Centred: a form this narrow pinned to the left edge of a wide
           desk monitor leaves the reader's eye travelling across empty
