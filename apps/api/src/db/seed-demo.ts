@@ -185,6 +185,29 @@ const REGULAR_WORK: readonly (readonly [string, string])[] = [
   ["Ayushman Bharat PM-JAY", "Cataract surgery"],
 ] as const;
 
+/**
+ * How often each payer answers a cashless request inside IRDAI's hour.
+ *
+ * Stamping the deadline made the compliance column real, and it then
+ * read 100% past target for every payer alike, because every seeded
+ * decision took days. A column that says the same thing about everyone
+ * measures nothing — the report exists to say which payer to chase, and
+ * it can only say that if they differ.
+ *
+ * The spread is the one a desk would recognise: the insurers who
+ * underwrite their own policies answer fastest, the third-party
+ * administrators sit in the middle, and the government scheme is slowest
+ * and least predictable.
+ */
+const ANSWERS_WITHIN_THE_HOUR: Record<string, number> = {
+  "Star Health Insurance": 0.72,
+  "Niva Bupa Health Insurance": 0.64,
+  "MediAssist TPA": 0.41,
+  "Paramount Health TPA": 0.33,
+  "Vidal Health TPA": 0.28,
+  "Ayushman Bharat PM-JAY": 0.09,
+};
+
 const DEDUCTION_PLAYBOOK = [
   {
     reason: "missing_document",
@@ -549,13 +572,28 @@ async function main(): Promise<void> {
     ];
     const preAuth = events[1]!.at;
 
+    /*
+      How long this payer takes to come back at all.
+
+      Turnaround measures the gap from PRE_AUTH_SENT to whatever happens
+      next, so this is the number IRDAI's hour is judged against —
+      whether the answer is an approval, a query or a refusal. It is the
+      payer's own rate that decides, which is what makes one column of
+      the report different from another.
+    */
+    const withinTheHour =
+      rand() < (ANSWERS_WITHIN_THE_HOUR[payer.name] ?? 0.35);
+    const firstResponse = withinTheHour
+      ? between(10, 58) * 60_000
+      : between(3, 72) * 3_600_000;
+
     // One in five picks up a query on the way through, which is what
     // the query inbox exists for and what drags turnaround out.
     const queried = rand() < 0.2;
     if (queried) {
       events.push({
         status: "QUERY_RAISED",
-        at: new Date(preAuth.getTime() + between(2, 20) * 3_600_000),
+        at: new Date(preAuth.getTime() + firstResponse),
       });
     }
 
@@ -563,7 +601,10 @@ async function main(): Promise<void> {
       // Rejected outright.
       events.push({
         status: "REJECTED",
-        at: new Date(preAuth.getTime() + between(1, 4) * DAY),
+        at: new Date(
+          preAuth.getTime() +
+            (queried ? firstResponse + between(1, 4) * DAY : firstResponse),
+        ),
       });
       await finish(claim.id, "REJECTED", events, {
         billedAmount: String(billed),
@@ -595,8 +636,11 @@ async function main(): Promise<void> {
       })),
     );
 
+    // Answered inside the payer's own response time, or — if they came
+    // back with a query first — a couple of days after that was settled.
     const approvedAt = new Date(
-      preAuth.getTime() + (queried ? between(2, 5) : between(1, 3)) * DAY,
+      preAuth.getTime() +
+        (queried ? firstResponse + between(1, 4) * DAY : firstResponse),
     );
 
     // The insurer has not answered yet. Every stage boundary has to be

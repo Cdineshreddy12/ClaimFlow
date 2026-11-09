@@ -26,7 +26,7 @@
 - [Scripts](#scripts)
 - [Environment variables](#environment-variables)
 - [Security model](#security-model)
-- [Roadmap](#roadmap)
+- [What's not built yet](#whats-not-built-yet)
 - [Documentation](#documentation)
 - [License](#license)
 
@@ -79,102 +79,70 @@ Phone layout — same screens, stacked nav behind a hamburger menu:
   <img src="docs/screenshots/claim-file-mobile.jpg" alt="Claim File on mobile" width="280" />
 </p>
 
+### AI in action
+
+Three places Claude actually runs, including what happens when it's
+unsure or catches something wrong — not screenshots of a happy path only.
+
+|                                                                                |                                                                                                        |
+| ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------ |
+| **Desk assistant** — asked a real question, reads live claim data to answer it | **Document classification** — confidence per file, and two that got no claim match                     |
+| ![Desk assistant answering a question](docs/screenshots/ai-desk-assistant.jpg) | ![Document classification confidence and abstentions](docs/screenshots/ai-document-classification.jpg) |
+
+**Pre-auth consistency check** — flags a named surgery whose line of treatment doesn't match, before the desk sends it to an insurer:
+
+![Pre-auth form consistency check catching a mismatch](docs/screenshots/ai-preauth-consistency-check.jpg)
+
 ## Status
 
-**Architecture and schema are real and live; feature modules are next.**
+**Everything below runs end-to-end against the live API, a real Supabase
+Postgres database, and a real S3 bucket — not mocked, and not just styled.**
 
-- ✅ Multi-tenant Postgres schema, migrated via Drizzle ORM and verified
-  against a real Supabase project (10 tables, 20 RLS policies, seeded
-  with the pilot tenant's sample data).
-- ✅ Workspace scaffold (`apps/web`, `apps/api`, `packages/contracts`)
-  typechecks, lints, tests, and builds clean in CI.
-- ✅ System architecture and six decision records written for the hard
-  calls: the checklist rules engine, tenant isolation, async document
-  processing, the claim state machine, AI confirmation UX, and billing.
-- ✅ Four of eight core screens have a reviewed, critiqued, and
-  accessibility-fixed design mockup.
-- ✅ Auth: Supabase JWT verification + a Custom Access Token hook that
-  stamps organization_id/role onto the token, RBAC middleware, enforced
-  on every claims route.
-- ✅ Claims module (API): list/get/create, status transitions enforced
-  against the shared state machine, desk_executive scoped to their own
-  assigned claims.
-- ✅ Checklist module (API): rules CRUD, gated to org_admin/desk_head.
-  Claim creation now actually snapshots the live rules onto the claim.
-- ✅ Documents module (API): pre-signed S3 upload, human-confirm into a
-  checklist slot, discard, and a live gap-view endpoint (required docs
-  minus confirmed ones). AI auto-classification isn't wired up yet — no
-  provider credentials exist for it (see docs/adr/0003) — so every
-  document is confirmed into a slot manually for now.
-- ✅ Query inbox module (API): log a TPA query against a claim, an
-  org-wide inbox listing (open/replied/all, same desk_executive scoping
-  as claims), and reply tracking. No AI summarizer wired up yet either —
-  same boundary as documents — so the summary/requested items are
-  entered by hand for now; the original email is the source of truth
-  either way per docs/adr/0005.
-- ✅ Web app: Claim File, Dashboard, and Query Inbox screens wired
-  end-to-end against the live API. Claim File has the status timeline,
-  live document-gap view, and a real upload flow (the browser PUTs
-  straight to S3, same pre-signed-URL path as the API). Dashboard has
-  real kpis, a claims-by-status breakdown, and the claims table — deductions by reason is now real (see below); avg discharge wait
-  still has no backing data, so open/overdue queries stands in rather
-  than being faked. Query Inbox
-  lists open TPA queries with a live reply-window countdown and marks
-  a reply sent for real (docs/adr/0005 — nothing is ever auto-sent, and
-  no reply body is stored, only the timestamp); whether a requested
-  document "looks attached" is a best-effort match against the claim's
-  confirmed checklist slots, not a stored fact, since nothing in the
-  schema links a query's requested item to a specific document. No
-  login screen yet, so a dev-only minted token stands in for auth (see
-  `.env.example`'s `VITE_DEV_TOKEN`) — swap for real Supabase auth once
-  the Custom Access Token hook is enabled.
-- ✅ The desk can actually drive all of it from the UI — open a claim,
-  advance it through the state machine (only the transitions the API
-  allows, derived from the same table it enforces), log a TPA query,
-  build the packet, mint a doctor link, record a deduction. Several of
-  these had working APIs and no way in from a screen.
-- ✅ Document sorting — an upload gets a suggested checklist slot with a
-  confidence and the evidence behind it. Claude reads the document
-  itself (verified live: a scan named `IMG_0423.png` classified at 98%
-  from the image alone, and a cafeteria menu with a misleading clinical
-  filename correctly abstained). Nothing is filed automatically:
-  the suggestion is pre-selected and a human clicks Confirm, so a slot
-  stays missing in the gap view until someone vouches for it. The UI
-  names which classifier made the suggestion rather than implying a
-  model ran.
-- ✅ Deductions by reason — recorded against a claim at settlement and
-  aggregated for the dashboard, with the avoidable share (missing or
-  late paperwork) called out separately, since that's the number the
-  40%-reduction target actually tracks.
-- ✅ Doctor approval by phone link — a desk mints a link for a named
-  doctor who approves or sends back clinical notes with no account.
-  Bounded by 48h expiry, one decision per link, and a payload narrowed
-  to confirmed clinical documents only (docs/adr/0010).
-- ✅ Merged PDF packet per claim — cover sheet plus every confirmed
-  document, type detected by magic number, unembeddable files reported
-  rather than dropped.
-- ✅ Audit logging — every mutation that creates, changes or destroys
-  tenant data writes a who/what/when entry (DPDP constraint, see
-  docs/adr/0009). Deltas only, not row dumps; reads gated to
-  org_admin/desk_head; no write route, so the trail can't be forged by
-  a client. Not yet transactional with the mutation — caveat in the ADR.
-- ✅ Checklist Admin screen — pick an insurer × procedure, add/remove
-  document requirements and flip each between required and optional.
-  Shows how many in-flight claims the pair has, and states plainly that
-  edits apply going forward only (verified: adding a live rule leaves an
-  open claim's frozen snapshot untouched).
-- ✅ Monthly period report — the one screen built for the person who
-  signs the deal but never logs in. A desk head picks a closed calendar
-  month and gets claim volume, settled value, average turnaround,
-  deductions by reason, and insurer turnaround, assembled from the same
-  summaries the dashboard and Turnaround page already compute (nothing
-  new is calculated), downloadable as a one-page PDF to forward on
-  (docs/adr/0018). Gated to org_admin/desk_head, same as Checklist
-  Admin — a desk executive's nav doesn't show it and the API 403s a
-  direct link.
+- **Auth & RBAC** — Supabase JWT verification with a Custom Access Token
+  hook that stamps `organization_id`/role onto the token. Three roles
+  (org_admin, desk_head, desk_executive), enforced in Fastify middleware
+  on every route — not just hidden in the UI.
+- **Claims** — one file per admission, a status timeline bound to the
+  shared state machine, desk executives scoped to their own assigned
+  claims.
+- **Checklist engine** — rules are per insurer × procedure and versioned:
+  editing a rule only affects claims opened after the edit, so an
+  in-flight claim's requirements never shift underneath the desk
+  ([`adr 0001`](docs/adr/0001-checklist-engine.md)).
+- **Documents** — pre-signed S3 upload, a live gap view (required minus
+  confirmed), and AI classification: Claude reads the document itself,
+  returns a confidence and the evidence behind it, and a human clicks
+  Confirm before anything counts. No `ANTHROPIC_API_KEY`? Falls back to
+  filename matching and says so in the UI rather than pretending a model
+  ran ([`adr 0003`](docs/adr/0003-document-processing-pipeline.md)).
+- **Pre-auth form** — Claude extracts the ~25 required fields from
+  uploaded documents; a separate consistency check reads the confirmed
+  fields against each other (dates out of order, an estimate that
+  doesn't add up, a named surgery whose line of treatment doesn't
+  match) and flags what's worth a second look rather than silently
+  accepting it.
+- **Query inbox** — Claude summarizes a pasted TPA email into what's
+  wanted and by when; the deadline only counts once a human confirms
+  it, and the original email stays visible underneath the summary
+  ([`adr 0005`](docs/adr/0005-ai-human-confirmation.md)).
+- **Desk assistant** — a floating panel that reads scattered uploads
+  with no claim attached, works out which claim and slot each belongs
+  to, and answers questions about the desk (turnaround, deductions,
+  what's overdue). It proposes; every write waits on a human's click
+  ([`adr 0017`](docs/adr/0017-desk-assistant.md)).
+- **Doctor approval links** — a desk mints a 48-hour, one-decision link
+  for a named doctor with no account, payload narrowed to confirmed
+  clinical documents only ([`adr 0010`](docs/adr/0010-doctor-approval-links.md)).
+- **Reports** — a merged PDF packet per claim, deductions by reason on
+  the dashboard, and a monthly period report for the person who signs
+  the deal but never logs in.
+- **Audit log** — every mutation writes a who/what/when entry; deltas
+  only, no write route, gated to org_admin/desk_head
+  ([`adr 0009`](docs/adr/0009-audit-logging.md)).
 
-All of the above is covered by both unit tests and integration tests
-against the real Supabase database and the real S3 bucket — not mocked.
+Covered by unit tests and integration tests against the real database —
+see [Scripts](#scripts). For what's deliberately not built yet, see
+[What's not built yet](#whats-not-built-yet).
 
 ## Architecture
 
@@ -313,33 +281,18 @@ Two things worth stating plainly rather than leaving implicit:
   never shift underneath the desk executive working it.
   [`docs/adr/0001`](docs/adr/0001-checklist-engine.md).
 
-## Roadmap
+## What's not built yet
 
-- [x] Auth (Supabase JWT + RBAC), claims, checklist, documents, and
-      query-inbox modules (API)
-- [x] Dashboard, Claim File, and Query Inbox screens (web) — wired to
-      the live API, not just styled
-- [x] Checklist Admin screen (web) — all four mockup screens now built
-- [x] Document classification — Claude when `ANTHROPIC_API_KEY` is set,
-      filename heuristic otherwise ([`adr 0003`](docs/adr/0003-document-processing-pipeline.md))
-- [x] Query summarisation — Claude reads a pasted TPA email for the
-      summary, requested items and deadline. The deadline waits for a
-      human's Confirm before it counts as the desk's own
-      ([`adr 0005`](docs/adr/0005-ai-human-confirmation.md))
-- [x] OCR for handwritten notes (Textract, feeding the classifier)
-- [x] Desk assistant — a floating panel on every screen that takes files
-      with no claim attached, works out which claim and slot each
-      belongs to, and answers questions about the desk. It proposes;
-      every write waits on a human's click
-      ([`adr 0017`](docs/adr/0017-desk-assistant.md))
-- [x] Doctor approval via phone link
-- [x] Merged PDF packet per claim
-- [x] Deductions by reason, on the dashboard
-- [x] Audit logging for every mutation (DPDP)
-- [x] Self-serve organization signup, hospital profile, 14-day trial —
-      see [`docs/adr/0007`](docs/adr/0007-onboarding-flow.md). Razorpay
-      billing itself is still to come.
-- [ ] Platform super-admin console with audited break-glass access
+- **Razorpay billing.** Self-serve organization signup, a hospital
+  profile, and a 14-day trial all exist
+  ([`adr 0007`](docs/adr/0007-onboarding-flow.md)); charging a card at
+  the end of the trial does not.
+- **A platform super-admin console** with audited break-glass access —
+  today, support work on a stuck tenant means a direct database query,
+  not a screen.
+- **OCR confidence isn't surfaced separately from classification
+  confidence** — Textract feeds the classifier, but a desk can't yet
+  tell "the scan was blurry" apart from "the document type is unclear."
 
 ## Documentation
 
