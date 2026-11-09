@@ -262,9 +262,10 @@ async function main(): Promise<void> {
     (p) => p.isActive && PROCEDURE_PROFILE[p.name],
   );
 
-  // Ayushman Bharat is a package scheme: capped rates, not a bill the
-  // hospital sets, so it is kept to the cheaper procedures.
-  const scheme = payers.find((p) => p.type === "scheme");
+  // The scheme payer reaches claims through REGULAR_WORK, which pairs
+  // Ayushman Bharat with cataracts — capped package rates, not a bill
+  // the hospital sets. Only the free draw excludes it, so a scheme
+  // claim never lands on a three-lakh knee.
   const commercial = payers.filter((p) => p.type !== "scheme");
 
   let settled = 0,
