@@ -38,6 +38,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { useNow } from "../../lib/use-now";
+import { SlaClock } from "../sla/SlaClock";
 
 /**
  * The claim ledger.
@@ -112,7 +114,7 @@ export function ClaimsListPage() {
 
   // Stamped once per mount so the "time in stage" column doesn't tick
   // while someone is reading it.
-  const now = useMemo(() => Date.now(), []);
+  const now = useNow();
 
   const visible = data?.rows ?? [];
   const total = data?.total ?? 0;
@@ -272,10 +274,22 @@ export function ClaimsListPage() {
                       <span className="proc">{claim.procedureName}</span>
                     </TableCell>
                     <TableCell>{claim.insurerName}</TableCell>
+                    {/* The IRDAI clock belongs next to the status, not in
+                        a column of its own: only three statuses carry a
+                        window, so a column would be empty on most rows
+                        and the status is the thing that decides whether
+                        there is one at all. */}
                     <TableCell>
-                      <Badge variant={STATUS_CHIP_VARIANT[claim.status]}>
-                        {STATUS_LABEL[claim.status]}
-                      </Badge>
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <Badge variant={STATUS_CHIP_VARIANT[claim.status]}>
+                          {STATUS_LABEL[claim.status]}
+                        </Badge>
+                        <SlaClock
+                          status={claim.status}
+                          deadline={claim.slaDeadline}
+                          now={now}
+                        />
+                      </div>
                     </TableCell>
                     <TableCell className="font-mono tabular-nums">
                       {formatAmount(claim.billedAmount)}

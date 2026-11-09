@@ -13,6 +13,7 @@ import { KpiRow } from "./KpiRow";
 import { ClaimsByStatusDonut } from "./ClaimsByStatusDonut";
 import { SettledTrendChart } from "./SettledTrendChart";
 import { dashboardMetrics } from "./metrics";
+import { useNow } from "../../lib/use-now";
 
 export function DashboardPage() {
   // One request for the whole page. It used to be every claim the
@@ -31,7 +32,7 @@ export function DashboardPage() {
 
   // Stamped once per mount rather than re-read on every render — keeps the
   // "time in stage" figures stable while the page sits open.
-  const now = useMemo(() => Date.now(), []);
+  const now = useNow();
 
   // The claim side is counted server-side; the query side still comes
   // from the inbox, which is bounded by the open queries a desk has.

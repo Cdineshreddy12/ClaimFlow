@@ -6,10 +6,11 @@ import { Loader } from "../../components/ui/loader";
 import { QueryCard } from "./QueryCard";
 import { QueryDetailPanel } from "./QueryDetailPanel";
 import { useQueryInbox } from "./api";
+import { useNow } from "../../lib/use-now";
 
 export function QueryInboxPage() {
   const { data: queries, isLoading, isError } = useQueryInbox("open");
-  const now = useMemo(() => Date.now(), []);
+  const now = useNow();
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   useEffect(() => {

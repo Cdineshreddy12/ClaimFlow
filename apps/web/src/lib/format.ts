@@ -10,6 +10,33 @@ export function formatDuration(ms: number): string {
   return `${minutes}m`;
 }
 
+/**
+ * A duration that is still running, for a clock the eye is on.
+ *
+ * Separate from `formatDuration` because the two answer different
+ * questions. That one measures how long a claim has sat in a stage —
+ * "3d 4h", where a second is noise. This one counts down an IRDAI
+ * hour, where the last ten minutes are the whole point and a figure
+ * that only moves once a minute reads as broken.
+ *
+ * So seconds appear under an hour and nowhere else: a three-hour
+ * discharge window shows "2h 47m" until it matters, then starts
+ * ticking.
+ */
+export function formatTimeLeft(ms: number): string {
+  const abs = Math.abs(ms);
+  const seconds = Math.floor(abs / 1000);
+  const minutes = Math.floor(seconds / 60);
+  const hours = Math.floor(minutes / 60);
+  const days = Math.floor(hours / 24);
+
+  if (days > 0) return `${days}d ${hours % 24}h`;
+  if (hours > 0) return `${hours}h ${String(minutes % 60).padStart(2, "0")}m`;
+  if (minutes > 0)
+    return `${minutes}m ${String(seconds % 60).padStart(2, "0")}s`;
+  return `${seconds}s`;
+}
+
 export function formatAmount(value: string | number | null): string {
   if (value === null) return "—";
   return `₹${Number(value).toLocaleString("en-IN")}`;

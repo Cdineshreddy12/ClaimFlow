@@ -1,5 +1,6 @@
 import { slaState, slaWindowFor, type ClaimStatus } from "@claimflow/contracts";
-import { formatDuration } from "../../lib/format";
+import { formatTimeLeft } from "../../lib/format";
+import { useNow } from "../../lib/use-now";
 import { Badge } from "@/components/ui/badge";
 
 /**
@@ -7,20 +8,25 @@ import { Badge } from "@/components/ui/badge";
  *
  * Reads the shared window and state helpers rather than its own
  * arithmetic, so the countdown here and the watch list agree to the
- * minute. A claim with no window gets no chip at all — it isn't late,
+ * second. A claim with no window gets no chip at all — it isn't late,
  * it isn't waiting on anybody.
+ *
+ * `now` stays overridable for tests, which need a fixed clock to
+ * assert against; left alone it runs.
  */
 export function SlaClock({
   status,
   deadline,
-  now = Date.now(),
+  now,
 }: {
   status: ClaimStatus;
   deadline: string | null;
   now?: number;
 }) {
+  const ticking = useNow();
+  const at = now ?? ticking;
   const window = slaWindowFor(status);
-  const { state, remainingMs } = slaState({ deadline, now, window });
+  const { state, remainingMs } = slaState({ deadline, now: at, window });
   if (state === "none" || remainingMs === null) return null;
 
   const variant =
@@ -34,10 +40,10 @@ export function SlaClock({
 
   const label =
     state === "breached"
-      ? `${formatDuration(remainingMs)} overdue`
+      ? `${formatTimeLeft(remainingMs)} overdue`
       : state === "met"
         ? "Answered in time"
-        : `${formatDuration(remainingMs)} left`;
+        : `${formatTimeLeft(remainingMs)} left`;
 
   return (
     <Badge

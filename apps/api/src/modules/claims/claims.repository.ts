@@ -134,6 +134,23 @@ function orderFor(sort: ClaimSortKey | undefined, dir: SortDirection) {
   }
 }
 
+/**
+ * The clock the claim is currently on, from its latest status event.
+ *
+ * A correlated subquery rather than a join so one claim stays one row.
+ * Shared by the list and the single-claim read because they were
+ * written apart and drifted: the file page rendered a countdown and
+ * the list it was reached from did not, so the same claim was visibly
+ * late on one screen and unremarkable on the other (docs/adr/0014).
+ */
+const latestSlaDeadline = sql<string | null>`(
+  select e.sla_deadline
+  from claim_status_events e
+  where e.claim_id = ${claims.id}
+  order by e.created_at desc
+  limit 1
+)`;
+
 function selectClaims(
   where: SQL | undefined,
   filters: {
@@ -148,6 +165,7 @@ function selectClaims(
       ...getTableColumns(claims),
       insurerName: insurers.name,
       procedureName: procedures.name,
+      slaDeadline: latestSlaDeadline,
     })
     .from(claims)
     .innerJoin(insurers, eq(claims.insurerId, insurers.id))
@@ -168,19 +186,7 @@ export async function getClaimById(id: string) {
       ...getTableColumns(claims),
       insurerName: insurers.name,
       procedureName: procedures.name,
-      /**
-       * The clock the claim is currently on, from its latest status
-       * event. A correlated subquery rather than a join so one claim
-       * stays one row — and it belongs here because every surface that
-       * renders a claim also has to say whether it's late (docs/adr/0014).
-       */
-      slaDeadline: sql<string | null>`(
-        select e.sla_deadline
-        from claim_status_events e
-        where e.claim_id = ${claims.id}
-        order by e.created_at desc
-        limit 1
-      )`,
+      slaDeadline: latestSlaDeadline,
     })
     .from(claims)
     .innerJoin(insurers, eq(claims.insurerId, insurers.id))

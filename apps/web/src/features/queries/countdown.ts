@@ -1,4 +1,4 @@
-import { formatDuration } from "../../lib/format";
+import { formatTimeLeft } from "../../lib/format";
 
 export interface Countdown {
   text: string;
@@ -14,13 +14,13 @@ export function formatCountdown(
   const diff = new Date(deadline).getTime() - now;
   if (diff < 0) {
     return {
-      text: `−${formatDuration(diff)}`,
+      text: `−${formatTimeLeft(diff)}`,
       label: "Reply window closed",
       isOverdue: true,
     };
   }
   return {
-    text: `+${formatDuration(diff)}`,
+    text: `+${formatTimeLeft(diff)}`,
     label: "Reply window closes in",
     isOverdue: false,
   };
