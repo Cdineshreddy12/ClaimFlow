@@ -26,6 +26,24 @@
 # works unchanged.
 
 services:
+  # Not started by `up` — it is a task, not a service:
+  #
+  #     docker compose run --rm migrate            # apply what is outstanding
+  #     docker compose run --rm migrate --status   # say what would happen
+  #     docker compose run --rm migrate --baseline # record all, run none
+  #
+  # `--baseline` is for a database that already has every migration
+  # applied by hand and no record of it. Without it, the first run
+  # there would try to create tables that exist.
+  migrate:
+    profiles: ["tools"]
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    env_file: .env
+    entrypoint: ["node", "dist/db/migrate.js"]
+    restart: "no"
+
   api:
     build:
       context: .

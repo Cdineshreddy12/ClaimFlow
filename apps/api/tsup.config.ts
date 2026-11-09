@@ -21,7 +21,7 @@ import { defineConfig } from "tsup";
  * ones that resolve files relative to themselves.
  */
 export default defineConfig({
-  entry: ["src/server.ts"],
+  entry: ["src/server.ts", "src/db/migrate.ts"],
   outDir: "dist",
   format: ["esm"],
   platform: "node",

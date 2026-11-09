@@ -10,10 +10,12 @@
     "typecheck": "tsc -b --noEmit",
     "test": "vitest run",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate",
+    "db:migrate": "tsx src/db/migrate.ts",
     "db:studio": "drizzle-kit studio",
     "db:seed": "tsx src/db/seed.ts",
-    "dev:token": "tsx scripts/mint-dev-token.ts"
+    "dev:token": "tsx scripts/mint-dev-token.ts",
+    "db:migrate:status": "tsx src/db/migrate.ts --status",
+    "db:baseline": "tsx src/db/migrate.ts --baseline"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.4.0",

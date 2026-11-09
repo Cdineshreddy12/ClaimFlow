@@ -219,20 +219,47 @@ the reasoning for each grant in `infra/iam/README.md`.
 asks. That is fine for a demo and worth pinning to the web domain for
 anything else.
 
-### Migrations are not yet runnable from the image
+### Migrations
 
-`pnpm --filter @claimflow/api db:migrate` runs drizzle-kit against
-`src/db/migrations`, and **the journal it reads is 24 migrations behind
-the directory**: `meta/_journal.json` ends at `0011`, while the folder
-goes to `0035`. Everything from `0012_claim_preauth_fields` onward —
-including the pre-auth layouts and the custom modules — was applied as
-raw SQL without a journal entry.
+```bash
+docker compose run --rm migrate              # apply what is outstanding
+docker compose run --rm migrate --status     # say what would happen, change nothing
+docker compose run --rm migrate --baseline   # record all as applied, run none
+```
 
-So on a fresh database that command produces a schema missing half the
-tables, silently and successfully. The SQL files are copied into the
-image at `/app/migrations` so a runner has something to run, but
-deciding what that runner is comes before pointing it at a database
-anyone cares about.
+or `pnpm --filter @claimflow/api db:migrate` from a checkout, which is
+the same code.
+
+**`--baseline` is for a database that already has these applied by
+hand.** The demo database is one: all 36 were applied as raw SQL over
+months with nothing recording them, so a first run there would try to
+create tables that already exist. Baselining writes the record without
+executing anything. A fresh database needs the plain command.
+
+`db:migrate` no longer calls `drizzle-kit`. It could not: drizzle
+applies what is listed in `meta/_journal.json`, and that journal stops
+at `0011` while the directory goes to `0035` — everything from
+`0012_claim_preauth_fields` onward, including the pre-auth layouts and
+the custom modules, was written and applied as raw SQL without a
+journal entry. Pointed at an empty database it built a schema missing
+half the tables and reported success.
+
+`src/db/migrate.ts` runs the files the way they have always actually
+been run: in filename order, which is numeric because every name is
+zero-padded to four digits. One transaction per file, so a failure
+leaves nothing half-applied. Applied filenames and their checksums go
+in `_claimflow_migrations`, and a file edited after it ran is an error
+rather than a silent divergence.
+
+Verified against an empty Postgres: all 36 apply, and the result is
+column-for-column identical to the live database — 24 tables, 246
+columns, no differences in either direction. Running twice is a no-op.
+
+`drizzle-kit generate` is still how a new migration is authored, but
+it diffs against `meta/*_snapshot.json`, and those stop at `0011` too.
+Until that is re-baselined it will propose a migration containing 24
+migrations' worth of changes. Write new ones by hand, as the last 24
+were.
 
 ### Without an Anthropic key
 
