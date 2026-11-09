@@ -42,11 +42,18 @@ import {
 export function InsurersAdminCard({
   selectedId,
   onSelect,
+  canEdit = true,
+  canDelete = true,
 }: {
   /** Highlighted as the one the rules editor above is working on. */
   selectedId?: string | undefined;
   /** Clicking a name picks it upstairs — the list and the editor are one job. */
   onSelect?: ((insurerId: string) => void) | undefined;
+  /** Add/Edit/Retire — the API allows org_admin and desk_head. */
+  canEdit?: boolean;
+  /** Delete is narrower than the rest: org_admin only, even for a
+   *  desk_head who can do everything else on this screen. */
+  canDelete?: boolean;
 } = {}) {
   const [showRetired, setShowRetired] = useState(false);
   /**
@@ -240,7 +247,7 @@ export function InsurersAdminCard({
               {showRetired ? "Hide retired" : `Show ${retiredCount} retired`}
             </button>
           ) : null}
-          {!showForm && !editingId ? (
+          {canEdit && !showForm && !editingId ? (
             <Button type="button" size="sm" onClick={() => setShowForm(true)}>
               Add insurer
             </Button>
@@ -320,33 +327,39 @@ export function InsurersAdminCard({
                     {insurer.ruleCount}
                   </TableCell>
                   <TableCell className="flex justify-end gap-1 whitespace-nowrap">
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      disabled={busy}
-                      onClick={() => startEdit(insurer)}
-                    >
-                      Edit
-                    </Button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      disabled={busy}
-                      onClick={() =>
-                        setActive.mutate({
-                          id: insurer.id,
-                          isActive: !insurer.isActive,
-                        })
-                      }
-                    >
-                      {insurer.isActive ? "Retire" : "Reinstate"}
-                    </Button>
+                    {canEdit ? (
+                      <>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          disabled={busy}
+                          onClick={() => startEdit(insurer)}
+                        >
+                          Edit
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          disabled={busy}
+                          onClick={() =>
+                            setActive.mutate({
+                              id: insurer.id,
+                              isActive: !insurer.isActive,
+                            })
+                          }
+                        >
+                          {insurer.isActive ? "Retire" : "Reinstate"}
+                        </Button>
+                      </>
+                    ) : null}
                     {/* Only offered when nothing depends on it. The API
                         refuses otherwise; not showing the button spares
                         the desk finding out the hard way. */}
-                    {insurer.claimCount === 0 && insurer.ruleCount === 0 ? (
+                    {canDelete &&
+                    insurer.claimCount === 0 &&
+                    insurer.ruleCount === 0 ? (
                       <Button
                         type="button"
                         size="sm"
@@ -364,6 +377,13 @@ export function InsurersAdminCard({
           </TableBody>
         </Table>
       )}
+
+      {!canEdit ? (
+        <p className="m-0 mt-3 text-sm text-ink-faint">
+          You can view the insurer master but not change it — ask a desk head or
+          an admin.
+        </p>
+      ) : null}
     </Card>
   );
 }

@@ -37,9 +37,12 @@ import {
 export function ProceduresAdminCard({
   selectedId,
   onSelect,
+  canEdit = true,
 }: {
   selectedId?: string;
   onSelect?: (id: string) => void;
+  /** Add/Edit/Retire/Delete — the API allows org_admin and desk_head. */
+  canEdit?: boolean;
 }) {
   // The one caller that wants the retired rows: it is the screen that
   // puts them back.
@@ -188,7 +191,7 @@ export function ProceduresAdminCard({
               {showRetired ? "Hide retired" : `Show ${retiredCount} retired`}
             </button>
           ) : null}
-          {!showForm && !editingId ? (
+          {canEdit && !showForm && !editingId ? (
             <Button type="button" onClick={() => setShowForm(true)}>
               Add procedure
             </Button>
@@ -260,46 +263,50 @@ export function ProceduresAdminCard({
                   <TableCell>{procedure.claims ?? 0}</TableCell>
                   <TableCell>{procedure.rules ?? 0}</TableCell>
                   <TableCell className="flex justify-end gap-1 whitespace-nowrap">
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      disabled={busy}
-                      onClick={() => startEdit(procedure)}
-                    >
-                      Edit
-                    </Button>
-                    {/* The reversible one, and the one a desk actually
-                        needs: deleting is refused the moment a claim
-                        points at the row, which is every procedure the
-                        hospital has really used. */}
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      disabled={busy}
-                      onClick={() =>
-                        setActive.mutate({
-                          id: procedure.id,
-                          isActive: !procedure.isActive,
-                        })
-                      }
-                    >
-                      {procedure.isActive ? "Retire" : "Reinstate"}
-                    </Button>
-                    {/* Only when nothing depends on it. A procedure with
-                        claims against it keeps its name, because those
-                        claims were opened under it. */}
-                    {!procedure.claims && !procedure.rules ? (
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        disabled={busy}
-                        onClick={() => setConfirmingDelete(procedure)}
-                      >
-                        Delete
-                      </Button>
+                    {canEdit ? (
+                      <>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          disabled={busy}
+                          onClick={() => startEdit(procedure)}
+                        >
+                          Edit
+                        </Button>
+                        {/* The reversible one, and the one a desk actually
+                            needs: deleting is refused the moment a claim
+                            points at the row, which is every procedure the
+                            hospital has really used. */}
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          disabled={busy}
+                          onClick={() =>
+                            setActive.mutate({
+                              id: procedure.id,
+                              isActive: !procedure.isActive,
+                            })
+                          }
+                        >
+                          {procedure.isActive ? "Retire" : "Reinstate"}
+                        </Button>
+                        {/* Only when nothing depends on it. A procedure with
+                            claims against it keeps its name, because those
+                            claims were opened under it. */}
+                        {!procedure.claims && !procedure.rules ? (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            disabled={busy}
+                            onClick={() => setConfirmingDelete(procedure)}
+                          >
+                            Delete
+                          </Button>
+                        ) : null}
+                      </>
                     ) : null}
                   </TableCell>
                 </TableRow>
@@ -308,6 +315,13 @@ export function ProceduresAdminCard({
           </TableBody>
         </Table>
       )}
+
+      {!canEdit ? (
+        <p className="m-0 mt-3 text-sm text-ink-faint">
+          You can view the procedure list but not change it — ask a desk head or
+          an admin.
+        </p>
+      ) : null}
     </Card>
   );
 }

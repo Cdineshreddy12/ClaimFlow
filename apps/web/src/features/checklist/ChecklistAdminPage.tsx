@@ -33,6 +33,9 @@ import { RuleRow } from "./RuleRow";
 export function ChecklistAdminPage() {
   const { role } = useAuth();
   const canEdit = role === "org_admin" || role === "desk_head";
+  // Narrower than canEdit: deleting an insurer outright, as opposed to
+  // retiring it, is org_admin only on the API — see insurers.routes.ts.
+  const canDeleteInsurer = role === "org_admin";
 
   const { data: insurers } = useInsurers();
   const { data: procedures } = useProcedures();
@@ -130,7 +133,7 @@ export function ChecklistAdminPage() {
         onChange={setTab}
       >
         {tab === "modules" ? (
-          <ModulesAdminCard />
+          <ModulesAdminCard canEdit={canEdit} />
         ) : tab === "preauth" ? (
           // The same insurer the other tabs are on, so one selection
           // drives everything an insurer wants.
@@ -139,10 +142,12 @@ export function ChecklistAdminPage() {
             insurerName={
               insurers?.find((i) => i.id === insurerId)?.name ?? undefined
             }
+            canEdit={canEdit}
           />
         ) : tab === "procedures" ? (
           <ProceduresAdminCard
             selectedId={procedureId}
+            canEdit={canEdit}
             onSelect={(id) => {
               // Same move as the insurer list: picking one here is how
               // you get to its rules.
@@ -153,6 +158,8 @@ export function ChecklistAdminPage() {
         ) : tab === "insurers" ? (
           <InsurersAdminCard
             selectedId={insurerId}
+            canEdit={canEdit}
+            canDelete={canDeleteInsurer}
             onSelect={(id) => {
               // Picking one here is how you get to its rules — the
               // reason these two ever shared a tab.

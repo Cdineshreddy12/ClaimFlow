@@ -35,7 +35,14 @@ import {
  * are the pre-auth builder's own registry rather than a second one,
  * which is the mistake the CRM's guide warns about in its own code.
  */
-export function ModulesAdminCard() {
+export function ModulesAdminCard({
+  canEdit = true,
+}: {
+  /** Defining/hiding/deleting a module or its fields — the API allows
+   *  org_admin and desk_head. Records within a module are a separate
+   *  screen (/m/:slug) open to every role, unaffected by this. */
+  canEdit?: boolean;
+} = {}) {
   const { data: modules, isLoading, isError } = useCustomModules(true);
   const create = useCreateModule();
   const setActive = useSetModuleActive();
@@ -105,7 +112,7 @@ export function ModulesAdminCard() {
 
       <CardHeader>
         <CardTitle>Modules</CardTitle>
-        {!showForm ? (
+        {canEdit && !showForm ? (
           <Button type="button" onClick={() => setShowForm(true)}>
             Add module
           </Button>
@@ -220,22 +227,24 @@ export function ModulesAdminCard() {
                   >
                     {expanded === module.id ? "Done" : "Fields"}
                   </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    disabled={busy}
-                    onClick={() =>
-                      setActive.mutate({
-                        id: module.id,
-                        isActive: !module.isActive,
-                      })
-                    }
-                  >
-                    {module.isActive ? "Hide" : "Show"}
-                  </Button>
+                  {canEdit ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      disabled={busy}
+                      onClick={() =>
+                        setActive.mutate({
+                          id: module.id,
+                          isActive: !module.isActive,
+                        })
+                      }
+                    >
+                      {module.isActive ? "Hide" : "Show"}
+                    </Button>
+                  ) : null}
                   {/* Only when it holds nothing — the API refuses otherwise. */}
-                  {(module.recordCount ?? 0) === 0 ? (
+                  {canEdit && (module.recordCount ?? 0) === 0 ? (
                     <Button
                       type="button"
                       size="sm"
@@ -249,7 +258,9 @@ export function ModulesAdminCard() {
                 </div>
               </div>
 
-              {expanded === module.id ? <FieldEditor module={module} /> : null}
+              {expanded === module.id ? (
+                <FieldEditor module={module} canEdit={canEdit} />
+              ) : null}
             </div>
           ))}
         </div>
@@ -272,7 +283,13 @@ export function ModulesAdminCard() {
  * have a sort order but no endpoint to change it, and a handle that
  * looks draggable and isn't is worse than no handle.
  */
-function FieldEditor({ module }: { module: CustomModule }) {
+function FieldEditor({
+  module,
+  canEdit,
+}: {
+  module: CustomModule;
+  canEdit: boolean;
+}) {
   const add = useAddField(module.slug);
   const removeField = useRemoveField(module.slug);
 
@@ -337,7 +354,9 @@ function FieldEditor({ module }: { module: CustomModule }) {
   }
 
   return (
-    <div className="mt-3 grid gap-3 border-t border-line pt-3 lg:grid-cols-[210px_minmax(0,1fr)]">
+    <div
+      className={`mt-3 grid gap-3 border-t border-line pt-3${canEdit ? " lg:grid-cols-[210px_minmax(0,1fr)]" : ""}`}
+    >
       <ConfirmDialog
         open={confirming !== null}
         onOpenChange={(open) => !open && setConfirming(null)}
@@ -353,52 +372,64 @@ function FieldEditor({ module }: { module: CustomModule }) {
         }
       />
 
-      <aside className="self-start overflow-hidden rounded-lg border border-line bg-surface-raised">
-        <div className="relative border-b border-line px-2.5 py-2 text-ink-faint [&_input]:h-8 [&_input]:w-full [&_input]:rounded-md [&_input]:border [&_input]:border-line [&_input]:bg-surface [&_input]:py-0 [&_input]:pl-[30px] [&_input]:pr-2.5 [&_input]:font-[inherit] [&_input]:text-sm [&_input]:text-ink [&_input]:outline-none [&_input:focus-visible]:outline [&_input:focus-visible]:outline-2 [&_input:focus-visible]:outline-offset-1 [&_input:focus-visible]:outline-accent [&_svg]:pointer-events-none [&_svg]:absolute [&_svg]:left-[19px] [&_svg]:top-1/2 [&_svg]:size-3 [&_svg]:-translate-y-1/2">
-          <Search aria-hidden />
-          <input
-            type="text"
-            placeholder="Search types…"
-            aria-label="Search field types"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </div>
+      {canEdit ? (
+        <aside className="self-start overflow-hidden rounded-lg border border-line bg-surface-raised">
+          <div className="relative border-b border-line px-2.5 py-2 text-ink-faint [&_input]:h-8 [&_input]:w-full [&_input]:rounded-md [&_input]:border [&_input]:border-line [&_input]:bg-surface [&_input]:py-0 [&_input]:pl-[30px] [&_input]:pr-2.5 [&_input]:font-[inherit] [&_input]:text-sm [&_input]:text-ink [&_input]:outline-none [&_input:focus-visible]:outline [&_input:focus-visible]:outline-2 [&_input:focus-visible]:outline-offset-1 [&_input:focus-visible]:outline-accent [&_svg]:pointer-events-none [&_svg]:absolute [&_svg]:left-[19px] [&_svg]:top-1/2 [&_svg]:size-3 [&_svg]:-translate-y-1/2">
+            <Search aria-hidden />
+            <input
+              type="text"
+              placeholder="Search types…"
+              aria-label="Search field types"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
 
-        <div className="px-3 pb-1.5 pt-3 text-2xs font-semibold uppercase tracking-[0.08em] text-ink-faint [&_span]:font-medium">
-          New fields <span>({palette.length})</span>
-        </div>
-        {/* One per row rather than the pre-auth builder's two columns:
+          <div className="px-3 pb-1.5 pt-3 text-2xs font-semibold uppercase tracking-[0.08em] text-ink-faint [&_span]:font-medium">
+            New fields <span>({palette.length})</span>
+          </div>
+          {/* One per row rather than the pre-auth builder's two columns:
             its eight types are all short, and these fourteen include
             "Multiple choice" and "Decimal number", which wrapped to two
             lines in a half-width cell and broke the list's rhythm. */}
-        <div className="flex flex-col border-t border-line">
-          {palette.map((type) => (
-            <button
-              key={type.type}
-              type="button"
-              className={`flex w-full cursor-pointer items-center gap-1.5 whitespace-nowrap border-0 border-b border-line bg-transparent px-2.5 py-[9px] text-left font-[inherit] text-sm last:border-b-0 enabled:hover:bg-accent-soft disabled:cursor-default disabled:opacity-45 ${
-                drafting === type.type
-                  ? "bg-accent-soft font-semibold text-accent-ink"
-                  : "text-ink"
-              }`}
-              disabled={add.isPending}
-              title={`Add a ${type.label.toLowerCase()} field`}
-              onClick={() => startDraft(type.type)}
-            >
-              <Add size={11} className="shrink-0 text-ink-faint" aria-hidden />
-              {type.label}
-            </button>
-          ))}
-        </div>
-        {palette.length === 0 ? (
-          <p className="m-0 px-3 py-3 text-sm text-ink-faint">
-            No type by that name.
-          </p>
-        ) : null}
-      </aside>
+          <div className="flex flex-col border-t border-line">
+            {palette.map((type) => (
+              <button
+                key={type.type}
+                type="button"
+                className={`flex w-full cursor-pointer items-center gap-1.5 whitespace-nowrap border-0 border-b border-line bg-transparent px-2.5 py-[9px] text-left font-[inherit] text-sm last:border-b-0 enabled:hover:bg-accent-soft disabled:cursor-default disabled:opacity-45 ${
+                  drafting === type.type
+                    ? "bg-accent-soft font-semibold text-accent-ink"
+                    : "text-ink"
+                }`}
+                disabled={add.isPending}
+                title={`Add a ${type.label.toLowerCase()} field`}
+                onClick={() => startDraft(type.type)}
+              >
+                <Add
+                  size={11}
+                  className="shrink-0 text-ink-faint"
+                  aria-hidden
+                />
+                {type.label}
+              </button>
+            ))}
+          </div>
+          {palette.length === 0 ? (
+            <p className="m-0 px-3 py-3 text-sm text-ink-faint">
+              No type by that name.
+            </p>
+          ) : null}
+        </aside>
+      ) : null}
 
       <div className="min-w-0">
+        {!canEdit ? (
+          <p className="m-0 mb-2 text-sm text-ink-faint">
+            You can view these fields but not change them — ask a desk head or
+            an admin.
+          </p>
+        ) : null}
         {error ? (
           <div className="mb-2 rounded-md border border-critical bg-critical-bg px-3 py-2 text-sm font-medium text-critical">
             {error}
@@ -436,21 +467,23 @@ function FieldEditor({ module }: { module: CustomModule }) {
                   {CUSTOM_FIELD_TYPE_BY_KEY[field.fieldType]?.label ??
                     field.fieldType}
                 </span>
-                <button
-                  type="button"
-                  className="inline-flex size-[26px] cursor-pointer items-center justify-center rounded-sm border border-transparent bg-transparent text-sm leading-none text-ink-soft enabled:hover:border-line-strong enabled:hover:text-ink disabled:cursor-default disabled:opacity-30"
-                  aria-label={`Take ${field.label} off the form`}
-                  title="Take off the form"
-                  onClick={() => setConfirming(field.id)}
-                >
-                  <X size={13} aria-hidden />
-                </button>
+                {canEdit ? (
+                  <button
+                    type="button"
+                    className="inline-flex size-[26px] cursor-pointer items-center justify-center rounded-sm border border-transparent bg-transparent text-sm leading-none text-ink-soft enabled:hover:border-line-strong enabled:hover:text-ink disabled:cursor-default disabled:opacity-30"
+                    aria-label={`Take ${field.label} off the form`}
+                    title="Take off the form"
+                    onClick={() => setConfirming(field.id)}
+                  >
+                    <X size={13} aria-hidden />
+                  </button>
+                ) : null}
               </div>
             ))
           )}
         </div>
 
-        {drafting ? (
+        {canEdit && drafting ? (
           <form
             className="mt-2 flex flex-wrap items-end gap-2 rounded-lg border border-accent bg-accent-soft p-3"
             onSubmit={submit}

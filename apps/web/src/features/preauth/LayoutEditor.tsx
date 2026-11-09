@@ -83,10 +83,15 @@ function parseEmptyColumnId(
 export function LayoutEditor({
   insurerId,
   insurerName,
+  canEdit = true,
 }: {
   /** Whose form to edit. Omitted edits the shared default. */
   insurerId?: string | undefined;
   insurerName?: string | undefined;
+  /** False renders the same layout with every write control removed —
+   *  the API refuses all of these to anyone but org_admin/desk_head, so
+   *  a desk_executive sees the form, not a button that fails on click. */
+  canEdit?: boolean;
 } = {}) {
   const { data: layout, isLoading } = usePreauthLayout(insurerId);
   const customise = useCustomiseForInsurer();
@@ -283,7 +288,9 @@ export function LayoutEditor({
   const firstSection = layout.sections[0];
 
   return (
-    <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-[300px_minmax(0,1fr)]">
+    <div
+      className={`grid grid-cols-1 items-start gap-5${canEdit ? " lg:grid-cols-[300px_minmax(0,1fr)]" : ""}`}
+    >
       <Dialog
         open={newFieldType !== null}
         onOpenChange={(next) => {
@@ -346,115 +353,121 @@ export function LayoutEditor({
         </DialogContent>
       </Dialog>
 
-      <aside className="static max-h-none overflow-y-auto rounded-lg border border-line bg-surface-raised lg:sticky lg:top-5 lg:max-h-[calc(100vh-60px)]">
-        <div className="relative border-b border-line px-2.5 py-2 text-ink-faint [&_input]:h-8 [&_input]:w-full [&_input]:rounded-md [&_input]:border [&_input]:border-line [&_input]:bg-surface [&_input]:py-0 [&_input]:pl-[30px] [&_input]:pr-2.5 [&_input]:font-[inherit] [&_input]:text-sm [&_input]:text-ink [&_input]:outline-none [&_input:focus-visible]:outline [&_input:focus-visible]:outline-2 [&_input:focus-visible]:outline-offset-1 [&_input:focus-visible]:outline-accent [&_svg]:pointer-events-none [&_svg]:absolute [&_svg]:left-[19px] [&_svg]:top-1/2 [&_svg]:size-3 [&_svg]:-translate-y-1/2">
-          <Search aria-hidden />
-          <input
-            type="text"
-            placeholder="Search fields…"
-            aria-label="Search fields"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </div>
+      {canEdit ? (
+        <aside className="static max-h-none overflow-y-auto rounded-lg border border-line bg-surface-raised lg:sticky lg:top-5 lg:max-h-[calc(100vh-60px)]">
+          <div className="relative border-b border-line px-2.5 py-2 text-ink-faint [&_input]:h-8 [&_input]:w-full [&_input]:rounded-md [&_input]:border [&_input]:border-line [&_input]:bg-surface [&_input]:py-0 [&_input]:pl-[30px] [&_input]:pr-2.5 [&_input]:font-[inherit] [&_input]:text-sm [&_input]:text-ink [&_input]:outline-none [&_input:focus-visible]:outline [&_input:focus-visible]:outline-2 [&_input:focus-visible]:outline-offset-1 [&_input:focus-visible]:outline-accent [&_svg]:pointer-events-none [&_svg]:absolute [&_svg]:left-[19px] [&_svg]:top-1/2 [&_svg]:size-3 [&_svg]:-translate-y-1/2">
+            <Search aria-hidden />
+            <input
+              type="text"
+              placeholder="Search fields…"
+              aria-label="Search fields"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
 
-        <div className="px-3 pb-1.5 pt-3 text-2xs font-semibold uppercase tracking-[0.08em] text-ink-faint [&_span]:font-medium">
-          New fields <span>({PREAUTH_FIELD_TYPES.length})</span>
-        </div>
-        <div className="grid grid-cols-2 border-t border-line">
-          {PREAUTH_FIELD_TYPES.filter((t) => matches(t.label)).map((type) => (
-            <button
-              key={type.type}
-              type="button"
-              className="flex cursor-pointer items-center gap-1.5 border-0 border-b border-r border-line bg-transparent px-2.5 py-[9px] text-left font-[inherit] text-sm text-ink even:border-r-0 enabled:hover:bg-accent-soft disabled:cursor-default disabled:opacity-45"
-              disabled={!firstSection || createField.isPending}
-              title={`Add a new ${type.label.toLowerCase()} field`}
-              onClick={() => {
-                setError(null);
-                setNewFieldLabel("");
-                setNewFieldType(type);
+          <div className="px-3 pb-1.5 pt-3 text-2xs font-semibold uppercase tracking-[0.08em] text-ink-faint [&_span]:font-medium">
+            New fields <span>({PREAUTH_FIELD_TYPES.length})</span>
+          </div>
+          <div className="grid grid-cols-2 border-t border-line">
+            {PREAUTH_FIELD_TYPES.filter((t) => matches(t.label)).map((type) => (
+              <button
+                key={type.type}
+                type="button"
+                className="flex cursor-pointer items-center gap-1.5 border-0 border-b border-r border-line bg-transparent px-2.5 py-[9px] text-left font-[inherit] text-sm text-ink even:border-r-0 enabled:hover:bg-accent-soft disabled:cursor-default disabled:opacity-45"
+                disabled={!firstSection || createField.isPending}
+                title={`Add a new ${type.label.toLowerCase()} field`}
+                onClick={() => {
+                  setError(null);
+                  setNewFieldLabel("");
+                  setNewFieldType(type);
+                }}
+              >
+                <Add
+                  size={11}
+                  className="shrink-0 text-ink-faint"
+                  aria-hidden
+                />
+                {type.label}
+              </button>
+            ))}
+          </div>
+
+          <button
+            type="button"
+            className="mx-2.5 my-3 block w-[calc(100%-20px)] cursor-pointer rounded-md border border-dashed border-line-strong bg-transparent p-[9px] font-[inherit] text-sm font-semibold text-ink-soft hover:border-accent hover:text-accent-ink"
+            onClick={() => setShowNewSection((v) => !v)}
+          >
+            + New section
+          </button>
+
+          {showNewSection ? (
+            <form
+              className="flex gap-1.5 px-2.5 pb-2.5"
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (!newSection.trim()) return;
+                addSection.mutate(
+                  {
+                    layoutId: layout.id,
+                    name: newSection.trim(),
+                    displayOrder: layout.sections.length,
+                  },
+                  {
+                    onSuccess: () => {
+                      setNewSection("");
+                      setShowNewSection(false);
+                    },
+                  },
+                );
               }}
             >
-              <Add size={11} className="shrink-0 text-ink-faint" aria-hidden />
-              {type.label}
-            </button>
-          ))}
-        </div>
-
-        <button
-          type="button"
-          className="mx-2.5 my-3 block w-[calc(100%-20px)] cursor-pointer rounded-md border border-dashed border-line-strong bg-transparent p-[9px] font-[inherit] text-sm font-semibold text-ink-soft hover:border-accent hover:text-accent-ink"
-          onClick={() => setShowNewSection((v) => !v)}
-        >
-          + New section
-        </button>
-
-        {showNewSection ? (
-          <form
-            className="flex gap-1.5 px-2.5 pb-2.5"
-            onSubmit={(e) => {
-              e.preventDefault();
-              if (!newSection.trim()) return;
-              addSection.mutate(
-                {
-                  layoutId: layout.id,
-                  name: newSection.trim(),
-                  displayOrder: layout.sections.length,
-                },
-                {
-                  onSuccess: () => {
-                    setNewSection("");
-                    setShowNewSection(false);
-                  },
-                },
-              );
-            }}
-          >
-            <Input
-              aria-label="Section name"
-              placeholder="e.g. Maternity"
-              value={newSection}
-              onChange={(e) => setNewSection(e.target.value)}
-            />
-            <Button type="submit" size="sm" disabled={!newSection.trim()}>
-              Add
-            </Button>
-          </form>
-        ) : null}
-
-        <div className="px-3 pb-1.5 pt-3 text-2xs font-semibold uppercase tracking-[0.08em] text-ink-faint [&_span]:font-medium">
-          Unused fields <span>({unused.length})</span>
-        </div>
-        <ul className="m-0 list-none border-t border-line p-0 pb-2.5">
-          {unused
-            .filter((f) => matches(f.label))
-            .map((field) => (
-              <li key={field.id}>
-                <button
-                  type="button"
-                  className="flex w-full cursor-pointer items-center justify-between gap-2.5 border-0 border-b border-line bg-transparent px-3 py-[9px] text-left font-[inherit] enabled:hover:bg-accent-soft"
-                  disabled={!firstSection}
-                  title="Add to the first section"
-                  onClick={() =>
-                    firstSection && addFieldTo(firstSection, 0, field.id)
-                  }
-                >
-                  <span className="overflow-hidden text-ellipsis whitespace-nowrap text-base">
-                    {field.label}
-                  </span>
-                  <span className="shrink-0 text-xs text-ink-faint">
-                    {field.fieldType}
-                  </span>
-                </button>
-              </li>
-            ))}
-          {unused.length === 0 ? (
-            <li className="px-3.5 py-6 text-center text-sm text-ink-faint">
-              Every field is on the form.
-            </li>
+              <Input
+                aria-label="Section name"
+                placeholder="e.g. Maternity"
+                value={newSection}
+                onChange={(e) => setNewSection(e.target.value)}
+              />
+              <Button type="submit" size="sm" disabled={!newSection.trim()}>
+                Add
+              </Button>
+            </form>
           ) : null}
-        </ul>
-      </aside>
+
+          <div className="px-3 pb-1.5 pt-3 text-2xs font-semibold uppercase tracking-[0.08em] text-ink-faint [&_span]:font-medium">
+            Unused fields <span>({unused.length})</span>
+          </div>
+          <ul className="m-0 list-none border-t border-line p-0 pb-2.5">
+            {unused
+              .filter((f) => matches(f.label))
+              .map((field) => (
+                <li key={field.id}>
+                  <button
+                    type="button"
+                    className="flex w-full cursor-pointer items-center justify-between gap-2.5 border-0 border-b border-line bg-transparent px-3 py-[9px] text-left font-[inherit] enabled:hover:bg-accent-soft"
+                    disabled={!firstSection}
+                    title="Add to the first section"
+                    onClick={() =>
+                      firstSection && addFieldTo(firstSection, 0, field.id)
+                    }
+                  >
+                    <span className="overflow-hidden text-ellipsis whitespace-nowrap text-base">
+                      {field.label}
+                    </span>
+                    <span className="shrink-0 text-xs text-ink-faint">
+                      {field.fieldType}
+                    </span>
+                  </button>
+                </li>
+              ))}
+            {unused.length === 0 ? (
+              <li className="px-3.5 py-6 text-center text-sm text-ink-faint">
+                Every field is on the form.
+              </li>
+            ) : null}
+          </ul>
+        </aside>
+      ) : null}
 
       <div className="min-w-0">
         {error ? (
@@ -485,7 +498,7 @@ export function LayoutEditor({
                 </>
               )}
             </p>
-            {isOwnForm ? (
+            {!canEdit ? null : isOwnForm ? (
               <Button
                 type="button"
                 size="sm"
@@ -537,6 +550,13 @@ export function LayoutEditor({
           </div>
         ) : null}
 
+        {!canEdit ? (
+          <p className="m-0 mb-4 text-sm text-ink-faint">
+            You can view this form but not change it — ask a desk head or an
+            admin.
+          </p>
+        ) : null}
+
         <p className="m-0 mb-4 max-w-[62ch] text-sm leading-normal text-ink-faint">
           Changes apply to claims opened from now on. Claims already in progress
           keep the form they were opened with.
@@ -555,6 +575,7 @@ export function LayoutEditor({
               <SectionCard
                 key={section.id}
                 section={section}
+                canEdit={canEdit}
                 onToggleColumns={() =>
                   setColumns.mutate({
                     id: section.id,
@@ -590,6 +611,7 @@ export function LayoutEditor({
                             <FieldRow
                               key={placement.id}
                               placement={placement}
+                              canEdit={canEdit}
                               onToggleRequired={() =>
                                 updatePlacement.mutate({
                                   id: placement.id,
@@ -623,10 +645,12 @@ export function LayoutEditor({
 /** One draggable field row. */
 function FieldRow({
   placement,
+  canEdit,
   onToggleRequired,
   onRemove,
 }: {
   placement: PreauthPlacement;
+  canEdit: boolean;
   onToggleRequired: () => void;
   onRemove: () => void;
 }) {
@@ -637,7 +661,7 @@ function FieldRow({
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: placement.id });
+  } = useSortable({ id: placement.id, disabled: !canEdit });
   const standard = placement.definition.isStandard;
 
   return (
@@ -649,9 +673,9 @@ function FieldRow({
       }${isDragging ? " opacity-50" : ""}`}
     >
       <span
-        className="flex shrink-0 cursor-grab select-none items-center text-ink-faint active:cursor-grabbing"
-        {...attributes}
-        {...listeners}
+        className={`flex shrink-0 select-none items-center text-ink-faint${canEdit ? " cursor-grab active:cursor-grabbing" : ""}`}
+        {...(canEdit ? attributes : {})}
+        {...(canEdit ? listeners : {})}
         aria-label={`Reorder ${placementLabel(placement)}`}
       >
         {standard ? <Lock size={13} /> : <Reorder size={13} />}
@@ -659,30 +683,44 @@ function FieldRow({
       <span className="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-base">
         {placementLabel(placement)}
       </span>
-      <button
-        type="button"
-        className={`shrink-0 cursor-pointer rounded-xs border bg-transparent px-[7px] py-0.5 font-[inherit] text-2xs font-semibold uppercase tracking-[0.03em] ${
-          placement.required
-            ? "border-critical bg-critical-bg text-critical"
-            : "border-line text-ink-faint"
-        }`}
-        onClick={onToggleRequired}
-        title={placement.required ? "Make optional" : "Make required"}
-      >
-        {placement.required ? "Required" : "Optional"}
-      </button>
+      {canEdit ? (
+        <button
+          type="button"
+          className={`shrink-0 cursor-pointer rounded-xs border bg-transparent px-[7px] py-0.5 font-[inherit] text-2xs font-semibold uppercase tracking-[0.03em] ${
+            placement.required
+              ? "border-critical bg-critical-bg text-critical"
+              : "border-line text-ink-faint"
+          }`}
+          onClick={onToggleRequired}
+          title={placement.required ? "Make optional" : "Make required"}
+        >
+          {placement.required ? "Required" : "Optional"}
+        </button>
+      ) : (
+        <span
+          className={`shrink-0 rounded-xs border px-[7px] py-0.5 text-2xs font-semibold uppercase tracking-[0.03em] ${
+            placement.required
+              ? "border-critical bg-critical-bg text-critical"
+              : "border-line text-ink-faint"
+          }`}
+        >
+          {placement.required ? "Required" : "Optional"}
+        </span>
+      )}
       <span className="shrink-0 text-xs text-ink-faint">
         {placement.definition.fieldType}
       </span>
-      <button
-        type="button"
-        className="inline-flex size-[26px] cursor-pointer items-center justify-center rounded-sm border border-transparent bg-transparent text-sm leading-none text-ink-soft enabled:hover:border-line-strong enabled:hover:text-ink disabled:cursor-default disabled:opacity-30"
-        aria-label={`Take ${placementLabel(placement)} off the form`}
-        title="Take off the form"
-        onClick={onRemove}
-      >
-        <X size={13} aria-hidden />
-      </button>
+      {canEdit ? (
+        <button
+          type="button"
+          className="inline-flex size-[26px] cursor-pointer items-center justify-center rounded-sm border border-transparent bg-transparent text-sm leading-none text-ink-soft enabled:hover:border-line-strong enabled:hover:text-ink disabled:cursor-default disabled:opacity-30"
+          aria-label={`Take ${placementLabel(placement)} off the form`}
+          title="Take off the form"
+          onClick={onRemove}
+        >
+          <X size={13} aria-hidden />
+        </button>
+      ) : null}
     </div>
   );
 }
@@ -690,11 +728,13 @@ function FieldRow({
 /** A section's header, drag handle, and column/delete actions — the field columns are passed in as children. */
 function SectionCard({
   section,
+  canEdit,
   onToggleColumns,
   onDelete,
   children,
 }: {
   section: PreauthSection;
+  canEdit: boolean;
   onToggleColumns: () => void;
   onDelete: () => void;
   children: ReactNode;
@@ -706,7 +746,7 @@ function SectionCard({
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: section.id });
+  } = useSortable({ id: section.id, disabled: !canEdit });
 
   return (
     <div
@@ -716,37 +756,39 @@ function SectionCard({
     >
       <div className="flex items-center gap-[9px] border-b border-line bg-surface px-[13px] py-[11px] [&_h3]:m-0 [&_h3]:flex-1 [&_h3]:text-base [&_h3]:font-semibold">
         <span
-          className="flex shrink-0 cursor-grab select-none items-center text-ink-faint active:cursor-grabbing"
-          {...attributes}
-          {...listeners}
+          className={`flex shrink-0 select-none items-center text-ink-faint${canEdit ? " cursor-grab active:cursor-grabbing" : ""}`}
+          {...(canEdit ? attributes : {})}
+          {...(canEdit ? listeners : {})}
           aria-label={`Reorder ${section.name}`}
         >
           <Reorder size={14} />
         </span>
         <h3>{section.name}</h3>
-        <div className="flex gap-0.5">
-          <button
-            type="button"
-            className="inline-flex size-[26px] cursor-pointer items-center justify-center rounded-sm border border-transparent bg-transparent text-ink-soft enabled:hover:border-line-strong enabled:hover:text-ink disabled:cursor-default disabled:opacity-30"
-            aria-label={`Use ${section.columnCount === 2 ? "one column" : "two columns"}`}
-            title={
-              section.columnCount === 2
-                ? "Switch to one column"
-                : "Switch to two columns"
-            }
-            onClick={onToggleColumns}
-          >
-            <ColumnsPreview count={section.columnCount === 2 ? 2 : 1} />
-          </button>
-          <button
-            type="button"
-            className="inline-flex size-[26px] cursor-pointer items-center justify-center rounded-sm border border-transparent bg-transparent text-ink-soft enabled:hover:border-line-strong enabled:hover:text-critical disabled:cursor-default disabled:opacity-30"
-            aria-label={`Delete ${section.name}`}
-            onClick={onDelete}
-          >
-            <Trash size={14} aria-hidden />
-          </button>
-        </div>
+        {canEdit ? (
+          <div className="flex gap-0.5">
+            <button
+              type="button"
+              className="inline-flex size-[26px] cursor-pointer items-center justify-center rounded-sm border border-transparent bg-transparent text-ink-soft enabled:hover:border-line-strong enabled:hover:text-ink disabled:cursor-default disabled:opacity-30"
+              aria-label={`Use ${section.columnCount === 2 ? "one column" : "two columns"}`}
+              title={
+                section.columnCount === 2
+                  ? "Switch to one column"
+                  : "Switch to two columns"
+              }
+              onClick={onToggleColumns}
+            >
+              <ColumnsPreview count={section.columnCount === 2 ? 2 : 1} />
+            </button>
+            <button
+              type="button"
+              className="inline-flex size-[26px] cursor-pointer items-center justify-center rounded-sm border border-transparent bg-transparent text-ink-soft enabled:hover:border-line-strong enabled:hover:text-critical disabled:cursor-default disabled:opacity-30"
+              aria-label={`Delete ${section.name}`}
+              onClick={onDelete}
+            >
+              <Trash size={14} aria-hidden />
+            </button>
+          </div>
+        ) : null}
       </div>
 
       {children}
