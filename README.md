@@ -12,8 +12,28 @@
 
 ---
 
+## Quick start
+
+```bash
+git clone https://github.com/Cdineshreddy12/ClaimFlow.git
+cd ClaimFlow
+pnpm install
+cp .env.example .env               # fill in Supabase / S3 / Anthropic keys
+pnpm --filter @claimflow/api db:migrate
+pnpm --filter @claimflow/api db:seed
+pnpm dev                            # web → :5175, api → :4200
+```
+
+One manual step before sign-in works: enable the Supabase **Custom
+Access Token** hook (Dashboard → Authentication → Hooks → select
+`public.custom_access_token_hook`) — that's a dashboard toggle, not SQL,
+so no migration can do it for you. Full local setup, demo data options,
+deployment, and demo login details are in
+[`deployment.md`](deployment.md).
+
 ## Table of contents
 
+- [Quick start](#quick-start)
 - [The problem](#the-problem)
 - [What ClaimFlow does](#what-claimflow-does)
 - [Screenshots](#screenshots)
@@ -21,7 +41,6 @@
 - [Architecture](#architecture)
 - [Tech stack](#tech-stack)
 - [Repository structure](#repository-structure)
-- [Getting started](#getting-started)
 - [Database](#database)
 - [Scripts](#scripts)
 - [Environment variables](#environment-variables)
@@ -275,14 +294,6 @@ docs/
   adr/            Decision records for the hard calls
   design/         Reviewed UI mockup
   screenshots/    What actually shipped, from the live deployment
-```
-
-## Getting started
-
-```bash
-pnpm install
-cp .env.example .env   # fill in Supabase / S3 / Anthropic / Razorpay keys
-pnpm dev                # runs apps/web and apps/api together
 ```
 
 ## Database
