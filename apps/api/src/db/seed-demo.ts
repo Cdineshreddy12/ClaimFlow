@@ -2,10 +2,12 @@ import { config } from "dotenv";
 config({ path: "../../.env" });
 config({ path: ".env" });
 
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import type { ClaimStatus } from "@claimflow/contracts";
 import { db } from "./client.js";
 import {
+  checklistRules,
+  claimPreauthFields,
   claimStatusEvents,
   claims,
   deductions,
@@ -220,6 +222,152 @@ function reasonFor(r: number): (typeof DEDUCTION_PLAYBOOK)[number] {
   return DEDUCTION_PLAYBOOK[DEDUCTION_PLAYBOOK.length - 1]!;
 }
 
+/**
+ * What a cashless desk is asked for, which is nearly the same list
+ * whoever the payer is. A claim opened against an insurer and
+ * procedure with no rules gets an empty checklist and the file says
+ * so — true, and useless as a demo, because the gap panel is the
+ * screen the product is arguing for.
+ */
+const BASE_CHECKLIST: readonly (readonly [string, boolean])[] = [
+  ["Pre-authorization form", true],
+  ["Treating doctor's note", true],
+  ["Photo ID proof", true],
+  ["Policy / e-card copy", true],
+  ["Investigation reports", true],
+  ["Discharge summary", true],
+  ["Final bill with break-up", true],
+  ["Previous treatment records", false],
+] as const;
+
+/** The extra one each procedure's own evidence turns on. */
+const PROCEDURE_EVIDENCE: Record<string, string> = {
+  "Total knee replacement": "Implant sticker / invoice",
+  Angioplasty: "Stent invoice and cath lab report",
+  "Gall bladder removal": "Ultrasound report (abdomen)",
+  "Caesarean section": "Obstetric ultrasound and LMP record",
+  "Hernia repair": "Mesh invoice",
+  Appendicectomy: "Histopathology report",
+  "Dengue with low platelets": "Serial platelet count chart",
+  "Cataract surgery": "IOL sticker",
+};
+
+/**
+ * A pre-auth form as a desk leaves it: the clinical and admission
+ * blocks filled from the doctor's note, the costing filled from the
+ * estimate. Values are generated per claim so the totals match the
+ * money on the claim rather than contradicting it.
+ */
+function preauthValues(opts: {
+  procedure: string;
+  billed: number;
+  admittedAt: Date;
+  stay: number;
+}): Record<string, string> {
+  const { procedure, billed, admittedAt, stay } = opts;
+  const DOCTORS = [
+    ["Dr. Ananthakrishnan V", "TN/14822/2009"],
+    ["Dr. Priyanka Sahni", "DMC/R/8341/2012"],
+    ["Dr. Rameshwar Joshi", "MMC/2004/41208"],
+    ["Dr. Fatima Baig", "KMC/19/7734"],
+    ["Dr. Siddharth Vaidya", "MMC/2011/55190"],
+  ] as const;
+  const [doctor, reg] = pick(DOCTORS);
+  const CLINICAL: Record<string, [string, string, string, string]> = {
+    "Total knee replacement": [
+      "Severe bilateral knee pain, unable to climb stairs for 8 months",
+      "Grade IV osteoarthritis, varus deformity, ROM 10-90 degrees",
+      "Primary osteoarthritis of knee",
+      "M17.0",
+    ],
+    Angioplasty: [
+      "Exertional chest pain radiating to left arm since 3 weeks",
+      "ECG ST depression in V4-V6; TMT positive; 90% LAD stenosis on angiography",
+      "Coronary artery disease, single vessel",
+      "I25.10",
+    ],
+    "Gall bladder removal": [
+      "Recurrent right upper quadrant pain after meals for 4 months",
+      "Murphy's sign positive; USG shows multiple calculi, wall 4mm",
+      "Chronic calculous cholecystitis",
+      "K80.10",
+    ],
+    "Caesarean section": [
+      "Primigravida at 39 weeks with breech presentation",
+      "Breech, EFW 3.1kg, inadequate pelvis on assessment",
+      "Breech presentation at term",
+      "O32.1",
+    ],
+    "Hernia repair": [
+      "Right groin swelling increasing on straining for 6 months",
+      "Reducible right inguinal hernia, cough impulse present",
+      "Unilateral inguinal hernia",
+      "K40.90",
+    ],
+    Appendicectomy: [
+      "Acute right iliac fossa pain with vomiting since 18 hours",
+      "Rebound tenderness at McBurney's point; WBC 14,800; USG probe tenderness",
+      "Acute appendicitis",
+      "K35.80",
+    ],
+    "Dengue with low platelets": [
+      "High fever with retro-orbital pain and myalgia for 5 days",
+      "NS1 positive; platelets fallen 148k to 42k over 72 hours; no bleeding",
+      "Dengue fever with thrombocytopenia",
+      "A90",
+    ],
+    "Cataract surgery": [
+      "Progressive blurring of vision in right eye for 1 year",
+      "Nuclear sclerosis grade III, BCVA 6/36, IOP 14 mmHg",
+      "Senile nuclear cataract",
+      "H25.1",
+    ],
+  };
+  const c = CLINICAL[procedure] ?? CLINICAL["Appendicectomy"]!;
+  const two = (n: number) => String(n).padStart(2, "0");
+  const iso = (d: Date) => d.toISOString().slice(0, 10);
+  const firstSeen = new Date(admittedAt.getTime() - between(3, 21) * DAY);
+
+  // The costing adds up to the billed amount, because a pre-auth whose
+  // lines do not sum to its own total is the first thing a TPA queries.
+  const room = Math.round((billed * 0.22) / stay / 100) * 100;
+  const roomTotal = room * stay;
+  const investigation = Math.round((billed * 0.12) / 100) * 100;
+  const ot = Math.round((billed * 0.18) / 100) * 100;
+  const meds = Math.round((billed * 0.24) / 100) * 100;
+  // Whatever the rounding left over lands here rather than being
+  // clamped away, because a form whose lines do not sum to its own
+  // total is the first thing a TPA sends back.
+  const fees = billed - roomTotal - investigation - ot - meds;
+
+  return {
+    treatingDoctorName: doctor,
+    treatingDoctorRegistrationNo: reg,
+    illnessWithComplaints: c[0],
+    clinicalFindings: c[1],
+    ailmentDurationDays: String(between(4, 180)),
+    firstConsultationDate: iso(firstSeen),
+    provisionalDiagnosis: c[2],
+    icd10Code: c[3],
+    lineOfTreatment:
+      procedure === "Dengue with low platelets"
+        ? "Conservative management"
+        : "Surgical management",
+    surgeryName: procedure,
+    admissionDate: iso(admittedAt),
+    admissionTime: `${two(admittedAt.getHours())}:${two(admittedAt.getMinutes())}`,
+    admissionType: "Planned",
+    expectedStayDays: String(stay),
+    roomType: billed > 200_000 ? "Single private room" : "Twin sharing",
+    roomRentPerDay: String(room),
+    investigationCost: String(investigation),
+    otCharges: String(ot),
+    professionalFees: String(fees),
+    medicinesConsumables: String(Math.max(meds, 0)),
+    totalExpectedCost: String(billed),
+  };
+}
+
 const SENTINEL = PATIENTS[0];
 
 async function main(): Promise<void> {
@@ -261,6 +409,45 @@ async function main(): Promise<void> {
   const procs = (await db.select().from(procedures)).filter(
     (p) => p.isActive && PROCEDURE_PROFILE[p.name],
   );
+
+  // Rules for every pairing this desk works, so a generated claim
+  // carries a checklist instead of the "no rules existed" notice. Only
+  // where none exist — an insurer/procedure someone already configured
+  // is left exactly as they configured it.
+  for (const [insurerName, procedureName] of REGULAR_WORK) {
+    const payer = payers.find((x) => x.name === insurerName);
+    const proc = procs.find((x) => x.name === procedureName);
+    if (!payer || !proc) continue;
+    const [has] = await db
+      .select({ id: checklistRules.id })
+      .from(checklistRules)
+      .where(
+        and(
+          eq(checklistRules.insurerId, payer.id),
+          eq(checklistRules.procedureId, proc.id),
+        ),
+      );
+    if (has) continue;
+    const evidence = PROCEDURE_EVIDENCE[proc.name];
+    await db.insert(checklistRules).values([
+      ...BASE_CHECKLIST.map(([documentType, required]) => ({
+        insurerId: payer.id,
+        procedureId: proc.id,
+        documentType,
+        required,
+      })),
+      ...(evidence
+        ? [
+            {
+              insurerId: payer.id,
+              procedureId: proc.id,
+              documentType: evidence,
+              required: true,
+            },
+          ]
+        : []),
+    ]);
+  }
 
   // The scheme payer reaches claims through REGULAR_WORK, which pairs
   // Ayushman Bharat with cataracts — capped package rates, not a bill
@@ -319,7 +506,17 @@ async function main(): Promise<void> {
               packageRate: String(billed),
             }
           : {}),
-        checklistSnapshot: [],
+        // Frozen at open time, exactly as claims.service does it
+        // (docs/adr/0001) — the claim keeps the list it was opened
+        // against even if the rules change later.
+        // A quarter of these are drawn freely rather than from the
+        // regular pairings, and those landed on insurer/procedure
+        // combinations nobody had configured — eighteen claims whose
+        // file opened on "this claim has no checklist". The rules are
+        // created on first use instead, so the empty state stays
+        // reachable by opening a claim on a new pairing rather than
+        // being most of the demo.
+        checklistSnapshot: await ensureRules(payer.id, proc.id, proc.name),
       })
       .returning();
     if (!claim) continue;
@@ -356,10 +553,38 @@ async function main(): Promise<void> {
       continue;
     }
 
+    // A claim that reached an insurer had a form filled in to reach
+    // them with. Drafts and the freshly-sent keep theirs empty, which
+    // is what the extract-and-confirm flow is demonstrated on.
+    if (rand() < 0.85) {
+      const values = preauthValues({
+        procedure: proc.name,
+        billed,
+        admittedAt,
+        stay: profile.stay,
+      });
+      const confirmedAt = new Date(preAuth.getTime() - 30 * 60_000);
+      await db.insert(claimPreauthFields).values(
+        Object.entries(values).map(([fieldKey, value]) => ({
+          claimId: claim.id,
+          fieldKey,
+          value,
+          confirmedAt,
+        })),
+      );
+    }
+
     const approvedAt = new Date(
       preAuth.getTime() + (queried ? between(2, 5) : between(1, 3)) * DAY,
     );
-    const sanctioned = money(billed * 0.86, billed);
+    // Usually the insurer sanctions enough and nothing is said about
+    // it. Making every claim fall short, as this first did, put a
+    // "needs cover" flag on all sixty-seven and turned the one signal
+    // that should mean something into wallpaper.
+    const sanctioned =
+      rand() < 0.72
+        ? money(billed * 1.02, billed * 1.2)
+        : money(billed * 0.72, billed * 0.94);
     events.push({ status: "APPROVED", at: approvedAt });
 
     if (roll < 0.2) {
@@ -475,6 +700,44 @@ async function main(): Promise<void> {
       `  ${inFlight} approved, still in flight\n` +
       `  ${rejected} rejected`,
   );
+}
+
+/** The rules for this pairing, creating the standard set if it has none. */
+async function ensureRules(
+  insurerId: string,
+  procedureId: string,
+  procedureName: string,
+) {
+  const read = () =>
+    db
+      .select({
+        documentType: checklistRules.documentType,
+        required: checklistRules.required,
+      })
+      .from(checklistRules)
+      .where(
+        and(
+          eq(checklistRules.insurerId, insurerId),
+          eq(checklistRules.procedureId, procedureId),
+        ),
+      );
+
+  const existing = await read();
+  if (existing.length > 0) return existing;
+
+  const evidence = PROCEDURE_EVIDENCE[procedureName];
+  await db.insert(checklistRules).values([
+    ...BASE_CHECKLIST.map(([documentType, required]) => ({
+      insurerId,
+      procedureId,
+      documentType,
+      required,
+    })),
+    ...(evidence
+      ? [{ insurerId, procedureId, documentType: evidence, required: true }]
+      : []),
+  ]);
+  return read();
 }
 
 /** Writes the event chain and the claim's final shape in one place. */
