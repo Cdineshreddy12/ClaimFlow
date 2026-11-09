@@ -233,17 +233,18 @@ the full reasoning.
 
 ## Tech stack
 
-| Layer        | Choice                                                                                    | Why                                                                                      |
-| ------------ | ----------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| Frontend     | React · Vite · TypeScript · Tailwind · Zustand (UI state) · TanStack Query (server state) | Fast to build a clean UI; server-state caching stays out of the client-state store       |
-| Backend      | Fastify (Node.js, TypeScript)                                                             | Lightweight, plugin-based, a natural fit for a module-per-domain API                     |
-| ORM          | Drizzle ORM + drizzle-kit                                                                 | Type-safe schema, queries, and migrations, generated from one TypeScript source of truth |
-| Database     | Supabase-hosted Postgres (Mumbai region)                                                  | DPDP-compliant residency; managed hosting                                                |
-| File storage | AWS S3 (Mumbai region)                                                                    | Scanned documents and merged PDF packets never live in the database                      |
-| AI           | Claude — classification, field extraction, query summarization                            | Structured extraction with citations maps directly to the human-confirm requirement      |
-| Billing      | Razorpay Subscriptions                                                                    | GST-compliant invoicing for Indian hospital finance teams                                |
+| Layer        | Choice                                                                                    | Why                                                                                                 |
+| ------------ | ----------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| Frontend     | React · Vite · TypeScript · Tailwind · Zustand (UI state) · TanStack Query (server state) | Quick to build a clean UI in, and TanStack Query keeps server-state caching out of the client store |
+| Backend      | Fastify (Node.js, TypeScript)                                                             | Lightweight and plugin-based — suits a module-per-domain API without much ceremony                  |
+| ORM          | Drizzle ORM + drizzle-kit                                                                 | Schema, queries and migrations stay type-safe, all generated from one TypeScript source             |
+| Database     | Supabase-hosted Postgres (Mumbai region)                                                  | Keeps patient data resident in India for DPDP, with Supabase running the ops                        |
+| File storage | AWS S3 (Mumbai region)                                                                    | Scans and merged PDF packets don't belong inside a database row                                     |
+| AI           | Claude — classification, field extraction, query summarization                            | Extraction comes back with citations, which is exactly what the human-confirm flow needs            |
+| Billing      | Razorpay Subscriptions                                                                    | Already handles GST-compliant invoicing, which Indian hospital finance teams expect                 |
 
-Full rationale for each decision is in [`docs/adr/`](docs/adr).
+Each of those decisions gets a longer write-up in [`docs/adr/`](docs/adr) —
+this table is the summary, not the reasoning.
 
 ## Repository structure
 
@@ -317,33 +318,36 @@ Summary:
 
 ## Security model
 
-Patient records are sensitive personal data under India's DPDP Act 2023.
-Two things worth stating plainly rather than leaving implicit:
+Patient records count as sensitive personal data under India's DPDP Act
+2023, so two things here are worth spelling out rather than leaving
+implicit.
 
-- **RLS policies exist in the schema but do not protect the API.** The API
-  connects to Postgres via Drizzle as the `postgres` superuser, and
-  Postgres superusers bypass Row-Level Security unconditionally — this is
-  documented Postgres behavior, not an oversight. **Fastify RBAC is the
-  enforced tenant boundary** for every request; every tenant-scoped query
-  in `apps/api/src/modules/*` must filter by `organization_id` explicitly.
-  Full detail: [`docs/adr/0002`](docs/adr/0002-authorization-and-tenant-isolation.md).
-- **Checklist rules are versioned.** Editing a hospital's checklist only
-  affects claims opened after the edit — an in-flight claim's requirements
-  never shift underneath the desk executive working it.
-  [`docs/adr/0001`](docs/adr/0001-checklist-engine.md).
+RLS policies are in the schema, but they don't actually protect the API.
+Drizzle connects as the `postgres` superuser, and Postgres superusers
+bypass Row-Level Security no matter what the policies say — that's
+documented Postgres behavior, not something that got missed. The real
+tenant boundary is **Fastify RBAC**: every tenant-scoped query in
+`apps/api/src/modules/*` has to filter by `organization_id` by hand, and
+that's enforced for every request. Full reasoning in
+[`docs/adr/0002`](docs/adr/0002-authorization-and-tenant-isolation.md).
+
+Checklist rules are also versioned, so editing a hospital's checklist only
+changes what applies to claims opened after the edit — a desk executive
+halfway through a claim never has the requirements shift underneath them.
+See [`docs/adr/0001`](docs/adr/0001-checklist-engine.md).
 
 ## What's not built yet
 
-- **Razorpay billing.** Self-serve organization signup, a hospital
-  profile, and a 14-day trial all exist
-  ([`adr 0007`](docs/adr/0007-onboarding-flow.md)); charging a card at
-  the end of the trial does not.
-- **A platform super-admin console** with audited break-glass access —
-  today, support work on a stuck tenant means a direct database query,
-  not a screen.
-- **OCR confidence isn't surfaced separately from classification
-  confidence** — Textract feeds the classifier, but a desk can't yet
-  tell "the scan was blurry" apart from "the document type is unclear."
+- Razorpay billing isn't wired up. Self-serve signup, a hospital profile
+  and a 14-day trial all work end to end
+  ([`adr 0007`](docs/adr/0007-onboarding-flow.md)) — nobody's card
+  actually gets charged when the trial runs out.
+- There's no platform super-admin console with audited break-glass
+  access yet. Helping a stuck tenant today means someone running a
+  direct database query, not clicking through a screen.
+- OCR confidence and classification confidence collapse into one number.
+  Textract feeds the classifier, but a desk can't yet tell "the scan was
+  blurry" apart from "the document type itself is unclear."
 
 ## Documentation
 
