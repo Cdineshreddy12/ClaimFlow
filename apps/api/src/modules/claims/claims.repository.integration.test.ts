@@ -19,9 +19,21 @@ describe.skipIf(!process.env.DATABASE_URL)(
   () => {
     // Unique per run: the suite's files run in parallel against one
     // database, and insurer names are unique (migration 0020).
-    const INSURER_NAME = `Test Insurer ${Date.now()}-${Math.random()
-      .toString(36)
-      .slice(2, 7)}`;
+    const RUN = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const INSURER_NAME = `Test Insurer ${RUN}`;
+
+    /*
+      The paging test searches by patient name, and `listClaims` searches
+      the whole hospital — it has no insurer to scope it to. A fixed name
+      like "Page A" therefore also matches the "Page A" a previous run
+      left behind when it was interrupted before its cleanup, and "of 3"
+      silently becomes "of 6".
+
+      Tagging the names with the run makes the search match only rows
+      this run created, so residue in the shared database is inert
+      rather than a failure three runs later in a different file.
+    */
+    const PAGE_TAG = `Page-${RUN} `;
 
     let insurerId: string;
     let procedureId: string;
@@ -55,15 +67,15 @@ describe.skipIf(!process.env.DATABASE_URL)(
      */
     describe("listClaims", () => {
       it("pages, and reports the total behind the page", async () => {
-        for (const name of ["Page A", "Page B", "Page C"]) {
+        for (const suffix of ["A", "B", "C"]) {
           await claimsRepository.createClaim(
-            { patientName: name, insurerId, procedureId },
+            { patientName: `${PAGE_TAG}${suffix}`, insurerId, procedureId },
             [],
           );
         }
 
         const first = await claimsRepository.listClaims({
-          q: "Page ",
+          q: PAGE_TAG,
           limit: 2,
           offset: 0,
         });
@@ -74,7 +86,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         expect(first.total).toBe(3);
 
         const second = await claimsRepository.listClaims({
-          q: "Page ",
+          q: PAGE_TAG,
           limit: 2,
           offset: 2,
         });

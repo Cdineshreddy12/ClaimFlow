@@ -1,7 +1,7 @@
 import { config } from "dotenv";
 config({ path: "../../.env" });
 
-import { eq } from "drizzle-orm";
+import { eq, like } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { db } from "../../db/client.js";
 import { claims, insurers, procedures } from "../../db/schema.js";
@@ -66,6 +66,22 @@ describe.skipIf(!process.env.DATABASE_URL)(
     }
 
     beforeAll(async () => {
+      /*
+        `periodClaimsSummary` sums the whole hospital over a window —
+        there is no insurer to scope it to, which is the point of the
+        report. So unlike every other test here, this one cannot make
+        itself independent of rows it did not create: a back-dated
+        "Report Patient" left in the shared database by a run that was
+        interrupted before its cleanup lands in this same window and
+        quietly turns "opened: 3" into "opened: 5".
+
+        Sweeping the marker first makes the suite self-healing rather
+        than permanently poisoned by one cancelled run.
+      */
+      await db
+        .delete(claims)
+        .where(like(claims.patientName, "Report Patient%"));
+
       const [insurer] = await db
         .insert(insurers)
         .values({ name: INSURER_NAME, type: "tpa" })
