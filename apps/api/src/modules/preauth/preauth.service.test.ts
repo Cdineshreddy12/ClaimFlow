@@ -6,9 +6,20 @@ import * as preauthIntegration from "../../integrations/preauth/index.js";
 import * as ocr from "../../integrations/ocr/textract.js";
 import * as s3 from "../../integrations/storage/s3.js";
 import * as preauthRepository from "./preauth.repository.js";
+import * as preauthLayoutsService from "../preauth-layouts/preauth-layouts.service.js";
 import * as auditor from "../../integrations/auditor/claude.js";
 
 vi.mock("./preauth.repository.js");
+/*
+  `confirmField` asks which field it is being handed, and that question
+  walks through the layout service into `preauth-layouts.repository`,
+  which opens a database connection. Unmocked, these unit tests passed
+  locally only because `.env` pointed at the real Supabase project —
+  they were reading from it on every run — and failed in CI, where
+  `DATABASE_URL` is unset, with eight copies of "DATABASE_URL is not
+  set". CI has been red since.
+*/
+vi.mock("../preauth-layouts/preauth-layouts.service.js");
 vi.mock("../../integrations/auditor/claude.js");
 vi.mock("../claims/claims.repository.js");
 vi.mock("../documents/documents.repository.js");
@@ -179,6 +190,11 @@ describe("preauth.service", () => {
         aiValue: null,
       } as never);
       vi.mocked(preauthRepository.listForClaim).mockResolvedValue([] as never);
+      // No placements, so `fieldOnClaim` falls through to the standard
+      // catalogue — the path every case below is actually testing.
+      vi.mocked(preauthLayoutsService.layoutForClaim).mockResolvedValue({
+        sections: [],
+      } as never);
     });
 
     it("rejects a value the field's own type won't take", async () => {
