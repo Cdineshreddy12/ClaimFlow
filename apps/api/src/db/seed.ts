@@ -55,9 +55,39 @@ async function seed() {
     console.log("reset: cleared the previous seed");
   }
 
+  // A named hospital, not a placeholder — the brief sized this against a
+  // 180-bed multispecialty hospital in Nashik, so the seed is one rather
+  // than leaving every profile field blank behind a generic name. None of
+  // this is a real entity's identifiers; the formats are real (ROHINI,
+  // GSTIN, PAN), the numbers inside them are invented.
   const [hospitalRow] = await db
     .insert(hospitalProfile)
-    .values({ name: "City General Hospital" })
+    .values({
+      name: "Godavari Multispecialty Hospital",
+      legalEntityName: "Godavari Healthcare Private Limited",
+      hospitalType: "Multispecialty",
+      ownershipType: "Private",
+      bedCount: 180,
+      rohiniId: "MH0234119870",
+      registrationNumber: "MH/NSK/HOSP/2014/00231",
+      pan: "AABCG4521H",
+      gstin: "27AABCG4521H1Z5",
+      nabhStatus: "Accredited",
+      addressLine1: "12, College Road",
+      addressLine2: "Near Shivaji Stadium",
+      city: "Nashik",
+      state: "Maharashtra",
+      pincode: "422005",
+      phone: "0253-2576410",
+      email: "desk@godavarimultispecialty.in",
+      website: "https://godavarimultispecialty.in",
+      deskContactName: "Anjali Kulkarni",
+      deskContactPhone: "+91 98230 11456",
+      deskContactEmail: "insurancedesk@godavarimultispecialty.in",
+      brandAccentColor: "#0E7C86",
+      tagline: "Multispecialty care, Nashik",
+      onboardingCompletedAt: new Date(),
+    })
     .returning();
   must(hospitalRow, "hospital profile");
 
@@ -343,7 +373,7 @@ async function seed() {
     },
   ]);
 
-  console.log("Seeded City General Hospital with 3 claims.");
+  console.log("Seeded Godavari Multispecialty Hospital with 3 claims.");
   process.exit(0);
 }
 
