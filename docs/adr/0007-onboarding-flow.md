@@ -1,5 +1,22 @@
 # 0007 — Self-serve onboarding flow
 
+**Superseded in part, 2026-11-04: ClaimFlow is single-tenant.** Written
+hours before the multi-tenancy removal
+([`0002`](0002-authorization-and-tenant-isolation.md)) and never updated
+after. The shape of the flow below mostly survived — there's still an
+`authenticateUserOnly` preHandler, still exactly one route an org-less
+user can reach, still shareable invite links — but every reference to
+`organizations`/`org_members` is now `hospital_profile`/`members`, and
+"create an organization" became "set up the one hospital this install
+is for." The real route is `POST /hospital` in
+`apps/api/src/modules/onboarding/onboarding.routes.ts`, and a second
+setup attempt gets a 409 ("this ClaimFlow is already set up — ask for
+an invite link") rather than creating another tenant, because there
+is no longer a concept of another tenant to create. The 14-day,
+no-card trial is real; Razorpay enforcement at trial-expiry is not,
+same as ADR 0006. The content below is the original flow design, kept
+as the reasoning that shaped what got built.
+
 ## Context
 
 [`0006-billing-and-onboarding.md`](0006-billing-and-onboarding.md) decided

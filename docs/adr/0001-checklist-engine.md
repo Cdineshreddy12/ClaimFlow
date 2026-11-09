@@ -1,5 +1,12 @@
 # 0001 — Checklist rules engine
 
+**Correction, 2026-11-09:** the single-tenant refactor
+([`0002`](0002-authorization-and-tenant-isolation.md)) dropped
+`organization_id` from every table, this one included. `checklist_rules`
+is keyed by `(insurer_id, procedure_id, document_type)` — the rest of
+this decision, including the versioning and the shared catalog, is
+unchanged and still how it works.
+
 ## Context
 
 Every claim's document requirements depend on which insurer/TPA and which

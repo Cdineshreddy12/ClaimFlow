@@ -134,3 +134,9 @@ which is the same control the desk uses to correct a wrong one.
 - There is deliberately no re-classify endpoint. Adding one is cheap if
   the desk ever asks; nobody has, because correcting the slot by hand is
   faster than asking the model again.
+
+**Correction, 2026-11-09:** that last point didn't hold — a
+`POST /:documentId/reclassify` route exists
+(`apps/api/src/modules/documents/documents.routes.ts`). The reasoning
+above was the decision at the time; a later change added the endpoint
+without coming back to update this record.

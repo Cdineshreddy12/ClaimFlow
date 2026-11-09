@@ -29,6 +29,15 @@ tenant data:
 | organization   | created, profile_updated         |
 | invite         | created, accepted                |
 
+**Correction, 2026-11-09:** the `organization` entity type is stale —
+the single-tenant refactor ([`0002`](0002-authorization-and-tenant-isolation.md))
+replaced it with `hospital` (`apps/api/src/modules/hospital/hospital.service.ts`).
+The table above also predates several modules added since (checklist
+proposals, custom modules, pre-auth layouts, enhancements) and was never
+extended to list them — normal drift for a table like this, not a defect
+in the policy itself, which is unchanged: service-layer only, delta-only,
+reads ungated by this mechanism.
+
 Reads are **not** audited. Logging every list and detail fetch would bury
 the mutations that matter in noise; if read-access forensics is needed
 later it belongs at the infrastructure layer, not inline here.

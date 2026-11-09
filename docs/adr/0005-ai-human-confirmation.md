@@ -58,6 +58,10 @@ exception, and the asymmetry wasn't deliberate.
 - The frontend needs one reusable `<AiSuggestion>`-style component (value,
   confidence, source, onConfirm) used across the field-prefill, document-sort,
   and query-summary surfaces, rather than three one-off implementations.
+  **Correction, 2026-11-09:** that component was never built — the three
+  surfaces (`PreauthField.tsx`, `UploadRow.tsx`, `QueryCard.tsx`) each
+  implement the confirm-before-it-counts rule separately. The _policy_
+  held; the planned shared component didn't happen.
 - "Send" actions (reply to a TPA, submit a packet) are never wired to fire
   automatically from an AI result — they require an explicit, separate user
   action every time, even after a field has been confirmed.

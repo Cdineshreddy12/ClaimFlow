@@ -1,5 +1,18 @@
 # 0006 — Billing and onboarding
 
+**Superseded in part, 2026-11-04: ClaimFlow is single-tenant.** This ADR
+was written the morning of the day the multi-tenancy removal
+([`0002`](0002-authorization-and-tenant-isolation.md)) shipped, and never
+got revisited after. There is no `organizations` table, no
+`razorpay_customer_id`/`razorpay_subscription_id` columns, and no
+`org_admin`-creates-a-tenant signup — a hospital sets up its one
+`hospital_profile` instead (`apps/api/src/modules/onboarding/`). The
+super-admin console described below is still genuinely not built, and is
+listed as such in the project README's "What's not built yet." Razorpay
+billing is also still not wired up, for the same reason — there's no
+subscription state left to bill against. The sections below are kept as
+the original reasoning; read them as history, not as the current schema.
+
 ## Context
 
 ClaimFlow sells to Indian hospitals as a subscription SaaS. Hospital finance
