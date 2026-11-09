@@ -143,10 +143,31 @@ the web bundle. A pull request runs CI and stops there.
 
 **No AWS keys are stored in GitHub.** The job asks GitHub for a
 short-lived OIDC token and trades it for
-`claimflow-demo-github-deploy`, whose trust policy only accepts
-`repo:Cdineshreddy12/ClaimFlow:ref:refs/heads/main` and whose
-permissions name this app's own ECR repository, service, bucket and
-distribution — nothing else in the account.
+`claimflow-demo-github-deploy`, whose permissions name this app's own
+ECR repository, service, bucket and distribution — nothing else in the
+account — and whose trust policy accepts exactly one subject:
+
+```
+repo:Cdineshreddy12@142651342/ClaimFlow@1445047547:ref:refs/heads/main
+```
+
+Those numbers are not a typo, and the documented
+`repo:OWNER/REPO:ref:refs/heads/main` form does **not** work here. This
+repository issues tokens whose subject carries the immutable owner and
+repository IDs, so a trust policy written the documented way is refused
+with `Not authorized to perform sts:AssumeRoleWithWebIdentity` and no
+further explanation. If you ever recreate the role, read the real
+subject out of the failed attempt rather than guessing at it:
+
+```bash
+aws cloudtrail lookup-events \
+  --lookup-attributes AttributeKey=EventName,AttributeValue=AssumeRoleWithWebIdentity \
+  --max-results 1 --query 'Events[0].CloudTrailEvent' --output text | jq -r '.userIdentity.userName'
+```
+
+The ID form is the better one to pin anyway: renaming the repository or
+the account cannot silently widen it, and nobody can claim it by
+creating a repository of the same name.
 
 The image is tagged with the commit as well as `latest`, so rolling
 back is pointing the service at an earlier task definition rather than
@@ -156,6 +177,13 @@ Migrations run as a one-off Fargate task on the new image _before_ the
 service rolls, and a non-zero exit stops the deploy with the old
 version still serving. The runner is idempotent, so a release that
 needs no migration costs one query.
+
+One task definition revision is registered per deploy and used for both
+the migration and the rollout, so the schema is migrated by exactly the
+image that then serves. The service's deployment circuit breaker is
+enabled with rollback, so an image that starts but never stabilises
+reverts to the previous revision on its own — and the job still fails,
+rather than leaving the demo down and the run green.
 
 Configuration lives in repo variables (`AWS_ROLE_ARN`, `ECS_CLUSTER`,
 `WEB_BUCKET`, `VITE_API_URL`, …). Only the two Supabase build values

@@ -13,6 +13,11 @@ on:
 # OIDC token and trades it for a role that can only touch this app's
 # own ECR repository, service, bucket and distribution — and only from
 # refs/heads/main, which is pinned in the role's trust policy.
+#
+# That trust policy pins the subject by the *immutable* owner and
+# repository IDs, because this repository issues tokens that carry them
+# and the documented repo:OWNER/REPO form therefore never matches. See
+# deployment.md if the role ever has to be recreated.
 permissions:
   id-token: write
   contents: read
@@ -67,8 +72,28 @@ jobs:
           container-name: api
           image: ${{ steps.image.outputs.uri }}
 
-      # Before the service rolls, and with the new image, so a release
-      # that needs a column has it by the time anything serves traffic.
+      - name: Register the revision
+        id: register
+        run: |
+          # The render action merges the live definition's tags in
+          # unconditionally, and this family carries none — so the file
+          # arrives with `"tags": []`, which RegisterTaskDefinition
+          # rejects outright ("Tags can not be empty"). Drop the key
+          # when it is empty rather than inventing tags to satisfy it.
+          jq 'if (.tags // []) == [] then del(.tags) else . end' \
+            "${{ steps.taskdef.outputs.task-definition }}" > taskdef.json
+
+          # Registered once, here, and reused for both the migration and
+          # the rollout. Letting the deploy action register its own copy
+          # would burn a second revision per deploy and migrate against
+          # a different one than it ships.
+          ARN=$(aws ecs register-task-definition --cli-input-json file://taskdef.json \
+            --query 'taskDefinition.taskDefinitionArn' --output text)
+          echo "arn=$ARN" >> "$GITHUB_OUTPUT"
+          echo "registered ${ARN##*/}"
+
+      # Before the service rolls, and on the image about to serve, so a
+      # release that needs a column has it by the time anything answers.
       # The runner is idempotent: with nothing outstanding it is one
       # query and no writes.
       - name: Run migrations
@@ -76,11 +101,8 @@ jobs:
           CLUSTER: ${{ vars.ECS_CLUSTER }}
           SUBNET: ${{ vars.ECS_TASK_SUBNET }}
           SG: ${{ vars.ECS_TASK_SECURITY_GROUP }}
+          ARN: ${{ steps.register.outputs.arn }}
         run: |
-          ARN=$(aws ecs register-task-definition \
-            --cli-input-json "file://${{ steps.taskdef.outputs.task-definition }}" \
-            --query 'taskDefinition.taskDefinitionArn' --output text)
-
           TASK=$(aws ecs run-task --cluster "$CLUSTER" --task-definition "$ARN" \
             --launch-type FARGATE \
             --network-configuration "awsvpcConfiguration={subnets=[$SUBNET],securityGroups=[$SG],assignPublicIp=ENABLED}" \
@@ -96,14 +118,23 @@ jobs:
           # schema never arrived.
           test "$CODE" = "0"
 
-      - uses: aws-actions/amazon-ecs-deploy-task-definition@v2
-        with:
-          task-definition: ${{ steps.taskdef.outputs.task-definition }}
-          service: ${{ vars.ECS_SERVICE }}
-          cluster: ${{ vars.ECS_CLUSTER }}
+      - name: Roll the service
+        env:
+          CLUSTER: ${{ vars.ECS_CLUSTER }}
+          SERVICE: ${{ vars.ECS_SERVICE }}
+          ARN: ${{ steps.register.outputs.arn }}
+        run: |
+          aws ecs update-service --cluster "$CLUSTER" --service "$SERVICE" \
+            --task-definition "$ARN" --query 'service.serviceName' --output text
+
           # Fails the job if the new tasks never reach steady state,
           # which is the difference between "deployed" and "started".
-          wait-for-service-stability: true
+          # The service's circuit breaker rolls back to the previous
+          # revision on its own, so a bad image self-heals and this step
+          # reports it rather than leaving the demo down and green.
+          aws ecs wait services-stable --cluster "$CLUSTER" --services "$SERVICE"
+          aws ecs describe-services --cluster "$CLUSTER" --services "$SERVICE" \
+            --query 'services[0].taskDefinition' --output text
 
   web:
     runs-on: ubuntu-latest
