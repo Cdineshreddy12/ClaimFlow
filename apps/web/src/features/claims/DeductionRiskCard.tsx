@@ -2,6 +2,8 @@ import { formatAmount } from "../../lib/format";
 import { useDeductionRisk } from "../deductions/api";
 import {
   describeScope,
+  formatCost,
+  formatHeadline,
   formatRate,
   formatRatePercent,
   isUrgent,
@@ -57,6 +59,7 @@ export function DeductionRiskCard({ claim }: { claim: Claim }) {
       <div className="flex flex-col gap-px overflow-hidden rounded-sm border border-line bg-line">
         {data.risks.map((risk) => {
           const action = riskAction(risk);
+          const headline = formatHeadline(risk);
           return (
             <div
               key={risk.reason}
@@ -71,16 +74,19 @@ export function DeductionRiskCard({ claim }: { claim: Claim }) {
                     Not preventable at the desk
                   </span>
                 ) : null}
-                <span className="ml-auto whitespace-nowrap text-base font-semibold text-critical max-sm:ml-0 font-mono tabular-nums">
-                  {formatAmount(risk.historicalTotal)} lost
+                <span
+                  className={`ml-auto whitespace-nowrap text-base font-semibold max-sm:ml-0 font-mono tabular-nums${
+                    headline.lost ? " text-critical" : " text-ink-soft"
+                  }`}
+                >
+                  {headline.text}
                 </span>
               </div>
               <div className="mt-[3px] text-sm text-ink-soft">
                 <span className="font-mono tabular-nums">
                   {formatRatePercent(risk)}
                 </span>{" "}
-                {formatRate(risk)} claims ·{" "}
-                {formatAmount(Math.round(risk.averagePerClaim))} each time
+                {formatRate(risk)} claims · {formatCost(risk)}
               </div>
               {action ? (
                 <div className="mt-[5px] text-sm text-ink">{action}</div>

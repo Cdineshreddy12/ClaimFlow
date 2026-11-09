@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import type { DeductionRisk } from "@claimflow/contracts";
 import {
   describeScope,
+  formatCost,
+  formatHeadline,
   formatRate,
   formatRatePercent,
   isUrgent,
@@ -27,6 +29,66 @@ function risk(over: Partial<DeductionRisk> = {}): DeductionRisk {
 describe("formatRate", () => {
   it("keeps the denominator in the sentence", () => {
     expect(formatRate(risk())).toBe("7 of the last 12");
+  });
+});
+
+/*
+  The row that prompted this read "₹3,500 lost · ₹0 each time": the
+  gross against the net, with the appeal that reconciles them nowhere in
+  sight. Both numbers were right and the row was unreadable.
+*/
+describe("a deduction the desk won back", () => {
+  const appealed = risk({
+    reason: "policy_mismatch",
+    avoidable: false,
+    claimsAffected: 1,
+    claimsConsidered: 5,
+    historicalTotal: 3_500,
+    recoveredTotal: 3_500,
+    netTotal: 0,
+    averagePerClaim: 0,
+    expectedCost: 0,
+  });
+
+  it("says the money came back instead of printing ₹0 each time", () => {
+    expect(formatCost(appealed)).toBe("₹3,500 cut, all recovered on appeal");
+  });
+
+  it("does not call it lost, and does not head the row in alarm red", () => {
+    expect(formatHeadline(appealed)).toEqual({
+      text: "₹3,500 recovered",
+      lost: false,
+    });
+  });
+
+  it("names the recovery on a partial win and still counts the rest lost", () => {
+    const partial = risk({
+      historicalTotal: 8_000,
+      recoveredTotal: 3_000,
+      netTotal: 5_000,
+      averagePerClaim: 5_000,
+    });
+    expect(formatCost(partial)).toBe(
+      "₹5,000 each time, after ₹3,000 recovered on appeal",
+    );
+    expect(formatHeadline(partial)).toEqual({
+      text: "₹5,000 lost",
+      lost: true,
+    });
+  });
+
+  it("leaves a deduction nobody appealed exactly as it was", () => {
+    expect(formatCost(risk())).toBe("₹30,000 each time");
+    expect(formatHeadline(risk())).toEqual({
+      text: "₹2,10,000 lost",
+      lost: true,
+    });
+  });
+
+  it("rounds the average rather than showing paise", () => {
+    expect(formatCost(risk({ averagePerClaim: 1_233.33 }))).toBe(
+      "₹1,233 each time",
+    );
   });
 });
 

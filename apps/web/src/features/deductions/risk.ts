@@ -3,6 +3,7 @@ import {
   type DeductionRisk,
   type DeductionRiskScope,
 } from "@claimflow/contracts";
+import { formatAmount } from "../../lib/format";
 
 /**
  * The sentences the risk panel renders.
@@ -22,6 +23,51 @@ export function formatRate(risk: DeductionRisk): string {
 export function formatRatePercent(risk: DeductionRisk): string {
   if (risk.claimsConsidered === 0) return "—";
   return `${Math.round((risk.claimsAffected / risk.claimsConsidered) * 100)}%`;
+}
+
+/** These are averages, so they arrive fractional; the panel never shows paise. */
+const money = (n: number) => formatAmount(Math.round(n));
+
+/**
+ * What this reason cost, after whatever the desk won back.
+ *
+ * The panel used to print the gross total as "lost" and the net average
+ * as "each time", which on a fully appealed deduction read "₹3,500
+ * lost · ₹0 each time" — two true numbers that look like a
+ * contradiction, with the fact reconciling them (the desk appealed and
+ * got all of it back) nowhere on the row. That fact is the best news
+ * the panel has, and it was the one thing it did not say.
+ *
+ * So the recovery is named wherever there is one, and "lost" is kept
+ * for money that actually stayed lost.
+ */
+export function formatCost(risk: DeductionRisk): string {
+  if (risk.recoveredTotal <= 0) {
+    return `${money(risk.averagePerClaim)} each time`;
+  }
+  if (risk.netTotal === 0) {
+    return `${money(risk.historicalTotal)} cut, all recovered on appeal`;
+  }
+  return `${money(risk.averagePerClaim)} each time, after ${money(
+    risk.recoveredTotal,
+  )} recovered on appeal`;
+}
+
+/**
+ * The figure that heads the row.
+ *
+ * `lost` is net: a deduction the desk appealed and won back did not
+ * cost the hospital anything, and colouring the gross in alarm red says
+ * it did. When none of it stayed lost the row stops being a loss and
+ * says what it is instead.
+ */
+export function formatHeadline(risk: DeductionRisk): {
+  text: string;
+  lost: boolean;
+} {
+  return risk.netTotal === 0 && risk.historicalTotal > 0
+    ? { text: `${money(risk.historicalTotal)} recovered`, lost: false }
+    : { text: `${money(risk.netTotal)} lost`, lost: true };
 }
 
 /**
