@@ -57,6 +57,14 @@ describe.skipIf(!process.env.DATABASE_URL)(
         [],
       );
       openClaimId = open.id;
+      // Opening a claim now writes its own DRAFT event, stamped at the
+      // real clock. These fixtures back-date a chain instead, so clear
+      // what the repository wrote before laying one down — otherwise
+      // the auto event is the most recent and every "latest event"
+      // assertion reads it.
+      await db
+        .delete(claimStatusEvents)
+        .where(eq(claimStatusEvents.claimId, openClaimId));
       await db.insert(claimStatusEvents).values([
         { claimId: openClaimId, status: "DRAFT", createdAt: SENT },
         {
@@ -78,6 +86,9 @@ describe.skipIf(!process.env.DATABASE_URL)(
         [],
       );
       settledClaimId = settled.id;
+      await db
+        .delete(claimStatusEvents)
+        .where(eq(claimStatusEvents.claimId, settledClaimId));
       await db.insert(claimStatusEvents).values([
         {
           claimId: settledClaimId,

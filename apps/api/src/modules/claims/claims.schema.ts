@@ -6,7 +6,13 @@ export const CreateClaimBody = z
     patientName: z.string().min(1),
     insurerId: z.string().uuid(),
     procedureId: z.string().uuid(),
-    billedAmount: z.coerce.number().positive().optional(),
+    /**
+     * What the hospital expects the admission to cost, not what it has
+     * billed — a claim being opened has billed nothing yet. It seeds
+     * the pre-auth form's total expected cost, which is where the
+     * number is actually asked for (docs/adr/0012).
+     */
+    expectedCost: z.coerce.number().positive().max(100_000_000).optional(),
     admittedAt: z.coerce.date().optional(),
     /**
      * Government scheme claims only. The payer's type decides whether

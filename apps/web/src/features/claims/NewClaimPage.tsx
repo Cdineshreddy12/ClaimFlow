@@ -38,7 +38,7 @@ export function NewClaimPage() {
   const [patientName, setPatientName] = useState("");
   const [insurerId, setInsurerId] = useState("");
   const [procedureId, setProcedureId] = useState("");
-  const [billedAmount, setBilledAmount] = useState("");
+  const [expectedCost, setExpectedCost] = useState("");
   const [packageCode, setPackageCode] = useState("");
   const [packageRate, setPackageRate] = useState("");
 
@@ -76,8 +76,8 @@ export function NewClaimPage() {
             packageRate: Number(packageRate),
           }
         : {}),
-      ...(!scheme && Number(billedAmount) > 0
-        ? { billedAmount: Number(billedAmount) }
+      ...(!scheme && Number(expectedCost) > 0
+        ? { expectedCost: Number(expectedCost) }
         : {}),
     });
     // Straight into the file — the next thing a desk does is upload.
@@ -183,19 +183,19 @@ export function NewClaimPage() {
             </div>
           ) : (
             <FormField
-              label="Estimated amount"
-              htmlFor="billedAmount"
+              label="Estimated cost"
+              htmlFor="expectedCost"
               optional
-              hint="In rupees — can be set later"
+              hint="In rupees — goes onto the pre-auth form as the total expected cost, and can be changed there"
               className="mb-0"
             >
               <Input
-                id="billedAmount"
+                id="expectedCost"
                 type="number"
                 min={1}
                 inputMode="numeric"
-                value={billedAmount}
-                onChange={(e) => setBilledAmount(e.target.value)}
+                value={expectedCost}
+                onChange={(e) => setExpectedCost(e.target.value)}
               />
             </FormField>
           )}

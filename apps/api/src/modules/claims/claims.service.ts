@@ -196,9 +196,16 @@ export async function createClaim(auth: AuthContext, body: CreateClaimBody) {
   const preauthLayoutSnapshot = await preauthLayoutsService.resolveLayout(
     body.insurerId,
   );
+  // Never onto the claim itself: `expectedCost` is what the hospital
+  // thinks the admission will cost, and writing it to `billedAmount`
+  // made a draft claim report a bill it had not raised — then left the
+  // pre-auth form's own total blank, so the desk typed the same figure
+  // twice.
+  const { expectedCost, ...claimFields } = body;
+
   const claim = await claimsRepository.createClaim(
     {
-      ...body,
+      ...claimFields,
       /*
         The rate IS the sanctioned amount, written now rather than left
         waiting on a decision the scheme has no reason to send.
@@ -217,6 +224,17 @@ export async function createClaim(auth: AuthContext, body: CreateClaimBody) {
     checklistSnapshot,
     preauthLayoutSnapshot,
   );
+
+  // Confirmed on arrival: a human typed it on the form that opened the
+  // claim, so it is not a suggestion waiting on a check (docs/adr/0005).
+  if (expectedCost !== undefined) {
+    await preauthRepository.confirm(
+      claim.id,
+      "totalExpectedCost",
+      String(expectedCost),
+      await getMemberId(auth.userId),
+    );
+  }
 
   await auditService.record(auth, {
     action: "claim.created",

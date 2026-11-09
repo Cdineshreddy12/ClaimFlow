@@ -135,6 +135,54 @@ describe("claims.service", () => {
       );
     });
 
+    it("puts the estimate on the pre-auth form, not in the billed amount", async () => {
+      // A claim being opened has billed nothing. Writing the estimate
+      // to `billedAmount` made a draft report a bill it never raised,
+      // and left the pre-auth form's own total blank so the desk typed
+      // the same figure twice.
+      vi.mocked(checklistService.getRequirementsSnapshot).mockResolvedValue([]);
+      vi.mocked(claimsRepository.createClaim).mockResolvedValue({
+        id: CLAIM_ID,
+      } as never);
+
+      const { createClaim } = await import("./claims.service.js");
+      await createClaim(auth("desk_executive"), {
+        patientName: "Priya Venkatesan",
+        insurerId: "55555555-5555-5555-5555-555555555555",
+        procedureId: "66666666-6666-6666-6666-666666666666",
+        expectedCost: 110000,
+      });
+
+      expect(claimsRepository.createClaim).toHaveBeenCalledWith(
+        expect.not.objectContaining({ expectedCost: expect.anything() }),
+        [],
+        expect.anything(),
+      );
+      // Confirmed on arrival — a human typed it (docs/adr/0005).
+      expect(preauthRepository.confirm).toHaveBeenCalledWith(
+        CLAIM_ID,
+        "totalExpectedCost",
+        "110000",
+        expect.anything(),
+      );
+    });
+
+    it("leaves the pre-auth total alone when no estimate was given", async () => {
+      vi.mocked(checklistService.getRequirementsSnapshot).mockResolvedValue([]);
+      vi.mocked(claimsRepository.createClaim).mockResolvedValue({
+        id: CLAIM_ID,
+      } as never);
+
+      const { createClaim } = await import("./claims.service.js");
+      await createClaim(auth("desk_executive"), {
+        patientName: "Rajendra Pawar",
+        insurerId: "55555555-5555-5555-5555-555555555555",
+        procedureId: "66666666-6666-6666-6666-666666666666",
+      });
+
+      expect(preauthRepository.confirm).not.toHaveBeenCalled();
+    });
+
     it("also freezes the pre-auth form layout onto the claim", async () => {
       // Same guarantee as the checklist (docs/adr/0001): an admin
       // reordering or removing a pre-auth field next month must not

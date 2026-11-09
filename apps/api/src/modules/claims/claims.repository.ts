@@ -200,8 +200,11 @@ export async function createClaim(
       patientName: data.patientName,
       insurerId: data.insurerId,
       procedureId: data.procedureId,
-      billedAmount:
-        data.billedAmount !== undefined ? data.billedAmount.toString() : null,
+      // Always null on a new claim: nothing has been billed until the
+      // bill is raised at discharge. What the desk types when opening
+      // one is an estimate, and that goes onto the pre-auth form's
+      // total expected cost instead.
+      billedAmount: null,
       admittedAt: data.admittedAt ?? null,
       // Government scheme claims only — the service refuses these on
       // any other payer. Both or neither, enforced in the database too.
@@ -217,6 +220,28 @@ export async function createClaim(
     })
     .returning();
   // We just inserted exactly one row — this is never actually absent.
+
+  /*
+    The claim's own starting gun.
+
+    Every other status writes an event; opening one did not, so the
+    chain began at PRE_AUTH_SENT and "Opened → pre-auth sent" had
+    nothing to measure from. That gap is the clearest hospital-side
+    delay there is — a claim admitted at nine and sent at four is six
+    hours the desk owns and nobody could see — and it is the one the
+    turnaround table was built to show.
+
+    No SLA deadline: no regulator gives a hospital a window for its own
+    paperwork, and inventing one would put a countdown on the desk that
+    nobody agreed to (docs/adr/0004).
+  */
+  await db.insert(claimStatusEvents).values({
+    claimId: claim!.id,
+    status: "DRAFT",
+    actorId: null,
+    slaDeadline: null,
+  });
+
   return claim!;
 }
 
