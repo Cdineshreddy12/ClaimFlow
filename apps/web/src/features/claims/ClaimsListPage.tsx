@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Search } from "reicon-react";
 import { CLAIM_PAGE_SIZE, ClaimStatus } from "@claimflow/contracts";
