@@ -33,6 +33,12 @@ export async function createDefinition(values: DefinitionInsert) {
   return row;
 }
 
+/** The 24 IRDAI definitions go in together or not at all — see ensureSeeded. */
+export async function createDefinitions(rows: DefinitionInsert[]) {
+  if (rows.length === 0) return [];
+  return db.insert(preauthFieldDefinitions).values(rows).returning();
+}
+
 export async function updateDefinition(
   id: string,
   values: Partial<DefinitionInsert>,

@@ -29,23 +29,36 @@ export async function ensureSeeded(): Promise<void> {
   const existing = await repo.listDefinitions();
   const byKey = new Map(existing.map((d) => [d.fieldKey, d]));
 
-  for (const field of PREAUTH_FIELDS) {
-    if (byKey.has(field.key)) continue;
-    const created = await repo.createDefinition({
-      fieldKey: field.key,
-      label: field.label,
-      fieldType: field.type,
-      hint: field.hint ?? null,
-      options: field.options ? [...field.options] : null,
-      isStandard: true,
-      conditionalOn: field.conditionalOn
-        ? {
-            fieldKey: field.conditionalOn.key,
-            equals: field.conditionalOn.equals,
-          }
-        : null,
-    });
-    if (created) byKey.set(created.fieldKey, created);
+  /*
+    Six round trips, not sixty.
+
+    This ran one INSERT per definition, per section and per placement —
+    about sixty-two in sequence on a database that answers in a few
+    milliseconds locally and a few hundred from another continent. It
+    sits on the request path (`resolveLayout` calls it), so on a fresh
+    install the first desk to open a claim paid for all of them before
+    seeing anything. The clone path next door was batched for exactly
+    this reason and this one was missed.
+  */
+  const missing = PREAUTH_FIELDS.filter((f) => !byKey.has(f.key));
+  if (missing.length > 0) {
+    const created = await repo.createDefinitions(
+      missing.map((field) => ({
+        fieldKey: field.key,
+        label: field.label,
+        fieldType: field.type,
+        hint: field.hint ?? null,
+        options: field.options ? [...field.options] : null,
+        isStandard: true,
+        conditionalOn: field.conditionalOn
+          ? {
+              fieldKey: field.conditionalOn.key,
+              equals: field.conditionalOn.equals,
+            }
+          : null,
+      })),
+    );
+    for (const row of created) byKey.set(row.fieldKey, row);
   }
 
   if (await repo.findLayoutRow(null)) return;
@@ -53,14 +66,23 @@ export async function ensureSeeded(): Promise<void> {
   const layout = await repo.createLayout("IRDAI standard form", null);
   if (!layout) throw new Error("failed to create the default layout");
 
-  for (const [index, group] of PreauthFieldGroup.options.entries()) {
-    const section = await repo.createSection(
-      layout.id,
-      PREAUTH_GROUP_LABEL[group],
-      index,
-    );
-    if (section) await repo.setSectionColumns(section.id, 2);
-    if (!section) continue;
+  const groups = PreauthFieldGroup.options;
+  const sections = await repo.createSections(
+    groups.map((group, index) => ({
+      layoutId: layout.id,
+      name: PREAUTH_GROUP_LABEL[group],
+      displayOrder: index,
+      // Set here rather than by a follow-up update per section, which
+      // was another six round trips for a column count known up front.
+      columnCount: 2,
+    })),
+  );
+  // Keyed by name rather than trusting the returned array's order.
+  const sectionByName = new Map(sections.map((row) => [row.name, row]));
+
+  const placements = groups.flatMap((group) => {
+    const section = sectionByName.get(PREAUTH_GROUP_LABEL[group]);
+    if (!section) return [];
     const fields = PREAUTH_FIELDS.filter((f) => f.group === group);
     // Counts only the fields that actually pair up. Alternating on the
     // index into the whole group looked equivalent and wasn't: a prose
@@ -69,24 +91,28 @@ export async function ensureSeeded(): Promise<void> {
     // section is how Clinical details ended up nine fields against
     // three, with half the section blank.
     let shortFields = 0;
-    for (const [order, field] of fields.entries()) {
+    return fields.flatMap((field, order) => {
       const definition = byKey.get(field.key);
-      if (!definition) continue;
+      if (!definition) return [];
       const isProse = field.type === "longtext";
-      await repo.createPlacement({
-        sectionId: section.id,
-        fieldDefinitionId: definition.id,
-        displayOrder: order,
-        // Prose reads badly at half width, so it takes the left column
-        // and the short fields pair up around it.
-        columnPosition: isProse ? 0 : shortFields++ % 2,
-        // Nothing is required: a desk routinely sends a partial
-        // pre-auth and completes it on query. The gap view surfaces
-        // incompleteness, not a blocked save.
-        required: false,
-      });
-    }
-  }
+      return [
+        {
+          sectionId: section.id,
+          fieldDefinitionId: definition.id,
+          displayOrder: order,
+          // Prose reads badly at half width, so it takes the left
+          // column and the short fields pair up around it.
+          columnPosition: isProse ? 0 : shortFields++ % 2,
+          // Nothing is required: a desk routinely sends a partial
+          // pre-auth and completes it on query. The gap view surfaces
+          // incompleteness, not a blocked save.
+          required: false,
+        },
+      ];
+    });
+  });
+
+  await repo.createPlacements(placements);
 }
 
 export class AlreadyCustomisedError extends Error {}
