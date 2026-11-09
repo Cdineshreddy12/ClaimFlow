@@ -135,17 +135,47 @@ API refuses dev-signed tokens when `NODE_ENV=production` regardless.
 
 ---
 
-## Deploying automatically
+## CI/CD
 
-A push to `main` runs CI; if CI passes, `.github/workflows/deploy.yml`
-builds the API image, migrates, rolls the ECS service, and publishes
-the web bundle. A pull request runs CI and stops there.
+Two workflows, chained: [`.github/workflows/ci.yml`](.github/workflows/ci.yml)
+gates every pull request and every push to `main`; nothing deploys until
+it's green. [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml)
+only fires once CI has already passed on `main` — a pull request runs CI
+and stops there.
+
+### Continuous integration — `ci.yml`
+
+One job, four steps, the same checks a contributor runs locally:
+
+```yaml
+pnpm install --frozen-lockfile
+pnpm lint
+pnpm typecheck
+pnpm test
+pnpm build
+```
+
+`--frozen-lockfile` is the point: CI refuses to run against a
+`pnpm-lock.yaml` that doesn't match `package.json`, rather than silently
+resolving different versions than what a clone gets. It runs on every
+PR against `main` and on every push to `main` — a merge doesn't skip
+the checks a PR already ran, since `main` itself could have moved.
+
+### Continuous deployment — `deploy.yml`
+
+Triggered by `workflow_run: ["CI"]` with `types: [completed]`, filtered
+to `branches: [main]` and `conclusion == 'success'` inside the job —
+**not** a separate `push` trigger, so the deploy is structurally unable
+to run against code CI hasn't already passed. A `concurrency` group
+(`deploy-production`, `cancel-in-progress: false`) serializes deploys:
+two merges close together queue rather than racing to update the same
+ECS service, where the loser would quietly win.
 
 **No AWS keys are stored in GitHub.** The job asks GitHub for a
-short-lived OIDC token and trades it for
-`claimflow-demo-github-deploy`, whose permissions name this app's own
-ECR repository, service, bucket and distribution — nothing else in the
-account — and whose trust policy accepts exactly one subject:
+short-lived OIDC token (`permissions: id-token: write`) and trades it
+for `claimflow-demo-github-deploy`, whose permissions name this app's
+own ECR repository, service, bucket and distribution — nothing else in
+the account — and whose trust policy accepts exactly one subject:
 
 ```
 repo:Cdineshreddy12@142651342/ClaimFlow@1445047547:ref:refs/heads/main
@@ -169,26 +199,127 @@ The ID form is the better one to pin anyway: renaming the repository or
 the account cannot silently widen it, and nobody can claim it by
 creating a repository of the same name.
 
-The image is tagged with the commit as well as `latest`, so rolling
-back is pointing the service at an earlier task definition rather than
-rebuilding, and "which code is running?" has an answer.
+Two jobs run in parallel, both gated on the same CI success:
 
-Migrations run as a one-off Fargate task on the new image _before_ the
-service rolls, and a non-zero exit stops the deploy with the old
-version still serving. The runner is idempotent, so a release that
-needs no migration costs one query.
+**`api`** — builds and rolls the Fargate service:
 
-One task definition revision is registered per deploy and used for both
-the migration and the rollout, so the schema is migrated by exactly the
-image that then serves. The service's deployment circuit breaker is
-enabled with rollback, so an image that starts but never stabilises
-reverts to the previous revision on its own — and the job still fails,
-rather than leaving the demo down and the run green.
+1. Runs on `ubuntu-24.04-arm`, not the default `ubuntu-latest`. The
+   Fargate task is Graviton (arm64); cross-building that under QEMU on
+   an x86 runner works but takes roughly five times as long for the
+   same image, so the runner's architecture matches the target rather
+   than emulating it.
+2. Logs into ECR via the assumed role, builds
+   `apps/api/Dockerfile`, and pushes it tagged with both the commit SHA
+   and `latest`. The commit tag is what makes a rollback a one-line
+   change — point the service at an earlier task definition — rather
+   than a rebuild, and what makes "which code is running?" answerable.
+3. Renders a new task definition revision pointing at that image, and
+   registers it **once**, reused for both the migration task and the
+   service rollout below — so the schema is migrated by exactly the
+   image that then serves, not a different revision than ships.
+4. Runs migrations as a one-off Fargate task on that new revision,
+   **before** the service rolls (`aws ecs run-task` with a command
+   override, then `wait tasks-stopped` and check the exit code). A
+   non-zero exit fails the job with the old version still serving,
+   rather than rolling out code whose schema never arrived. The runner
+   itself is idempotent, so a release needing no migration costs one
+   query.
+5. Rolls the ECS service to the new task definition and
+   `aws ecs wait services-stable` — the difference between "deployed"
+   and "started." The service's deployment circuit breaker is enabled
+   with rollback, so an image that starts but never reaches steady
+   state reverts to the previous revision on its own, and this step
+   still fails the job rather than leaving the demo down and the run
+   green.
 
-Configuration lives in repo variables (`AWS_ROLE_ARN`, `ECS_CLUSTER`,
-`WEB_BUCKET`, `VITE_API_URL`, …). Only the two Supabase build values
-are secrets, and that is for log hygiene rather than confidentiality —
-the anon key ships inside the bundle by design.
+**`web`** — builds and publishes the SPA, independently of the API job:
+
+1. Builds `apps/web` with the three `VITE_*` values as build-time env
+   — Vite inlines them, so they're build inputs, not runtime
+   configuration. `VITE_API_URL` is a plain repo variable;
+   `VITE_SUPABASE_URL`/`VITE_SUPABASE_ANON_KEY` are repo secrets for log
+   hygiene, not confidentiality — the anon key ships inside the bundle
+   by design either way.
+2. Syncs `apps/web/dist` to the web S3 bucket in a specific order:
+   hashed, content-addressed assets first, cached hard
+   (`public,max-age=31536000,immutable`) and excluding `index.html`;
+   then `index.html` itself, `no-cache,no-store,must-revalidate`. In
+   that order, so the bundle files a new `index.html` names are already
+   in place by the time anything requests it — reversing the order
+   would let a browser fetch the new `index.html` before its assets
+   exist in the bucket.
+3. Invalidates CloudFront for `/index.html` and `/`, so the one
+   uncached object doesn't serve stale out of the edge cache between
+   deploys.
+
+Configuration lives in repo variables (`AWS_ROLE_ARN`, `AWS_REGION`,
+`ECR_REPOSITORY`, `ECS_CLUSTER`, `ECS_SERVICE`, `ECS_TASK_FAMILY`,
+`ECS_TASK_SUBNET`, `ECS_TASK_SECURITY_GROUP`, `WEB_BUCKET`,
+`WEB_DISTRIBUTION_ID`, `VITE_API_URL`). Only the two Supabase build
+values are secrets.
+
+---
+
+## AWS services
+
+What's actually in use, and why — the IAM policies backing this are
+checked into [`infra/iam/`](infra/iam), not just described in prose.
+
+**S3 — two buckets, two jobs.** A documents bucket
+(`zopkit-staging-claimflow-documents`) holds scanned uploads and merged
+PDF packets; the browser writes to it directly with a pre-signed URL
+the API issues, so the bucket needs its own CORS rule allowing `PUT`
+and `GET` from the web app's origin — that rule lives on the bucket,
+not in this repo. A separate web bucket (`WEB_BUCKET`) holds the built
+SPA, written only by the `web` deploy job above, served through
+CloudFront rather than directly.
+
+**CloudFront** fronts the web bucket — it's what the deploy job
+invalidates after every publish, and it's what makes `index.html`
+`no-cache` meaningful (the edge would otherwise cache it anyway). In
+this deployment the API's own public URL is also a CloudFront domain;
+exactly how that origin is wired (which load balancer or service
+discovery sits between it and the Fargate tasks) was set up directly in
+the AWS console and isn't captured as code anywhere in this repo — worth
+knowing if you go looking for it and don't find it.
+
+**ECS Fargate** runs the API container — see Continuous deployment
+above for the task definition / migration / rollout mechanics. No EC2
+to patch; the circuit breaker is what makes a bad deploy self-heal
+instead of paging someone.
+
+**ECR** is the API's image registry — one repository, commit-tagged
+images plus a floating `latest`.
+
+**Textract** does OCR on handwritten doctors' notes, feeding the AI
+classifier (`docs/adr/0003`). The IAM grant is deliberately narrow —
+`textract:DetectDocumentText` only, nothing else — see
+[`infra/iam/README.md`](infra/iam/README.md) for exactly which Textract
+APIs were ruled out and why (the async API would need its own S3 read
+access; the sync call takes bytes inline and doesn't).
+
+**Two separate IAM identities, two separate blast radii:**
+
+- `claimflow-demo-github-deploy` — the GitHub OIDC role CI assumes, no
+  long-lived keys anywhere. Scoped to this app's own ECR repository,
+  ECS service, and the two S3/CloudFront pairs above; trust policy
+  pinned to this repository's immutable ID on `refs/heads/main` only
+  (see the CI/CD section above for why the documented trust-policy form
+  doesn't work here).
+- `claimflow-api` — the runtime user the API server authenticates as.
+  Scoped to one S3 bucket's objects (not the web bucket) plus the one
+  Textract action above, nothing else — this key lives in developer
+  `.env` files, so it was never given a broad deployment credential's
+  reach. The exact policy JSON is
+  [`infra/iam/claimflow-api-policy.json`](infra/iam/claimflow-api-policy.json).
+
+**Region.** `AWS_REGION` for the GitHub Actions deploy (where ECR/ECS
+live) is a separate repo variable from the API's own `AWS_REGION` env
+var (where S3/Textract live) — nothing requires them to match, and
+they're set independently. The documents bucket and Textract calls are
+meant to run in Mumbai (`ap-south-1`) for DPDP data residency; see
+`DATA_RESIDENCY_ACK` below for where this demo's actual deployment
+diverges from that and why.
 
 ---
 
