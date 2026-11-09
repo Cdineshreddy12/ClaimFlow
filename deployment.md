@@ -104,7 +104,7 @@ Names only — never commit values. `.env` is gitignored and a single root
 | `SUPABASE_ANON_KEY`         | api     | Public key                                                                 |
 | `SUPABASE_SERVICE_ROLE_KEY` | api     | Admin operations. Optional; unset today                                    |
 | `SUPABASE_JWT_SECRET`       | api     | Local dev tokens only. A placeholder, not the project secret               |
-| `DATA_RESIDENCY_ACK`        | api     | Why this server runs outside India. See below — demo only                  |
+| `DATA_RESIDENCY_ACK`        | api     | Escape hatch if the boot-time residency check fails. See below             |
 | `ANTHROPIC_API_KEY`         | api     | Document sorting, query summaries, pre-auth extraction, the desk assistant |
 | `AWS_REGION`                | api     | S3 region                                                                  |
 | `AWS_S3_BUCKET`             | api     | Document bucket                                                            |
@@ -318,8 +318,8 @@ live) is a separate repo variable from the API's own `AWS_REGION` env
 var (where S3/Textract live) — nothing requires them to match, and
 they're set independently. The documents bucket and Textract calls are
 meant to run in Mumbai (`ap-south-1`) for DPDP data residency; see
-`DATA_RESIDENCY_ACK` below for where this demo's actual deployment
-diverges from that and why.
+`DATA_RESIDENCY_ACK` below for the check that enforces this and the
+escape hatch for an environment that can't meet it.
 
 ---
 
@@ -479,27 +479,26 @@ Until that is re-baselined it will propose a migration containing 24
 migrations' worth of changes. Write new ones by hand, as the last 24
 were.
 
-### `DATA_RESIDENCY_ACK` — the demo is deployed outside India
+### `DATA_RESIDENCY_ACK`
 
 `assertDataResidency` refuses to boot a production server whose
 database or S3 region is outside India, because the DPDP Act 2023
-treats patient records as sensitive personal data.
+treats patient records as sensitive personal data. On Fargate, a task
+has no IPv6, so the API must reach Supabase through the Supavisor
+pooler rather than the direct host — and the pooler hostname is the one
+place the region is actually visible to this check, so an environment
+that routes through it gets checked where one on a direct connection
+wouldn't be.
 
-The demo trips it. Its Supabase project is in `ap-northeast-1`
-(Tokyo), and the project cannot be moved. Two things interlock to make
-that unavoidable on Fargate: a task has no IPv6, so it must use the
-Supavisor pooler to reach Supabase over IPv4 — and the pooler hostname
-is the one place the region is visible, so the check that could not see
-it through `db.<ref>.supabase.co` can see it now.
+`DATA_RESIDENCY_ACK` is the only way to boot anyway, and it's
+deliberately awkward: the value must be a full sentence saying why,
+and that sentence is logged at error level on every boot beside the
+finding it excuses. There's no flag that just says `true`.
 
-`DATA_RESIDENCY_ACK` is the only way past, and it is deliberately
-awkward: the value must be a sentence saying why, and that sentence is
-logged at error level on every boot beside the finding it excuses.
-There is no flag that just says `true`.
-
-**This is for synthetic records.** A server holding real patient data
-outside India is unlawful whatever this variable says. The log line
-exists so that nobody can claim the deployment did not know.
+**This is for synthetic records only.** A server holding real patient
+data outside India is unlawful whatever this variable says. The log
+line exists so that nobody deploying this for real can claim the check
+didn't warn them.
 
 ### Without an Anthropic key
 
