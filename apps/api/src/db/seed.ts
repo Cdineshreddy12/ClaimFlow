@@ -31,17 +31,21 @@ async function seed() {
     .returning();
   must(hospitalRow, "hospital profile");
 
-  const [companyBRow, companyCRow, companyDRow] = await db
+  const [paramountRow, nivaBupaRow, vidalRow] = await db
     .insert(insurers)
     .values([
-      { name: "Company B", type: "tpa" },
-      { name: "Company C", type: "insurer" },
-      { name: "Company D", type: "tpa" },
+      // Real payers an Indian cashless desk actually deals with. The
+      // brief anonymised them as Company B/C/D; on a screen beside
+      // Star Health and Ayushman Bharat that reads as unfinished work
+      // rather than discretion.
+      { name: "Paramount Health TPA", type: "tpa" },
+      { name: "Niva Bupa Health Insurance", type: "insurer" },
+      { name: "Vidal Health TPA", type: "tpa" },
     ])
     .returning();
-  const companyB = must(companyBRow, "Company B");
-  const companyC = must(companyCRow, "Company C");
-  const companyD = must(companyDRow, "Company D");
+  const paramount = must(paramountRow, "Paramount Health TPA");
+  const nivaBupa = must(nivaBupaRow, "Niva Bupa Health Insurance");
+  const vidal = must(vidalRow, "Vidal Health TPA");
 
   const [gallBladderRow, kneeReplacementRow, dengueRow] = await db
     .insert(procedures)
@@ -57,48 +61,48 @@ async function seed() {
 
   await db.insert(checklistRules).values([
     {
-      insurerId: companyB.id,
+      insurerId: paramount.id,
       procedureId: gallBladder.id,
       documentType: "Pre-authorization form",
       required: true,
     },
     {
-      insurerId: companyB.id,
+      insurerId: paramount.id,
       procedureId: gallBladder.id,
       documentType: "Treating doctor's note",
       required: true,
     },
     {
-      insurerId: companyB.id,
+      insurerId: paramount.id,
       procedureId: gallBladder.id,
       documentType: "Ultrasound report (abdomen)",
       required: true,
     },
     {
-      insurerId: companyB.id,
+      insurerId: paramount.id,
       procedureId: gallBladder.id,
       documentType: "Photo ID proof",
       required: true,
     },
     {
-      insurerId: companyB.id,
+      insurerId: paramount.id,
       procedureId: gallBladder.id,
       documentType: "Policy / e-card copy",
       required: true,
     },
     {
-      insurerId: companyB.id,
+      insurerId: paramount.id,
       procedureId: gallBladder.id,
       documentType: "Previous treatment records",
       required: false,
     },
   ]);
 
-  const [clm3381Row] = await db
+  const [gallBladderClaimRow] = await db
     .insert(claims)
     .values({
       patientName: "Rajendra Pawar",
-      insurerId: companyB.id,
+      insurerId: paramount.id,
       procedureId: gallBladder.id,
       status: "QUERY_RAISED",
       billedAmount: "185000",
@@ -116,14 +120,14 @@ async function seed() {
       ],
     })
     .returning();
-  const clm3381 = must(clm3381Row, "CLM-3381");
+  const gallBladderClaim = must(gallBladderClaimRow, "Rajendra Pawar's claim");
 
-  const [, clm3385Row] = await db
+  const [, dengueClaimRow] = await db
     .insert(claims)
     .values([
       {
         patientName: "Sunita Deshmukh",
-        insurerId: companyC.id,
+        insurerId: nivaBupa.id,
         procedureId: kneeReplacement.id,
         status: "PRE_AUTH_SENT",
         billedAmount: "320000",
@@ -131,7 +135,7 @@ async function seed() {
       },
       {
         patientName: "Imran Shaikh",
-        insurerId: companyD.id,
+        insurerId: vidal.id,
         procedureId: dengue.id,
         status: "ENHANCEMENT_REQUESTED",
         billedAmount: "95000",
@@ -139,26 +143,26 @@ async function seed() {
       },
     ])
     .returning();
-  const clm3385 = must(clm3385Row, "CLM-3385");
+  const dengueClaim = must(dengueClaimRow, "Imran Shaikh's claim");
 
   await db.insert(queries).values([
     {
-      claimId: clm3381.id,
+      claimId: gallBladderClaim.id,
       tpaRawEmail:
-        "Dear Team,\n\nWith reference to the pre-authorization request for patient Rajendra Pawar (Claim Ref: CLM-3381) for laparoscopic cholecystectomy, we note that the ultrasound report confirming gallstone diagnosis has not been enclosed with the submitted documents.\n\nKindly share the ultrasound report along with the radiologist's impression at the earliest to enable processing of this request. This query must be resolved within 48 hours of this communication, failing which the request will be closed.\n\nRegards,\nClaims Team, Company B TPA",
+        "Dear Team,\n\nWith reference to the pre-authorization request for patient Rajendra Pawar (Claim Ref: CLM-0001) for laparoscopic cholecystectomy, we note that the ultrasound report confirming gallstone diagnosis has not been enclosed with the submitted documents.\n\nKindly share the ultrasound report along with the radiologist's impression at the earliest to enable processing of this request. This query must be resolved within 48 hours of this communication, failing which the request will be closed.\n\nRegards,\nClaims Team, Paramount Health TPA",
       aiSummary:
-        "Company B TPA needs the ultrasound report (with radiologist's impression) for Rajendra Pawar's gallbladder claim before they can process pre-authorization. Reply within 48 hours of the email, or the request closes automatically.",
+        "Paramount Health TPA needs the ultrasound report (with radiologist's impression) for Rajendra Pawar's gallbladder claim before they can process pre-authorization. Reply within 48 hours of the email, or the request closes automatically.",
       requestedItems: [
         "Ultrasound report (abdomen), with radiologist's impression",
       ],
       deadline: new Date(Date.now() - 6 * 60 * 60 * 1000),
     },
     {
-      claimId: clm3385.id,
+      claimId: dengueClaim.id,
       tpaRawEmail:
-        "Dear Team,\n\nWith reference to the enhancement request for patient Imran Shaikh (Claim Ref: CLM-3385) for dengue with low platelets, we require an updated CBC report showing the platelet count trend over the last 24 hours before we can process the enhanced sanction.\n\nKindly share this within 24 hours of this communication.\n\nRegards,\nClaims Team, Company D TPA",
+        "Dear Team,\n\nWith reference to the enhancement request for patient Imran Shaikh (Claim Ref: CLM-0003) for dengue with low platelets, we require an updated CBC report showing the platelet count trend over the last 24 hours before we can process the enhanced sanction.\n\nKindly share this within 24 hours of this communication.\n\nRegards,\nClaims Team, Vidal Health TPA",
       aiSummary:
-        "Company D TPA needs an updated CBC/platelet trend (last 24h) before approving the enhancement for Imran Shaikh. Reply within 24 hours.",
+        "Vidal Health TPA needs an updated CBC/platelet trend (last 24h) before approving the enhancement for Imran Shaikh. Reply within 24 hours.",
       requestedItems: [
         "Updated CBC report with platelet count trend (last 24h)",
       ],
