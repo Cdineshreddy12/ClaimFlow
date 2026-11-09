@@ -16,6 +16,7 @@
 
 - [The problem](#the-problem)
 - [What ClaimFlow does](#what-claimflow-does)
+- [Screenshots](#screenshots)
 - [Status](#status)
 - [Architecture](#architecture)
 - [Tech stack](#tech-stack)
@@ -54,6 +55,29 @@ everything by hand.
   original email always visible underneath the summary.
 - **Multi-tenant from the ground up** — every hospital that signs up is an
   isolated organization on one shared deployment, not a one-off install.
+
+## Screenshots
+
+Captured from the live deployment, signed in as Org Admin, against the
+seeded demo data — not mockups.
+
+|                                                                         |                                                                         |
+| ----------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| **Dashboard** — KPIs, the overdue queue, and what needs attention today | **Claim File** — status timeline, document gap view, "what now" actions |
+| ![Dashboard](docs/screenshots/dashboard.jpg)                            | ![Claim File](docs/screenshots/claim-file.jpg)                          |
+| **Claims list** — sortable, filterable, time-in-stage per claim         | **Query Inbox** — a TPA's email with the AI summary and reply countdown |
+| ![Claims list](docs/screenshots/claims-list.jpg)                        | ![Query Inbox](docs/screenshots/query-inbox.jpg)                        |
+| **Turnaround** — every claim waiting on an insurer, oldest first        | **Receivables** — outstanding by age bucket and by insurer              |
+| ![Turnaround](docs/screenshots/turnaround.jpg)                          | ![Receivables](docs/screenshots/receivables.jpg)                        |
+| **Checklist Admin** — per insurer × procedure document rules            | **Monthly Report** — turnaround, deductions by reason, settled value    |
+| ![Checklist Admin](docs/screenshots/checklist-admin.jpg)                | ![Reports](docs/screenshots/reports.jpg)                                |
+
+Phone layout — same screens, stacked nav behind a hamburger menu:
+
+<p>
+  <img src="docs/screenshots/dashboard-mobile.jpg" alt="Dashboard on mobile" width="280" />
+  <img src="docs/screenshots/claim-file-mobile.jpg" alt="Claim File on mobile" width="280" />
+</p>
 
 ## Status
 
