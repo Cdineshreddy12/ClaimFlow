@@ -11,11 +11,17 @@ both import. Postgres and auth are Supabase; document storage is S3.
 One hospital per install, so these three accounts all belong to the same
 desk and differ only by role. Sign in at the web app's `/login`.
 
-| Role           | Email                              | Password             | Sees                                                          |
-| -------------- | ---------------------------------- | -------------------- | ------------------------------------------------------------- |
-| Org Admin      | `desk.admin@claimflow.example.com` | `quarry-quarry-2268` | Everything, including Checklist Admin and inviting colleagues |
-| Desk Head      | `desk.head@claimflow.example.com`  | `amber-willow-8335`  | All claims on the desk; can settle a claim                    |
-| Desk Executive | `desk.exec@claimflow.example.com`  | `copper-willow-4323` | Only claims assigned to them; cannot settle                   |
+| Role           | Email                              | Sees                                                          |
+| -------------- | ---------------------------------- | ------------------------------------------------------------- |
+| Org Admin      | `desk.admin@claimflow.example.com` | Everything, including Checklist Admin and inviting colleagues |
+| Desk Head      | `desk.head@claimflow.example.com`  | All claims on the desk; can settle a claim                    |
+| Desk Executive | `desk.exec@claimflow.example.com`  | Only claims assigned to them; cannot settle                   |
+
+The passwords are not in this file and will not be. A password written
+down in a public repository is a password anyone can read, and rotating
+it does not un-publish the old one — so it does not go in a tracked
+file, a screenshot, or a commit message. Ask whoever runs the demo, or
+set your own from Supabase → Authentication → Users.
 
 The role split is worth exercising — it's enforced in the API, not just
 hidden in the UI. Signing in as **Desk Executive** shows one claim
