@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/server.ts",
-    "build": "tsc -b",
+    "build": "tsup",
     "start": "node dist/server.js",
     "typecheck": "tsc -b --noEmit",
     "test": "vitest run",
@@ -29,6 +29,7 @@
     "fastify": "^5.0.0",
     "fastify-plugin": "^5.0.1",
     "jose": "^6.2.15",
+    "jsonwebtoken": "^9.0.3",
     "pdf-lib": "^1.17.1",
     "postgres": "^3.4.4",
     "zod": "^3.23.8"
@@ -37,8 +38,8 @@
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^22.7.5",
     "drizzle-kit": "^0.27.0",
-    "jsonwebtoken": "^9.0.3",
     "pino-pretty": "^11.2.2",
+    "tsup": "^9.0.0",
     "tsx": "^4.19.1",
     "typescript": "^5.6.3",
     "vitest": "^2.1.2"
