@@ -76,6 +76,13 @@ export function formatHeadline(risk: DeductionRisk): {
  * The narrow scope is the credible one, so when we had to widen, the
  * copy has to admit it rather than let "Star Health cuts this" stand
  * for "Star Health cuts this on this procedure".
+ *
+ * Returns the whole noun phrase, "claims" included, because the
+ * qualifier has to come after the noun it qualifies. Handing back a
+ * bare "Star Health, all procedures" for the card to drop between
+ * "settled" and "claims" split the phrase at the comma — "5 settled
+ * Star Health, all procedures claims" — and the middot the narrow
+ * scope used instead was punctuation standing where a word belonged.
  */
 export function describeScope(
   scope: DeductionRiskScope,
@@ -83,8 +90,8 @@ export function describeScope(
   procedureName: string,
 ): string {
   return scope === "insurer_procedure"
-    ? `${insurerName} · ${procedureName}`
-    : `${insurerName}, all procedures`;
+    ? `${insurerName} claims for ${procedureName}`
+    : `${insurerName} claims for any procedure`;
 }
 
 /**

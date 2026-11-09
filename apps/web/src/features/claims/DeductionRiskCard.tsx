@@ -51,8 +51,8 @@ export function DeductionRiskCard({ claim }: { claim: Claim }) {
 
       <p className="mb-3.5 text-base leading-[1.55] text-ink-soft [&_b]:font-semibold [&_b]:text-ink">
         Across <b>{data.claimsConsidered}</b> settled{" "}
-        {describeScope(data.scope, claim.insurerName, claim.procedureName)}{" "}
-        claims, about <b>{formatAmount(Math.round(atStake))}</b> of preventable
+        {describeScope(data.scope, claim.insurerName, claim.procedureName)},
+        about <b>{formatAmount(Math.round(atStake))}</b> of preventable
         deductions per claim.
       </p>
 

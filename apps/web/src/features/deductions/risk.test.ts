@@ -108,12 +108,31 @@ describe("describeScope", () => {
   it("names the procedure when the history was that specific", () => {
     expect(
       describeScope("insurer_procedure", "Star Health", "Cholecystectomy"),
-    ).toBe("Star Health · Cholecystectomy");
+    ).toBe("Star Health claims for Cholecystectomy");
   });
 
   it("admits when it had to widen rather than implying the narrow claim", () => {
     expect(describeScope("insurer", "Star Health", "Cholecystectomy")).toBe(
-      "Star Health, all procedures",
+      "Star Health claims for any procedure",
+    );
+  });
+
+  /*
+    The card drops this into "Across 5 settled …, about ₹1,900 of
+    preventable deductions per claim", so it has to survive being read
+    as part of that sentence. It did not: a bare "Star Health, all
+    procedures" put the comma inside the noun phrase and produced
+    "5 settled Star Health, all procedures claims".
+  */
+  it("reads as English inside the sentence the card builds", () => {
+    const sentence = (scope: "insurer" | "insurer_procedure") =>
+      `Across 5 settled ${describeScope(scope, "Star Health", "Cholecystectomy")}, about ₹1,900 of preventable deductions per claim.`;
+
+    expect(sentence("insurer_procedure")).toBe(
+      "Across 5 settled Star Health claims for Cholecystectomy, about ₹1,900 of preventable deductions per claim.",
+    );
+    expect(sentence("insurer")).toBe(
+      "Across 5 settled Star Health claims for any procedure, about ₹1,900 of preventable deductions per claim.",
     );
   });
 });
