@@ -135,6 +135,35 @@ API refuses dev-signed tokens when `NODE_ENV=production` regardless.
 
 ---
 
+## Deploying automatically
+
+A push to `main` runs CI; if CI passes, `.github/workflows/deploy.yml`
+builds the API image, migrates, rolls the ECS service, and publishes
+the web bundle. A pull request runs CI and stops there.
+
+**No AWS keys are stored in GitHub.** The job asks GitHub for a
+short-lived OIDC token and trades it for
+`claimflow-demo-github-deploy`, whose trust policy only accepts
+`repo:Cdineshreddy12/ClaimFlow:ref:refs/heads/main` and whose
+permissions name this app's own ECR repository, service, bucket and
+distribution — nothing else in the account.
+
+The image is tagged with the commit as well as `latest`, so rolling
+back is pointing the service at an earlier task definition rather than
+rebuilding, and "which code is running?" has an answer.
+
+Migrations run as a one-off Fargate task on the new image _before_ the
+service rolls, and a non-zero exit stops the deploy with the old
+version still serving. The runner is idempotent, so a release that
+needs no migration costs one query.
+
+Configuration lives in repo variables (`AWS_ROLE_ARN`, `ECS_CLUSTER`,
+`WEB_BUCKET`, `VITE_API_URL`, …). Only the two Supabase build values
+are secrets, and that is for log hygiene rather than confidentiality —
+the anon key ships inside the bundle by design.
+
+---
+
 ## Containers
 
 Both halves build as images from the repository root, because each is

@@ -1,0 +1,155 @@
+name: Deploy
+
+# Only after the checks have passed, and only for main. A pull request
+# runs CI and stops there — nothing reaches the demo until it is
+# merged.
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main]
+
+# No long-lived AWS keys anywhere. The job asks GitHub for a short
+# OIDC token and trades it for a role that can only touch this app's
+# own ECR repository, service, bucket and distribution — and only from
+# refs/heads/main, which is pinned in the role's trust policy.
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  # One deploy at a time. Two overlapping runs would race to update
+  # the same ECS service, and the loser would quietly win.
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  api:
+    # Native arm64, because the task runs on Graviton. Cross-building
+    # under QEMU on an x86 runner works and takes about five times as
+    # long for the same image.
+    runs-on: ubuntu-24.04-arm
+    if: github.event.workflow_run.conclusion == 'success'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push
+        id: image
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+          REPOSITORY: ${{ vars.ECR_REPOSITORY }}
+          # The commit, not just `latest`. An immutable tag is what
+          # makes a rollback a one-line change rather than a rebuild,
+          # and what makes "which code is running?" answerable.
+          TAG: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          docker build -f apps/api/Dockerfile -t "$REGISTRY/$REPOSITORY:$TAG" .
+          docker tag "$REGISTRY/$REPOSITORY:$TAG" "$REGISTRY/$REPOSITORY:latest"
+          docker push "$REGISTRY/$REPOSITORY:$TAG"
+          docker push "$REGISTRY/$REPOSITORY:latest"
+          echo "uri=$REGISTRY/$REPOSITORY:$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Point the task definition at the new image
+        id: taskdef
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition-family: ${{ vars.ECS_TASK_FAMILY }}
+          container-name: api
+          image: ${{ steps.image.outputs.uri }}
+
+      # Before the service rolls, and with the new image, so a release
+      # that needs a column has it by the time anything serves traffic.
+      # The runner is idempotent: with nothing outstanding it is one
+      # query and no writes.
+      - name: Run migrations
+        env:
+          CLUSTER: ${{ vars.ECS_CLUSTER }}
+          SUBNET: ${{ vars.ECS_TASK_SUBNET }}
+          SG: ${{ vars.ECS_TASK_SECURITY_GROUP }}
+        run: |
+          ARN=$(aws ecs register-task-definition \
+            --cli-input-json "file://${{ steps.taskdef.outputs.task-definition }}" \
+            --query 'taskDefinition.taskDefinitionArn' --output text)
+
+          TASK=$(aws ecs run-task --cluster "$CLUSTER" --task-definition "$ARN" \
+            --launch-type FARGATE \
+            --network-configuration "awsvpcConfiguration={subnets=[$SUBNET],securityGroups=[$SG],assignPublicIp=ENABLED}" \
+            --overrides '{"containerOverrides":[{"name":"api","command":["node","dist/db/migrate.js"]}]}' \
+            --query 'tasks[0].taskArn' --output text)
+
+          aws ecs wait tasks-stopped --cluster "$CLUSTER" --tasks "$TASK"
+          CODE=$(aws ecs describe-tasks --cluster "$CLUSTER" --tasks "$TASK" \
+            --query 'tasks[0].containers[0].exitCode' --output text)
+          echo "migrate exited $CODE"
+          # A failed migration stops the deploy here, with the old
+          # version still serving, rather than rolling out code whose
+          # schema never arrived.
+          test "$CODE" = "0"
+
+      - uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+        with:
+          task-definition: ${{ steps.taskdef.outputs.task-definition }}
+          service: ${{ vars.ECS_SERVICE }}
+          cluster: ${{ vars.ECS_CLUSTER }}
+          # Fails the job if the new tasks never reach steady state,
+          # which is the difference between "deployed" and "started".
+          wait-for-service-stability: true
+
+  web:
+    runs-on: ubuntu-latest
+    if: github.event.workflow_run.conclusion == 'success'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Build
+        # Vite inlines these at build time, so they are build inputs
+        # rather than runtime configuration — changing where the SPA
+        # points means rebuilding it, not restarting anything.
+        env:
+          VITE_API_URL: ${{ vars.VITE_API_URL }}
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+        run: pnpm --filter @claimflow/web build
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Publish
+        env:
+          BUCKET: ${{ vars.WEB_BUCKET }}
+          DISTRIBUTION: ${{ vars.WEB_DISTRIBUTION_ID }}
+        run: |
+          # Hashed filenames first and cached hard; index.html last and
+          # never cached. In that order, so the bundles a new
+          # index.html names are already in place when it lands.
+          aws s3 sync apps/web/dist "s3://$BUCKET" --delete \
+            --exclude index.html \
+            --cache-control "public,max-age=31536000,immutable"
+          aws s3 cp apps/web/dist/index.html "s3://$BUCKET/index.html" \
+            --cache-control "no-cache,no-store,must-revalidate" \
+            --content-type text/html
+          aws cloudfront create-invalidation \
+            --distribution-id "$DISTRIBUTION" --paths "/index.html" "/" \
+            --query 'Invalidation.Id' --output text
