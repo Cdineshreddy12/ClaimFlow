@@ -108,6 +108,18 @@ insurer, without a code change:
 
 ![Ward rounds custom module](docs/screenshots/custom-module-ward-rounds.jpg)
 
+### Doctor approval by phone link
+
+A desk mints a 48-hour, one-decision link for a named doctor with no
+account — ClaimFlow doesn't send it for them, it's shared however the
+desk already reaches the doctor
+([`adr 0010`](docs/adr/0010-doctor-approval-links.md)):
+
+|                                                                                                  |                                                                                                                                                            |
+| ------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Desk side** — "Ask a doctor" on the Claim File mints the link and shows the expiry             | **Doctor side** — public, no login; this one honestly refuses to let the doctor approve blind, since no clinical documents were confirmed on the claim yet |
+| ![Doctor approval link created from the desk](docs/screenshots/doctor-approval-link-created.jpg) | ![Doctor-facing approval page, public route, no login](docs/screenshots/doctor-approval-page.jpg)                                                          |
+
 ### AI in action
 
 Four places Claude actually runs, including what happens when it's
