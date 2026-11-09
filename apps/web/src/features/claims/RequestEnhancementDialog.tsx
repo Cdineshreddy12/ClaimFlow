@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -34,6 +34,17 @@ export function RequestEnhancementDialog({
   const [reason, setReason] = useState("");
   const request = useRequestEnhancement(claim.id);
 
+  /*
+    Seeded with the figure the card just suggested. It said "roughly
+    ₹42,400 would cover it" and then opened an empty box, so the desk
+    read the number off the screen behind the dialog and typed it back
+    in. Still editable — the suggestion is a starting point, and the
+    insurer is being asked for whatever the desk decides.
+  */
+  useEffect(() => {
+    if (open) setAmount(suggestedAmount ? String(suggestedAmount) : "");
+  }, [open, suggestedAmount]);
+
   const valid = Number(amount) > 0 && reason.trim().length > 0;
 
   async function submit(e: React.FormEvent) {
@@ -53,12 +64,6 @@ export function RequestEnhancementDialog({
       open={open}
       onOpenChange={(next) => {
         onOpenChange(next);
-        if (next && suggestedAmount && !amount) {
-          // Pre-filled from the shortfall, and editable: the desk knows
-          // things about the rest of the admission that the arithmetic
-          // doesn't.
-          setAmount(String(suggestedAmount));
-        }
         if (!next) request.reset();
       }}
     >

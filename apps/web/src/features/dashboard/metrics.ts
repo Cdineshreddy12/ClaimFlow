@@ -17,7 +17,14 @@ import type { InboxQuery } from "../queries/types";
 export interface DashboardMetrics {
   openClaims: number;
   /** Settled this calendar month — the counterweight to the gap counts. */
-  completedThisMonth: number;
+  /**
+   * Claims the money arrived for this month, counted on the payment
+   * date. Deliberately not the same question as the status donut's
+   * "Settled" slice, which counts claims sitting in that status now —
+   * the two were labelled alike and read as one number disagreeing
+   * with itself.
+   */
+  paidThisMonth: number;
   /** What the insurers actually paid on those, in rupees. */
   settledValueThisMonth: number;
   needsAttention: number;
@@ -34,7 +41,7 @@ export function dashboardMetrics(
 ): DashboardMetrics {
   return {
     openClaims: overview?.openClaims ?? 0,
-    completedThisMonth: overview?.settledThisMonth.count ?? 0,
+    paidThisMonth: overview?.settledThisMonth.count ?? 0,
     settledValueThisMonth: overview?.settledThisMonth.value ?? 0,
     needsAttention: overview?.needsAttention ?? 0,
     avgTimeInStageHours: overview?.avgTimeInStageHours ?? null,

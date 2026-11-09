@@ -18,6 +18,16 @@ import {
 import { STATUS_CHIP_VARIANT, STATUS_LABEL, type Claim } from "./types";
 import { Badge } from "@/components/ui/badge";
 import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectSeparator,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   SortButton,
   Table,
   TableBody,
@@ -38,15 +48,24 @@ import {
  * hundreds, which is search and sort, not a summary card.
  */
 
-const FILTERS: { value: StatusFilter; label: string }[] = [
+/**
+ * The two kinds of filter, kept apart because they are different
+ * questions: these three are how a desk thinks about its day, and are
+ * derived from the state machine rather than listed (see
+ * `statusesForFilter`).
+ */
+const VIEW_FILTERS: { value: StatusFilter; label: string }[] = [
   { value: "open", label: "Open" },
   { value: "attention", label: "Needs attention" },
   { value: "all", label: "All" },
-  ...ClaimStatus.options.map((status) => ({
+];
+
+/** Every literal status, in lifecycle order. */
+const STATUS_FILTERS: { value: StatusFilter; label: string }[] =
+  ClaimStatus.options.map((status) => ({
     value: status as StatusFilter,
     label: STATUS_LABEL[status],
-  })),
-];
+  }));
 
 const COLUMNS: { key: ClaimSortKey; label: string; numeric?: boolean }[] = [
   { key: "patient", label: "Patient" },
@@ -114,20 +133,51 @@ export function ClaimsListPage() {
             onChange={(e) => setState({ ...state, search: e.target.value })}
           />
         </div>
-        <select
-          className="w-full rounded-md border border-line bg-surface-raised px-3 py-2 font-[inherit] text-base text-ink hover:border-line-strong focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent sm:w-auto"
-          aria-label="Filter by status"
+        {/*
+          A native <select> paints its popup with the OS, so this list
+          came up as a grey system menu with its own highlight colour —
+          the one control on the page that didn't belong to the app.
+
+          The grouping is the other half of it. "Open", "Needs attention"
+          and "All" are questions a desk asks; the nine below are literal
+          statuses. Flat, "All" sat mid-run between two of them with
+          nothing to say it was a different kind of thing.
+        */}
+        <Select
           value={state.status}
-          onChange={(e) =>
-            setState({ ...state, status: e.target.value as StatusFilter })
+          onValueChange={(value) =>
+            setState({ ...state, status: value as StatusFilter })
           }
         >
-          {FILTERS.map((f) => (
-            <option key={f.value} value={f.value}>
-              {f.label}
-            </option>
-          ))}
-        </select>
+          <SelectTrigger
+            aria-label="Filter by status"
+            // Fixed width from `sm` up: the label changes with the
+            // choice, and a trigger that resizes shunts the button
+            // beside it along the row.
+            className="w-full sm:w-[12.5rem]"
+          >
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectGroup>
+              <SelectLabel>Views</SelectLabel>
+              {VIEW_FILTERS.map((f) => (
+                <SelectItem key={f.value} value={f.value}>
+                  {f.label}
+                </SelectItem>
+              ))}
+            </SelectGroup>
+            <SelectSeparator />
+            <SelectGroup>
+              <SelectLabel>Status</SelectLabel>
+              {STATUS_FILTERS.map((f) => (
+                <SelectItem key={f.value} value={f.value}>
+                  {f.label}
+                </SelectItem>
+              ))}
+            </SelectGroup>
+          </SelectContent>
+        </Select>
         <Button asChild>
           <Link to="/claims/new">Open a claim</Link>
         </Button>

@@ -20,11 +20,20 @@ import {
   PREAUTH_FIELD_TYPES,
   columnPlacements,
   placementLabel,
+  type PreauthFieldTypeDef,
   type PreauthLayout,
   type PreauthPlacement,
   type PreauthSection,
 } from "@claimflow/contracts";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+} from "@/components/ui/dialog";
+import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
 import { Loader } from "@/components/ui/loader";
 import {
@@ -100,6 +109,36 @@ export function LayoutEditor({
   const [error, setError] = useState<string | null>(null);
   const [newSection, setNewSection] = useState("");
   const [showNewSection, setShowNewSection] = useState(false);
+  /*
+    Naming a new field used to go through `window.prompt`, which is a
+    native modal: unstyled, unlabelled, impossible to show the derived
+    field key in, and it blocks the whole renderer while it is open.
+    This is the same Dialog every other write on the desk uses.
+  */
+  const [newFieldType, setNewFieldType] = useState<PreauthFieldTypeDef | null>(
+    null,
+  );
+  const [newFieldLabel, setNewFieldLabel] = useState("");
+
+  async function createNewField() {
+    const label = newFieldLabel.trim();
+    if (!label || !firstSection) return;
+    setError(null);
+    try {
+      const created = await createField.mutateAsync({
+        fieldKey: camelKey(label),
+        label,
+        fieldType: newFieldType!.type,
+      });
+      addFieldTo(firstSection, 0, created.id);
+      setNewFieldType(null);
+      setNewFieldLabel("");
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Couldn't create that field.",
+      );
+    }
+  }
 
   const sensors = useSensors(
     // A few pixels of travel before a drag starts, so clicking a row's
@@ -245,6 +284,68 @@ export function LayoutEditor({
 
   return (
     <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-[300px_minmax(0,1fr)]">
+      <Dialog
+        open={newFieldType !== null}
+        onOpenChange={(next) => {
+          if (!next) setNewFieldType(null);
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader
+            title={`New ${newFieldType?.label.toLowerCase() ?? ""} field`}
+            description="It goes to the top of the first section; drag it where it belongs."
+          />
+          <form
+            id="new-preauth-field"
+            onSubmit={(e) => {
+              e.preventDefault();
+              void createNewField();
+            }}
+          >
+            {error ? (
+              <div className="mb-3 flex items-center justify-between gap-3 rounded-md border border-critical bg-critical-bg px-3.5 py-2.5 text-base font-medium text-critical">
+                {error}
+              </div>
+            ) : null}
+            <FormField
+              label="Field name"
+              htmlFor="new-field-label"
+              // The key is what a document extraction maps onto, and it
+              // is derived from the name rather than typed — showing it
+              // here is the only chance anyone gets to see what they
+              // are about to create.
+              hint={
+                newFieldLabel.trim()
+                  ? `Stored as ${camelKey(newFieldLabel)}`
+                  : "As it should read on the printed form"
+              }
+            >
+              <Input
+                id="new-field-label"
+                autoFocus
+                value={newFieldLabel}
+                onChange={(e) => setNewFieldLabel(e.target.value)}
+                placeholder="e.g. MediAssist authorisation reference"
+              />
+            </FormField>
+          </form>
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button type="button" variant="outline">
+                Cancel
+              </Button>
+            </DialogClose>
+            <Button
+              type="submit"
+              form="new-preauth-field"
+              disabled={!newFieldLabel.trim() || createField.isPending}
+            >
+              {createField.isPending ? "Adding…" : "Add field"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <aside className="static max-h-none overflow-y-auto rounded-lg border border-line bg-surface-raised lg:sticky lg:top-5 lg:max-h-[calc(100vh-60px)]">
         <div className="relative border-b border-line px-2.5 py-2 text-ink-faint [&_input]:h-8 [&_input]:w-full [&_input]:rounded-md [&_input]:border [&_input]:border-line [&_input]:bg-surface [&_input]:py-0 [&_input]:pl-[30px] [&_input]:pr-2.5 [&_input]:font-[inherit] [&_input]:text-sm [&_input]:text-ink [&_input]:outline-none [&_input:focus-visible]:outline [&_input:focus-visible]:outline-2 [&_input:focus-visible]:outline-offset-1 [&_input:focus-visible]:outline-accent [&_svg]:pointer-events-none [&_svg]:absolute [&_svg]:left-[19px] [&_svg]:top-1/2 [&_svg]:size-3 [&_svg]:-translate-y-1/2">
           <Search aria-hidden />
@@ -268,26 +369,10 @@ export function LayoutEditor({
               className="flex cursor-pointer items-center gap-1.5 border-0 border-b border-r border-line bg-transparent px-2.5 py-[9px] text-left font-[inherit] text-sm text-ink even:border-r-0 enabled:hover:bg-accent-soft disabled:cursor-default disabled:opacity-45"
               disabled={!firstSection || createField.isPending}
               title={`Add a new ${type.label.toLowerCase()} field`}
-              onClick={async () => {
+              onClick={() => {
                 setError(null);
-                const label = window.prompt(
-                  `Name for the new ${type.label.toLowerCase()} field`,
-                );
-                if (!label?.trim() || !firstSection) return;
-                try {
-                  const created = await createField.mutateAsync({
-                    fieldKey: camelKey(label),
-                    label: label.trim(),
-                    fieldType: type.type,
-                  });
-                  addFieldTo(firstSection, 0, created.id);
-                } catch (err) {
-                  setError(
-                    err instanceof Error
-                      ? err.message
-                      : "Couldn't create that field.",
-                  );
-                }
+                setNewFieldLabel("");
+                setNewFieldType(type);
               }}
             >
               <Add size={11} className="shrink-0 text-ink-faint" aria-hidden />
@@ -406,7 +491,20 @@ export function LayoutEditor({
                 size="sm"
                 variant="outline"
                 disabled={revert.isPending}
-                onClick={() => revert.mutate(insurerId)}
+                // Both of these used to swallow their failure: the
+                // button went back to its resting label and the form
+                // was unchanged, which reads exactly like success.
+                onClick={() => {
+                  setError(null);
+                  revert.mutate(insurerId, {
+                    onError: (err) =>
+                      setError(
+                        err instanceof Error
+                          ? err.message
+                          : "Couldn't revert to the shared form.",
+                      ),
+                  });
+                }}
               >
                 {revert.isPending ? "Reverting…" : "Revert to the shared form"}
               </Button>
@@ -415,10 +513,24 @@ export function LayoutEditor({
                 type="button"
                 size="sm"
                 disabled={customise.isPending}
-                onClick={() => customise.mutate(insurerId)}
+                onClick={() => {
+                  setError(null);
+                  customise.mutate(insurerId, {
+                    onError: (err) =>
+                      setError(
+                        err instanceof Error
+                          ? err.message
+                          : `Couldn't give ${insurerName} its own form.`,
+                      ),
+                  });
+                }}
               >
+                {/* Names the work rather than saying "Creating…": it
+                    copies the whole shared form, which is a few
+                    seconds even batched, and an unexplained wait on a
+                    disabled button reads as broken. */}
                 {customise.isPending
-                  ? "Creating…"
+                  ? "Copying the shared form…"
                   : `Give ${insurerName} its own form`}
               </Button>
             )}

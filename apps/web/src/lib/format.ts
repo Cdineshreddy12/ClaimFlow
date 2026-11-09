@@ -27,3 +27,24 @@ export function formatCompactAmount(value: number): string {
   if (abs >= 1e3) return `${sign}₹${trim(abs / 1e3)}K`;
   return `${sign}₹${abs}`;
 }
+
+/**
+ * An admission timestamp, printed only as precisely as it is known.
+ *
+ * "Date of admission" and "Time of admission" are separate fields on
+ * the pre-auth form, and confirming only the date stores midnight.
+ * Printing that with a time gave every such claim an admission at
+ * "12:00 am" — a precision the desk never entered, on a line they
+ * would quote back to an insurer.
+ */
+export function formatAdmission(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  const at = new Date(iso);
+  if (Number.isNaN(at.getTime())) return "—";
+  const midnight =
+    at.getHours() === 0 && at.getMinutes() === 0 && at.getSeconds() === 0;
+  return at.toLocaleString("en-IN", {
+    dateStyle: "medium",
+    ...(midnight ? {} : { timeStyle: "short" }),
+  });
+}

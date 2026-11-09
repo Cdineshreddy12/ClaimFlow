@@ -44,10 +44,10 @@ export function KpiRow({
           actually finished. */}
       <div className="rounded-lg border border-line bg-surface-raised px-[18px] py-4 shadow-card">
         <div className="text-xs font-semibold uppercase tracking-[0.05em] text-ink-faint">
-          Settled, This Month
+          Paid, This Month
         </div>
         <div className="mt-2 text-2xl font-[650] tracking-[-0.02em] tabular-nums">
-          {metrics.completedThisMonth}
+          {metrics.paidThisMonth}
         </div>
         <div className="mt-1.5 text-sm text-ink-soft">
           {metrics.settledValueThisMonth > 0

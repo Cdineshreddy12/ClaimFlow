@@ -52,8 +52,16 @@ function useLayoutMutation<TArgs, TResult>(
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: fn,
-    onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: ["preauth-layout"] }),
+    /*
+      Deliberately not returned. react-query keeps a mutation pending
+      until a promise handed back from here settles, so returning the
+      invalidation made every button wait on refetches nobody is
+      looking at — "Creating…" sat disabled for five seconds when the
+      server had answered in one. Fire it and let the screen catch up.
+    */
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["preauth-layout"] });
+    },
   });
 }
 
@@ -94,8 +102,9 @@ function useOptimisticLayoutMutation<TArgs, TResult>(
         queryClient.setQueryData(key, data);
       });
     },
-    onSettled: () =>
-      queryClient.invalidateQueries({ queryKey: ["preauth-layout"] }),
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: ["preauth-layout"] });
+    },
   });
 }
 
@@ -282,8 +291,16 @@ export function useCustomiseForInsurer() {
   return useMutation({
     mutationFn: (insurerId: string) =>
       api.post<PreauthLayout>("/preauth-layout/for-insurer", { insurerId }),
-    onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: ["preauth-layout"] }),
+    /*
+      Deliberately not returned. react-query keeps a mutation pending
+      until a promise handed back from here settles, so returning the
+      invalidation made every button wait on refetches nobody is
+      looking at — "Creating…" sat disabled for five seconds when the
+      server had answered in one. Fire it and let the screen catch up.
+    */
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["preauth-layout"] });
+    },
   });
 }
 
@@ -293,7 +310,15 @@ export function useRevertToDefaultLayout() {
   return useMutation({
     mutationFn: (insurerId: string) =>
       api.delete<void>(`/preauth-layout/for-insurer/${insurerId}`),
-    onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: ["preauth-layout"] }),
+    /*
+      Deliberately not returned. react-query keeps a mutation pending
+      until a promise handed back from here settles, so returning the
+      invalidation made every button wait on refetches nobody is
+      looking at — "Creating…" sat disabled for five seconds when the
+      server had answered in one. Fire it and let the screen catch up.
+    */
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["preauth-layout"] });
+    },
   });
 }

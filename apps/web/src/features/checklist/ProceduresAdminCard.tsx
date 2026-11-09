@@ -91,8 +91,13 @@ export function ProceduresAdminCard({
       } else {
         await create.mutateAsync(body);
       }
+      // Cleared but left open after an add, the way the insurer form
+      // next door behaves: a hospital sets this list up in one sitting,
+      // and closing after each one made it five clicks per procedure.
+      // An edit is a single correction, so that does close.
+      const wasEdit = Boolean(editingId);
       reset();
-      setShowForm(false);
+      if (wasEdit) setShowForm(false);
     } catch (err) {
       // The API says what went wrong — a duplicate name, usually — and
       // that is more use than "couldn't save".

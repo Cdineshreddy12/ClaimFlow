@@ -1,19 +1,15 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { formatAmount } from "../../lib/format";
-import { downloadPreauthForm, useDoctorApprovals } from "./api";
+import { formatAdmission, formatAmount } from "../../lib/format";
+import {
+  downloadPreauthForm,
+  useClaimFinancials,
+  useDoctorApprovals,
+} from "./api";
 import { ClaimActions } from "./ClaimActions";
 import { doctorVerdict } from "./doctor-verdict";
 import type { Claim, ClaimGaps } from "./types";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
-
-function formatDate(iso: string | null) {
-  if (!iso) return "—";
-  return new Date(iso).toLocaleString("en-IN", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  });
-}
 
 /**
  * The facts and the actions, pinned beside the work.
@@ -50,6 +46,7 @@ export function ClaimSummaryRail({
   const [printing, setPrinting] = useState(false);
   const [printError, setPrintError] = useState<string | null>(null);
   const { data: approvals } = useDoctorApprovals(claim.id);
+  const { data: money } = useClaimFinancials(claim.id);
   const doctor = doctorVerdict(approvals);
 
   return (
@@ -110,10 +107,21 @@ export function ClaimSummaryRail({
               </div>
             </>
           ) : (
+            /*
+              Two different facts, so two different labels. A claim
+              being opened has billed nothing; what it has is the
+              hospital's estimate. Calling that "Billed amount" from
+              the first screen made every draft claim report a bill it
+              had not raised.
+            */
             <div>
-              <dt>Billed amount</dt>
+              <dt>
+                {claim.billedAmount === null ? "Expected cost" : "Billed"}
+              </dt>
               <dd className="font-mono tabular-nums">
-                {formatAmount(claim.billedAmount)}
+                {formatAmount(
+                  claim.billedAmount ?? money?.expectedCost ?? null,
+                )}
               </dd>
             </div>
           )}
@@ -126,7 +134,7 @@ export function ClaimSummaryRail({
           <div>
             <dt>Admitted</dt>
             <dd className="font-mono tabular-nums">
-              {formatDate(claim.admittedAt)}
+              {formatAdmission(claim.admittedAt)}
             </dd>
           </div>
           <div>

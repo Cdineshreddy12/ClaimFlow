@@ -5,10 +5,49 @@ export const API_URL = import.meta.env.VITE_API_URL;
 const DEV_TOKEN =
   (typeof __DEV_TOKEN__ === "string" ? __DEV_TOKEN__ : "") || undefined;
 
+/**
+ * How long any one call may hang before it is treated as failed.
+ *
+ * Without this a request that never comes back never fails either:
+ * `fetch` has no default timeout, so a server restart, a dropped
+ * connection or a sleeping laptop left a mutation pending forever and
+ * its button disabled with no error and no way out — the desk's only
+ * recovery was to reload the page and hope.
+ *
+ * Generous because the AI calls are genuinely slow: reading a form off
+ * four documents takes the better part of twenty seconds on a good
+ * day. This is the "something is wrong" threshold, not a target.
+ */
+const REQUEST_TIMEOUT_MS = 60_000;
+
+/** Both callers want the same bounded signal, including the blob path. */
+function withTimeout(init?: RequestInit): RequestInit {
+  return { ...init, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) };
+}
+
+/** A timeout surfaces as a TimeoutError, which says nothing to a desk. */
+function asApiError(err: unknown): never {
+  if (err instanceof DOMException && err.name === "TimeoutError") {
+    throw new ApiError(0, "The server didn't respond. Try that again.");
+  }
+  if (err instanceof TypeError) {
+    throw new ApiError(0, "Couldn't reach the server. Check your connection.");
+  }
+  throw err;
+}
+
 export class ApiError extends Error {
   constructor(
     public status: number,
     message: string,
+    /**
+     * Per-field complaints, when the endpoint sent any.
+     *
+     * A 422 from a form-shaped endpoint names which answer is wrong.
+     * Flattening that to one sentence sends the reader hunting through
+     * twelve inputs for the one it meant.
+     */
+    public fields?: { fieldKey: string; message: string }[],
   ) {
     super(message);
   }
@@ -35,19 +74,20 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const token = await getAuthToken();
 
   const res = await fetch(`${API_URL}${path}`, {
-    ...init,
+    ...withTimeout(init),
     headers: {
       ...(init?.body ? { "Content-Type": "application/json" } : {}),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...init?.headers,
     },
-  });
+  }).catch(asApiError);
 
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new ApiError(
       res.status,
       body.error ?? body.message ?? res.statusText,
+      Array.isArray(body.fields) ? body.fields : undefined,
     );
   }
 
@@ -58,8 +98,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 async function requestBlob(path: string): Promise<Blob> {
   const token = await getAuthToken();
   const res = await fetch(`${API_URL}${path}`, {
+    ...withTimeout(),
     headers: token ? { Authorization: `Bearer ${token}` } : {},
-  });
+  }).catch(asApiError);
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new ApiError(res.status, body.error ?? res.statusText);

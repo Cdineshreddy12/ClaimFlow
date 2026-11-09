@@ -3,6 +3,7 @@ import { useParams } from "react-router-dom";
 import { AppShell } from "../../app/AppShell";
 import { Loader } from "../../components/ui/loader";
 import { Tabs, type TabDef } from "../../components/ui/tabs";
+import { formatAdmission } from "../../lib/format";
 import { usePreauthFields } from "../preauth/api";
 import { useClaimLayout } from "../preauth/layout-api";
 import { preauthProgress } from "../preauth/progress";
@@ -17,14 +18,6 @@ import { SlaClock } from "../sla/SlaClock";
 import { useClaim, useClaimFinancials, useClaimGaps } from "./api";
 import { STATUS_CHIP_VARIANT, STATUS_LABEL } from "./types";
 import { Badge } from "@/components/ui/badge";
-
-function formatDate(iso: string | null) {
-  if (!iso) return null;
-  return new Date(iso).toLocaleString("en-IN", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  });
-}
 
 /**
  * One admission's file.
@@ -103,7 +96,7 @@ export function ClaimFilePage() {
     layout,
     fields: preauth?.fields,
   });
-  const admitted = formatDate(claim.admittedAt);
+  const admitted = claim.admittedAt ? formatAdmission(claim.admittedAt) : null;
 
   const tabs: TabDef[] = [
     {

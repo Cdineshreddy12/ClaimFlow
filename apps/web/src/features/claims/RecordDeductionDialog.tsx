@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   DEDUCTION_REASON_LABEL,
   type DeductionReason,
@@ -36,6 +36,21 @@ export function RecordDeductionDialog({
   const [amount, setAmount] = useState("");
   const [note, setNote] = useState("");
   const record = useRecordDeduction(claim.id);
+
+  /*
+    Seeded with what is actually unrecovered — the bill less what the
+    insurer paid. The payment dialog that sends a desk here has just
+    done this arithmetic on screen; opening an empty box made them do
+    it again from memory. Editable, because one payment can hide
+    several reasons and only the desk knows the split.
+  */
+  const unpaid =
+    claim.billedAmount === null
+      ? null
+      : Number(claim.billedAmount) - Number(claim.settledAmount ?? 0);
+  useEffect(() => {
+    if (open) setAmount(unpaid !== null && unpaid > 0 ? String(unpaid) : "");
+  }, [open, unpaid]);
 
   // "Other" is a bucket, not an answer — without a note it tells the
   // dashboard nothing anyone can act on.

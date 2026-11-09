@@ -33,7 +33,7 @@ describe("dashboardMetrics", () => {
     const m = dashboardMetrics(overview(), [], NOW);
     expect(m.openClaims).toBe(3);
     expect(m.needsAttention).toBe(1);
-    expect(m.completedThisMonth).toBe(2);
+    expect(m.paidThisMonth).toBe(2);
     expect(m.settledValueThisMonth).toBe(330_000);
     expect(m.avgTimeInStageHours).toBe(9.5);
   });

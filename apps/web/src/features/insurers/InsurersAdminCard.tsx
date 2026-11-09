@@ -170,7 +170,7 @@ export function InsurersAdminCard({
   */
   const editForm = (
     <form
-      className="flex flex-col items-stretch gap-2 sm:flex-row sm:flex-wrap sm:items-center [&>*:first-child]:sm:flex-[2_1_200px] [&>*:nth-child(2)]:sm:flex-[0_1_130px] [&>*:nth-child(3)]:sm:flex-[0_1_130px] [&>*:nth-child(4)]:sm:flex-[1_1_180px]"
+      className="flex flex-col items-stretch gap-2 sm:flex-row sm:flex-wrap sm:items-center [&>*:first-child]:sm:flex-[2_1_200px] [&>*:nth-child(2)]:sm:flex-[0_1_175px] [&>*:nth-child(3)]:sm:flex-[0_1_130px] [&>*:nth-child(4)]:sm:flex-[1_1_180px]"
       onSubmit={submit}
     >
       <Input
