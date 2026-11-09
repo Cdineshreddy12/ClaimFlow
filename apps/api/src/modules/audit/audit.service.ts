@@ -31,6 +31,7 @@ export type AuditAction =
   | "query.updated"
   | "query.replied"
   | "query.deadline_confirmed"
+  | "query.resummarised"
   | "custom_module.created"
   | "custom_module.updated"
   | "custom_module.retired"

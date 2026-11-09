@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
+import { canRetrySummarisation } from "@claimflow/contracts";
 import { useClaimGaps } from "../claims/api";
 import { isRequestedItemAttached } from "./attachment";
 import { formatCountdown } from "./countdown";
 import { fromLocalInput, toLocalInput } from "./deadline";
-import { useConfirmDeadline, useMarkReplied } from "./api";
+import { useConfirmDeadline, useMarkReplied, useResummarise } from "./api";
 import type { InboxQuery } from "./types";
 import { Button } from "../../components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -176,6 +177,8 @@ export function QueryDetailPanel({
 }) {
   const { data: gaps } = useClaimGaps(query.claimId);
   const markReplied = useMarkReplied();
+  const resummarise = useResummarise();
+  const canRetry = canRetrySummarisation(query);
   const satisfied = gaps?.satisfied ?? [];
   const allAttached = query.requestedItems.every((item) =>
     isRequestedItemAttached(item, satisfied),
@@ -235,6 +238,42 @@ export function QueryDetailPanel({
               : "Summary · written by the desk"}
           </div>
           <p>{query.aiSummary}</p>
+        </div>
+      ) : canRetry ? (
+        /*
+          The one CTA the summariser gets. Nothing offers to *start* a
+          summary — that happens on its own when the email is logged —
+          but once the automatic attempt has failed, whether another
+          call is worth making is a question only the desk can answer.
+          Shown in the summary's own slot, because this is the thing
+          that is missing from it.
+        */
+        <div className="mb-3.5 flex flex-wrap items-center justify-between gap-3 rounded-md border border-line bg-surface-sunken px-4 py-3">
+          <div>
+            <div className="mb-0.5 text-2xs font-bold uppercase tracking-[0.05em] text-ink-soft">
+              Summary · couldn&apos;t be read
+            </div>
+            <p className="m-0 text-base text-ink-soft">
+              The email is below and the query is safe. Reading it again usually
+              works.
+            </p>
+          </div>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={resummarise.isPending}
+            onClick={() => resummarise.mutate(query.id)}
+          >
+            {resummarise.isPending ? "Reading…" : "Try again"}
+          </Button>
+        </div>
+      ) : null}
+
+      {resummarise.isError ? (
+        <div className="mb-3.5 rounded-md border border-critical bg-critical-bg px-3.5 py-2.5 text-base font-medium text-critical">
+          Still couldn&apos;t read it. The email below is the record — you can
+          write the summary yourself.
         </div>
       ) : null}
 

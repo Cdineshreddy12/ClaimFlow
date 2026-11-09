@@ -33,6 +33,24 @@ export function useConfirmDeadline() {
 }
 
 /**
+ * Asks the summariser to read the email again.
+ *
+ * Only ever offered on a query whose first attempt failed — the
+ * automatic one already ran, and this is the point at which a human is
+ * the right one to decide whether another call is worth making.
+ */
+export function useResummarise() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      api.post<InboxQuery>(`/queries/${id}/summarise`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["queries", "inbox"] });
+    },
+  });
+}
+
+/**
  * Records that a reply went out through whatever channel (email/portal) —
  * nothing is sent from here. No reply body is stored either, since the
  * schema only tracks the timestamp — see docs/adr/0005.

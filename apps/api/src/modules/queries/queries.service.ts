@@ -14,6 +14,12 @@ import type {
 
 export class ClaimNotFoundError extends Error {}
 export class QueryNotFoundError extends Error {}
+/** Nothing to re-read — the query has no stored email. */
+export class NothingToSummariseError extends Error {}
+/** No API key configured, so a retry would fail the same way. */
+export class SummariserUnavailableError extends Error {}
+/** The retry ran and lost; the query stays marked failed. */
+export class SummarisationFailedError extends Error {}
 
 interface AuthContext {
   userId: string;
@@ -31,6 +37,20 @@ export async function createQuery(
   claimId: string,
   body: CreateQueryBody,
 ) {
+  /*
+    The same email pasted onto the same claim moments ago is the same
+    paste, not a second query. Checked before the model runs, so a
+    retry after a timeout costs nothing and returns what the first
+    attempt actually stored — including a summary the desk never got
+    to see land.
+  */
+  const duplicate = await queriesRepository.findRecentDuplicate(
+    claimId,
+    body.tpaRawEmail,
+    new Date(),
+  );
+  if (duplicate) return duplicate;
+
   // Only fill what the desk left blank. Someone who typed their own
   // summary has already read the email, and overwriting that would be
   // the model second-guessing a human who was there.
@@ -72,6 +92,8 @@ async function summariseIfBlank(
   const needsSummary = !body.aiSummary;
   const needsItems = !body.requestedItems || body.requestedItems.length === 0;
   const needsDeadline = !body.deadline;
+  // Nothing to fill, so nothing was attempted — which is the truth,
+  // and distinct from an attempt that came back empty.
   if (!needsSummary && !needsItems && !needsDeadline) return body;
 
   const summariser = getSummariser();
@@ -89,6 +111,7 @@ async function summariseIfBlank(
     });
     return {
       ...body,
+      summarisationStatus: "ok",
       ...(needsSummary ? { aiSummary: result.summary } : {}),
       ...(needsItems ? { requestedItems: result.requestedItems } : {}),
       ...(needsDeadline && result.deadline
@@ -103,8 +126,76 @@ async function summariseIfBlank(
     console.error("query summarisation failed", {
       error: err instanceof Error ? err.message : String(err),
     });
-    return body;
+    // Recorded, not just logged: a server log is no use to the desk
+    // exec looking at the empty summary, and this is what lets the
+    // panel offer them a retry.
+    return { ...body, summarisationStatus: "failed" };
   }
+}
+
+/**
+ * Runs the summariser again on a query whose first attempt failed.
+ *
+ * The one place a button for this belongs: the automatic attempt has
+ * already happened and lost, and only a human knows whether the email
+ * is worth another call. Still fills blanks only — a desk exec who
+ * gave up and typed the summary themselves keeps it.
+ */
+export async function resummarise(auth: AuthContext, id: string) {
+  const existing = await queriesRepository.getById(id);
+  if (!existing) throw new QueryNotFoundError(id);
+  if (!existing.tpaRawEmail) throw new NothingToSummariseError(id);
+
+  const summariser = getSummariser();
+  if (!summariser) throw new SummariserUnavailableError();
+
+  const needsSummary = !existing.aiSummary;
+  const needsItems = (existing.requestedItems as string[]).length === 0;
+  const needsDeadline = !existing.deadline;
+
+  let saved;
+  try {
+    const now = new Date();
+    const result = await summariser.summarise({
+      rawEmail: existing.tpaRawEmail,
+      sentAt: emailSentAt(existing.tpaRawEmail, now) ?? now,
+    });
+    saved = await queriesRepository.saveSummarisation(id, {
+      summarisationStatus: "ok",
+      ...(needsSummary ? { aiSummary: result.summary } : {}),
+      ...(needsItems ? { requestedItems: result.requestedItems } : {}),
+      ...(needsDeadline && result.deadline
+        ? {
+            deadline: new Date(result.deadline),
+            deadlineInferred: result.deadlineInferred,
+          }
+        : {}),
+    });
+  } catch (err) {
+    console.error("query re-summarisation failed", {
+      queryId: id,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    // Left failed, so the retry stays on offer rather than the button
+    // vanishing on a second failure.
+    await queriesRepository.saveSummarisation(id, {
+      summarisationStatus: "failed",
+    });
+    throw new SummarisationFailedError(id);
+  }
+
+  await auditService.record(auth, {
+    action: "query.resummarised",
+    entityType: "query",
+    entityId: id,
+    before: {
+      summarisationStatus: existing.summarisationStatus,
+      hadSummary: Boolean(existing.aiSummary),
+    },
+    after: { summarisationStatus: "ok" },
+  });
+
+  return saved;
 }
 
 export async function getQuery(auth: AuthContext, id: string) {

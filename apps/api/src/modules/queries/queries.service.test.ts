@@ -408,4 +408,235 @@ describe("queries.service", () => {
       expect(orgMembersRepository.getMemberId).not.toHaveBeenCalled();
     });
   });
+  /**
+   * A failed call and a query nobody ran the model on used to look
+   * identical from the outside — both left the summary null. The
+   * status is what lets the panel offer a retry on one and not the
+   * other, so what it records matters more than what it is called.
+   */
+  describe("createQuery records what the summariser did", () => {
+    beforeEach(() => {
+      vi.mocked(queriesRepository.create).mockResolvedValue({
+        id: QUERY_ID,
+      } as never);
+    });
+
+    it("marks a summarised query ok", async () => {
+      vi.mocked(summariser.getSummariser).mockReturnValue({
+        summarise: vi.fn().mockResolvedValue({
+          summary: "They want the discharge summary.",
+          requestedItems: ["Discharge summary"],
+          deadline: null,
+          deadlineInferred: false,
+        }),
+      });
+
+      const { createQuery } = await import("./queries.service.js");
+      await createQuery(auth("desk_head"), CLAIM_ID, {
+        tpaRawEmail: "Send the discharge summary.",
+        requestedItems: [],
+      });
+
+      expect(
+        vi.mocked(queriesRepository.create).mock.calls[0]![1]
+          .summarisationStatus,
+      ).toBe("ok");
+    });
+
+    it("still saves the query when the model falls over, and says so", async () => {
+      vi.mocked(summariser.getSummariser).mockReturnValue({
+        summarise: vi.fn().mockRejectedValue(new Error("502 from upstream")),
+      });
+
+      const { createQuery } = await import("./queries.service.js");
+      await createQuery(auth("desk_head"), CLAIM_ID, {
+        tpaRawEmail: "Send the discharge summary.",
+        requestedItems: [],
+      });
+
+      const written = vi.mocked(queriesRepository.create).mock.calls[0]![1];
+      // The paste is what matters; losing it to a model outage would be
+      // the worse failure by far.
+      expect(written.tpaRawEmail).toBe("Send the discharge summary.");
+      expect(written.summarisationStatus).toBe("failed");
+      expect(written.aiSummary).toBeUndefined();
+    });
+
+    it("leaves a query the desk filled in itself as not_attempted", async () => {
+      vi.mocked(summariser.getSummariser).mockReturnValue({
+        summarise: vi.fn(),
+      });
+
+      const { createQuery } = await import("./queries.service.js");
+      await createQuery(auth("desk_head"), CLAIM_ID, {
+        tpaRawEmail: "...",
+        aiSummary: "They want the bill.",
+        requestedItems: ["Final bill"],
+        deadline: new Date("2026-11-10T10:00:00.000Z"),
+      });
+
+      expect(
+        vi.mocked(queriesRepository.create).mock.calls[0]![1]
+          .summarisationStatus,
+      ).toBeUndefined();
+    });
+  });
+
+  /**
+   * The summariser runs inside the create, so a slow model can outlast
+   * the client's timeout: the desk sees "couldn't save", presses the
+   * button again, and the row that did commit gets a twin that sits in
+   * the inbox being counted overdue alongside it.
+   */
+  describe("createQuery duplicate suppression", () => {
+    it("returns the row the first attempt stored instead of a second one", async () => {
+      const already = { id: QUERY_ID, aiSummary: "Already read." };
+      vi.mocked(queriesRepository.findRecentDuplicate).mockResolvedValue(
+        already as never,
+      );
+
+      const { createQuery } = await import("./queries.service.js");
+      const result = await createQuery(auth("desk_head"), CLAIM_ID, {
+        tpaRawEmail: "Send the discharge summary.",
+        requestedItems: [],
+      });
+
+      expect(result).toBe(already);
+      expect(queriesRepository.create).not.toHaveBeenCalled();
+    });
+
+    it("checks before paying for the model, not after", async () => {
+      vi.mocked(queriesRepository.findRecentDuplicate).mockResolvedValue({
+        id: QUERY_ID,
+      } as never);
+      const summarise = vi.fn();
+      vi.mocked(summariser.getSummariser).mockReturnValue({ summarise });
+
+      const { createQuery } = await import("./queries.service.js");
+      await createQuery(auth("desk_head"), CLAIM_ID, {
+        tpaRawEmail: "Send the discharge summary.",
+        requestedItems: [],
+      });
+
+      expect(summarise).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("resummarise", () => {
+    const EMAIL = "Kindly send the Part B form within 48 hours.";
+
+    function storedQuery(over: Record<string, unknown> = {}) {
+      return {
+        id: QUERY_ID,
+        tpaRawEmail: EMAIL,
+        aiSummary: null,
+        requestedItems: [],
+        deadline: null,
+        summarisationStatus: "failed",
+        ...over,
+      } as never;
+    }
+
+    it("fills what is still blank and marks the query ok", async () => {
+      vi.mocked(queriesRepository.getById).mockResolvedValue(storedQuery());
+      vi.mocked(queriesRepository.saveSummarisation).mockResolvedValue({
+        id: QUERY_ID,
+      } as never);
+      vi.mocked(summariser.getSummariser).mockReturnValue({
+        summarise: vi.fn().mockResolvedValue({
+          summary: "They want the Part B form.",
+          requestedItems: ["Signed Part B form"],
+          deadline: "2026-11-08T03:30:00.000Z",
+          deadlineInferred: true,
+        }),
+      });
+
+      const { resummarise } = await import("./queries.service.js");
+      await resummarise(auth("desk_head"), QUERY_ID);
+
+      expect(queriesRepository.saveSummarisation).toHaveBeenCalledWith(
+        QUERY_ID,
+        expect.objectContaining({
+          summarisationStatus: "ok",
+          aiSummary: "They want the Part B form.",
+          requestedItems: ["Signed Part B form"],
+          deadlineInferred: true,
+        }),
+      );
+    });
+
+    it("keeps a summary the desk wrote after giving up on the model", async () => {
+      vi.mocked(queriesRepository.getById).mockResolvedValue(
+        storedQuery({ aiSummary: "Typed this myself." }),
+      );
+      vi.mocked(queriesRepository.saveSummarisation).mockResolvedValue({
+        id: QUERY_ID,
+      } as never);
+      vi.mocked(summariser.getSummariser).mockReturnValue({
+        summarise: vi.fn().mockResolvedValue({
+          summary: "The model's version.",
+          requestedItems: ["Signed Part B form"],
+          deadline: null,
+          deadlineInferred: false,
+        }),
+      });
+
+      const { resummarise } = await import("./queries.service.js");
+      await resummarise(auth("desk_head"), QUERY_ID);
+
+      const patch = vi.mocked(queriesRepository.saveSummarisation).mock
+        .calls[0]![1];
+      expect(patch.aiSummary).toBeUndefined();
+      // The items were still blank, so those it may fill.
+      expect(patch.requestedItems).toEqual(["Signed Part B form"]);
+    });
+
+    it("leaves the query retryable when the retry fails too", async () => {
+      vi.mocked(queriesRepository.getById).mockResolvedValue(storedQuery());
+      vi.mocked(queriesRepository.saveSummarisation).mockResolvedValue({
+        id: QUERY_ID,
+      } as never);
+      vi.mocked(summariser.getSummariser).mockReturnValue({
+        summarise: vi.fn().mockRejectedValue(new Error("still down")),
+      });
+
+      const { resummarise, SummarisationFailedError } =
+        await import("./queries.service.js");
+
+      await expect(resummarise(auth("desk_head"), QUERY_ID)).rejects.toThrow(
+        SummarisationFailedError,
+      );
+      expect(queriesRepository.saveSummarisation).toHaveBeenCalledWith(
+        QUERY_ID,
+        { summarisationStatus: "failed" },
+      );
+    });
+
+    it("refuses a query with no email to read", async () => {
+      vi.mocked(queriesRepository.getById).mockResolvedValue(
+        storedQuery({ tpaRawEmail: null }),
+      );
+
+      const { resummarise, NothingToSummariseError } =
+        await import("./queries.service.js");
+
+      await expect(resummarise(auth("desk_head"), QUERY_ID)).rejects.toThrow(
+        NothingToSummariseError,
+      );
+    });
+
+    it("refuses when no summariser is configured, rather than marking it failed", async () => {
+      vi.mocked(queriesRepository.getById).mockResolvedValue(storedQuery());
+      vi.mocked(summariser.getSummariser).mockReturnValue(null);
+
+      const { resummarise, SummariserUnavailableError } =
+        await import("./queries.service.js");
+
+      await expect(resummarise(auth("desk_head"), QUERY_ID)).rejects.toThrow(
+        SummariserUnavailableError,
+      );
+      // Nothing was attempted, so nothing is recorded about an attempt.
+      expect(queriesRepository.saveSummarisation).not.toHaveBeenCalled();
+    });
+  });
 });

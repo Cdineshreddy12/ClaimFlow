@@ -1,7 +1,13 @@
 import type { FastifyInstance } from "fastify";
 import { authenticate } from "../../middleware/authenticate.js";
 import * as queriesService from "./queries.service.js";
-import { ClaimNotFoundError, QueryNotFoundError } from "./queries.service.js";
+import {
+  ClaimNotFoundError,
+  NothingToSummariseError,
+  QueryNotFoundError,
+  SummarisationFailedError,
+  SummariserUnavailableError,
+} from "./queries.service.js";
 import {
   ClaimIdParams,
   ConfirmDeadlineBody,
@@ -104,6 +110,39 @@ export async function registerQueryInboxRoutes(app: FastifyInstance) {
     } catch (err) {
       if (err instanceof QueryNotFoundError) {
         return reply.code(404).send({ error: "query not found" });
+      }
+      throw err;
+    }
+  });
+
+  /*
+    A retry, asked for by a human after the automatic attempt failed.
+    POST rather than PATCH: it is not an edit to the query, it runs
+    work and costs a model call, and running it twice is two calls.
+  */
+  app.post("/:id/summarise", async (request, reply) => {
+    const { id } = QueryIdParams.parse(request.params);
+    try {
+      const result = await queriesService.resummarise(request.authUser!, id);
+      return reply.send(result);
+    } catch (err) {
+      if (err instanceof QueryNotFoundError) {
+        return reply.code(404).send({ error: "query not found" });
+      }
+      if (err instanceof NothingToSummariseError) {
+        return reply
+          .code(422)
+          .send({ error: "this query has no email to read" });
+      }
+      if (err instanceof SummariserUnavailableError) {
+        return reply
+          .code(503)
+          .send({ error: "summarising is switched off on this install" });
+      }
+      if (err instanceof SummarisationFailedError) {
+        return reply
+          .code(502)
+          .send({ error: "couldn't read the email — try again" });
       }
       throw err;
     }

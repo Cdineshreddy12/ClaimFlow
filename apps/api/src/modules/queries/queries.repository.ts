@@ -1,4 +1,5 @@
-import { and, desc, eq, isNotNull, isNull, type SQL } from "drizzle-orm";
+import { and, desc, eq, gte, isNotNull, isNull, type SQL } from "drizzle-orm";
+import type { SummarisationStatus } from "@claimflow/contracts";
 import { db } from "../../db/client.js";
 import { claims, insurers, procedures, queries } from "../../db/schema.js";
 import { getClaimById } from "../claims/claims.repository.js";
@@ -28,12 +29,93 @@ export async function create(claimId: string, data: CreateQueryInput) {
       requestedItems: data.requestedItems,
       deadline: data.deadline ?? null,
       summarisedBy: data.summarisedBy ?? null,
+      summarisationStatus: data.summarisationStatus ?? "not_attempted",
       deadlineInferred: data.deadlineInferred ?? false,
       deadlineConfirmedBy: data.deadlineConfirmedBy ?? null,
       deadlineConfirmedAt: data.deadlineConfirmedAt ?? null,
     })
     .returning();
   return query;
+}
+
+/**
+ * How long an identical paste counts as the same paste.
+ *
+ * The window exists because the summariser runs inside the create: a
+ * slow model can outlast the client's timeout, the desk sees "couldn't
+ * save", presses the button again, and the row that did commit gets a
+ * twin — two identical entries in the inbox, both counted overdue.
+ *
+ * Bounded rather than forever, and a lookup rather than a unique
+ * index, because a byte-identical email *is* legitimately loggable
+ * twice — a TPA that chases with the same text months later is one
+ * query the desk still has to answer. A constraint could not tell the
+ * two apart; ten minutes can.
+ */
+const DUPLICATE_WINDOW_MS = 10 * 60 * 1000;
+
+/** The same email, on the same claim, logged moments ago. */
+export async function findRecentDuplicate(
+  claimId: string,
+  tpaRawEmail: string,
+  now: Date,
+) {
+  const [row] = await db
+    .select()
+    .from(queries)
+    .where(
+      and(
+        eq(queries.claimId, claimId),
+        eq(queries.tpaRawEmail, tpaRawEmail),
+        gte(queries.createdAt, new Date(now.getTime() - DUPLICATE_WINDOW_MS)),
+      ),
+    )
+    .orderBy(desc(queries.createdAt))
+    .limit(1);
+  return row;
+}
+
+/**
+ * Writes a re-run's result onto a query that already exists.
+ *
+ * Only ever fills blanks, exactly as the create does — a desk exec who
+ * typed a summary after the first attempt failed must not have it
+ * overwritten by a retry they asked for. The status is always written:
+ * it describes the attempt, not the content.
+ */
+export async function saveSummarisation(
+  id: string,
+  data: {
+    summarisationStatus: SummarisationStatus;
+    aiSummary?: string | undefined;
+    requestedItems?: string[] | undefined;
+    deadline?: Date | undefined;
+    deadlineInferred?: boolean | undefined;
+  },
+) {
+  const patch: Partial<typeof queries.$inferInsert> = {
+    summarisationStatus: data.summarisationStatus,
+  };
+  if (data.aiSummary !== undefined) {
+    patch.aiSummary = data.aiSummary;
+    patch.summarisedBy = "claude";
+  }
+  if (data.requestedItems !== undefined)
+    patch.requestedItems = data.requestedItems;
+  if (data.deadline !== undefined) {
+    // Unconfirmed, like any summariser deadline — docs/adr/0005. A
+    // retry is still the model talking, however deliberately it was
+    // asked for.
+    patch.deadline = data.deadline;
+    patch.deadlineInferred = data.deadlineInferred ?? false;
+  }
+
+  const [updated] = await db
+    .update(queries)
+    .set(patch)
+    .where(eq(queries.id, id))
+    .returning();
+  return updated;
 }
 
 export async function getById(id: string) {
@@ -143,6 +225,7 @@ export async function listInbox(filters: {
       tpaRawEmail: queries.tpaRawEmail,
       aiSummary: queries.aiSummary,
       summarisedBy: queries.summarisedBy,
+      summarisationStatus: queries.summarisationStatus,
       requestedItems: queries.requestedItems,
       deadline: queries.deadline,
       deadlineInferred: queries.deadlineInferred,

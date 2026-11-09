@@ -1,4 +1,4 @@
-import type { ClaimStatus } from "@claimflow/contracts";
+import type { ClaimStatus, SummarisationStatus } from "@claimflow/contracts";
 
 export interface InboxQuery {
   id: string;
@@ -10,6 +10,12 @@ export interface InboxQuery {
   requestedItems: string[];
   /** 'claude' when generated, null when a desk exec typed it. */
   summarisedBy: string | null;
+  /**
+   * Whether the model was asked and what came back. Distinguishes a
+   * summary that failed — which the panel offers to retry — from one
+   * nobody ever ran.
+   */
+  summarisationStatus: SummarisationStatus;
   deadline: string | null;
   /** True when the deadline was calculated from a relative phrase, not read verbatim. */
   deadlineInferred: boolean;

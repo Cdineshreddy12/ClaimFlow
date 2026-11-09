@@ -564,6 +564,17 @@ export const queries = pgTable(
       .default(sql`'[]'::jsonb`),
     /** 'claude' when the summary was generated, null when a human typed it. */
     summarisedBy: text("summarised_by"),
+    /**
+     * One of SummarisationStatus — see migration 0035.
+     *
+     * `summarisedBy` says who wrote what is there; this says whether the
+     * model was asked and what came back. A null summary with a
+     * 'failed' status is a retry waiting to happen; the same null with
+     * 'not_attempted' is just a query nobody ran the model on.
+     */
+    summarisationStatus: text("summarisation_status")
+      .notNull()
+      .default("not_attempted"),
     deadline: timestamp("deadline", { withTimezone: true }),
     /** True when the deadline was read out of the email rather than entered. */
     deadlineInferred: boolean("deadline_inferred").notNull().default(false),

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { SummarisationStatus } from "@claimflow/contracts";
 
 export const ClaimIdParams = z.object({
   claimId: z.string().uuid(),
@@ -64,6 +65,8 @@ export type ListInboxQuery = z.infer<typeof ListInboxQuery>;
  */
 export interface CreateQueryInput extends CreateQueryBody {
   summarisedBy?: string | undefined;
+  /** Whether the model was asked, and what came back. */
+  summarisationStatus?: SummarisationStatus | undefined;
   deadlineInferred?: boolean | undefined;
   /**
    * Set only when the deadline came from the body — a desk exec typing
