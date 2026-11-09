@@ -1,5 +1,5 @@
 import { and, eq } from "drizzle-orm";
-import type { ClaimStatus } from "@claimflow/contracts";
+import { type ClaimStatus, slaDeadlineFor } from "@claimflow/contracts";
 import { db } from "./client.js";
 import {
   checklistRules,
@@ -218,12 +218,18 @@ async function seed() {
     const claim = must(row, `${opts.patientName}'s claim`);
 
     for (const step of opts.chain) {
+      const at = ago(step.daysAgo);
       await db.insert(claimStatusEvents).values({
         claimId: claim.id,
         status: step.status,
         actorId: null,
-        slaDeadline: null,
-        createdAt: ago(step.daysAgo),
+        // Stamped from the same table the server stamps from, rather
+        // than left null. Turnaround counts a breach as `answered_at >
+        // sla_deadline`, so an event with no deadline can never be one
+        // — seeded claims reported perfect compliance because the
+        // column was empty, not because anybody met the hour.
+        slaDeadline: slaDeadlineFor(step.status, at),
+        createdAt: at,
       });
     }
     return claim;

@@ -3,7 +3,7 @@ config({ path: "../../.env" });
 config({ path: ".env" });
 
 import { and, eq, inArray } from "drizzle-orm";
-import type { ClaimStatus } from "@claimflow/contracts";
+import { type ClaimStatus, slaDeadlineFor } from "@claimflow/contracts";
 import { db } from "./client.js";
 import {
   checklistRules,
@@ -458,6 +458,7 @@ async function main(): Promise<void> {
   let settled = 0,
     awaitingPayment = 0,
     inFlight = 0,
+    awaitingDecision = 0,
     rejected = 0;
   let deductionRows = 0;
 
@@ -481,9 +482,27 @@ async function main(): Promise<void> {
     const profile = PROCEDURE_PROFILE[proc.name]!;
     const isScheme = payer.type === "scheme";
 
-    // Spread across six months, oldest first, so the monthly report has
-    // a shape rather than a spike.
-    const opened = 5 + Math.floor((i / PATIENTS.length) * 170);
+    /*
+      Spread across six months, oldest first, so the monthly report has
+      a shape rather than a spike — except for the first few, which are
+      admitted inside the last week.
+
+      A hospital always has inpatients, and the claim stages only look
+      right if some claims are genuinely mid-treatment. Starting the
+      whole run five days back left almost nothing young enough to still
+      be awaiting its bill, so "approved, not yet billed" came out
+      nearly empty once that stage stopped being filled by old claims
+      that had simply been abandoned there.
+    */
+    const admittedThisWeek = 5;
+    const opened =
+      i < admittedThisWeek
+        ? 1 + i
+        : 5 +
+          Math.floor(
+            ((i - admittedThisWeek) / (PATIENTS.length - admittedThisWeek)) *
+              170,
+          );
     const admittedAt = daysAgo(opened, between(8, 20));
     const billed = isScheme
       ? money(profile.lo * 0.7, profile.hi * 0.75)
@@ -555,28 +574,49 @@ async function main(): Promise<void> {
 
     // A claim that reached an insurer had a form filled in to reach
     // them with. Drafts and the freshly-sent keep theirs empty, which
-    // is what the extract-and-confirm flow is demonstrated on.
-    if (rand() < 0.85) {
-      const values = preauthValues({
-        procedure: proc.name,
-        billed,
-        admittedAt,
-        stay: profile.stay,
-      });
-      const confirmedAt = new Date(preAuth.getTime() - 30 * 60_000);
-      await db.insert(claimPreauthFields).values(
-        Object.entries(values).map(([fieldKey, value]) => ({
-          claimId: claim.id,
-          fieldKey,
-          value,
-          confirmedAt,
-        })),
-      );
-    }
+    // is what the extract-and-confirm flow is demonstrated on — but
+    // every claim still here is on its way to APPROVED at least, and
+    // the 15% that used to be skipped produced thirteen claims an
+    // insurer had approved against a blank form. The empty state comes
+    // from the drafts, not from losing paperwork after the fact.
+    const values = preauthValues({
+      procedure: proc.name,
+      billed,
+      admittedAt,
+      stay: profile.stay,
+    });
+    const confirmedAt = new Date(preAuth.getTime() - 30 * 60_000);
+    await db.insert(claimPreauthFields).values(
+      Object.entries(values).map(([fieldKey, value]) => ({
+        claimId: claim.id,
+        fieldKey,
+        value,
+        confirmedAt,
+      })),
+    );
 
     const approvedAt = new Date(
       preAuth.getTime() + (queried ? between(2, 5) : between(1, 3)) * DAY,
     );
+
+    // The insurer has not answered yet. Every stage boundary has to be
+    // a date that has actually arrived: approving a claim next Tuesday
+    // put CLM-2058 and CLM-2060 in the future, where nothing but the
+    // verifier could see them. This is also what fills the pre-auth and
+    // query stages, which is where a desk's own clock is running.
+    if (approvedAt.getTime() > Date.now()) {
+      await finish(
+        claim.id,
+        queried ? "QUERY_RAISED" : "PRE_AUTH_SENT",
+        events,
+        {
+          billedAmount: String(billed),
+        },
+      );
+      awaitingDecision++;
+      continue;
+    }
+
     // Usually the insurer sanctions enough and nothing is said about
     // it. Making every claim fall short, as this first did, put a
     // "needs cover" flag on all sixty-seven and turned the one signal
@@ -587,8 +627,27 @@ async function main(): Promise<void> {
         : money(billed * 0.72, billed * 0.94);
     events.push({ status: "APPROVED", at: approvedAt });
 
-    if (roll < 0.2) {
-      // Still being treated, or the bill is not raised yet.
+    const billedAt = new Date(
+      approvedAt.getTime() + profile.stay * DAY + between(0, 3) * DAY,
+    );
+
+    /*
+      Still being treated, or the bill is not raised yet — which is
+      true exactly while the bill date has not arrived, so that is the
+      test rather than a dice roll.
+
+      Drawing this set at random ignored how old the claim was, and two
+      things followed. Claims that opened five months ago sat in
+      "approved, not yet billed", which reads as a desk that walked away
+      rather than one with work in hand. And the claims that did get
+      billed had no upper bound on the bill date, so one escaped into
+      the data submitted tomorrow.
+
+      A bill still outstanding months later is a different thing and
+      stays: that is what the receivables ageing buckets are made of.
+      An *approval* nobody has billed against for months is not.
+    */
+    if (billedAt.getTime() > Date.now()) {
       await finish(claim.id, "APPROVED", events, {
         billedAmount: String(billed),
         sanctionedAmount: String(sanctioned),
@@ -597,9 +656,6 @@ async function main(): Promise<void> {
       continue;
     }
 
-    const billedAt = new Date(
-      approvedAt.getTime() + profile.stay * DAY + between(0, 3) * DAY,
-    );
     events.push({ status: "FINAL_BILL_SUBMITTED", at: billedAt });
 
     if (roll < 0.38) {
@@ -698,6 +754,7 @@ async function main(): Promise<void> {
       `  ${settled} settled (${deductionRows} deductions)\n` +
       `  ${awaitingPayment} billed, awaiting payment\n` +
       `  ${inFlight} approved, still in flight\n` +
+      `  ${awaitingDecision} sent, awaiting the insurer\n` +
       `  ${rejected} rejected`,
   );
 }
@@ -752,7 +809,12 @@ async function finish(
       claimId,
       status: e.status,
       actorId: null,
-      slaDeadline: null,
+      // Stamped from the same table the server stamps from, rather than
+      // left null. Turnaround counts a breach as `answered_at >
+      // sla_deadline`, so an event with no deadline can never be one —
+      // every seeded claim reported perfect compliance because the
+      // column was empty, not because anybody met the hour.
+      slaDeadline: slaDeadlineFor(e.status, e.at),
       createdAt: e.at,
     });
   }

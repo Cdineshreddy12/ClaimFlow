@@ -71,6 +71,42 @@ const CHECKS: Check[] = [
         select 1 from claim_status_events e where e.claim_id = c.id)`,
   },
   {
+    // CLM-1655 was submitted tomorrow. The bill date was the approval
+    // plus the length of stay with nothing capping it, so a claim
+    // admitted recently enough got a bill dated past today — invisible
+    // in every list, since they sort newest first and it simply sat on
+    // top looking like the latest one.
+    name: "nothing happened in the future",
+    offenders: `
+      select c.reference from claim_status_events e
+      join claims c on c.id = e.claim_id
+      where e.created_at > now()`,
+  },
+  {
+    /*
+      Turnaround counts a breach as `answered_at > sla_deadline`, so an
+      event with no deadline can never be one. Both seeds wrote null,
+      and the result was a compliance column reading 0% past target
+      against a 1-hour window on 48-hour averages — the headline number
+      of an IRDAI demo, green because the data was missing.
+    */
+    name: "every decision event carries the deadline it is judged against",
+    offenders: `
+      select c.reference from claim_status_events e
+      join claims c on c.id = e.claim_id
+      where e.status in ('PRE_AUTH_SENT', 'FINAL_BILL_SUBMITTED',
+                         'ENHANCEMENT_REQUESTED')
+        and e.sla_deadline is null`,
+  },
+  {
+    name: "a claim an insurer approved was not approved against a blank form",
+    offenders: `
+      select c.reference from claims c
+      where c.status in ('APPROVED', 'FINAL_BILL_SUBMITTED', 'SETTLED')
+        and not exists (
+          select 1 from claim_preauth_fields f where f.claim_id = c.id)`,
+  },
+  {
     name: "a claim's status matches its latest event",
     offenders: `
       select c.reference from claims c
