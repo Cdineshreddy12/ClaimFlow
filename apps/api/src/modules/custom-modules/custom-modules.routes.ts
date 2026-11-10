@@ -32,15 +32,7 @@ const ListQuery = z.object({
   includeInactive: z.enum(["true", "false"]).optional(),
 });
 
-/**
- * Modules a hospital defines for itself.
- *
- * Two audiences on one router, split by role. **Designing** a module —
- * its fields, whether it exists at all — is administration, held to the
- * same two roles as the insurer and checklist masters. **Using** one is
- * ordinary desk work, open to anyone signed in: a module nobody can
- * write to is a table nobody fills.
- */
+/** Modules a hospital defines for itself. */
 export async function registerCustomModulesRoutes(app: FastifyInstance) {
   app.addHook("preHandler", authenticate);
 
@@ -214,12 +206,7 @@ function replyForModuleError(err: unknown, reply: FastifyReply): boolean {
 
 function replyForRecordError(err: unknown, reply: FastifyReply): boolean {
   if (err instanceof RecordInvalidError) {
-    /*
-      422 with the per-field detail, not a flat 400. The form shows
-      these against the fields they belong to, and a single "invalid
-      record" string would send a desk hunting through twelve inputs
-      for the one it means.
-    */
+    // 422 with the per-field detail, not a flat 400.
     void reply.code(422).send({
       error: "Some answers don't match this module's fields",
       fields: err.errors,

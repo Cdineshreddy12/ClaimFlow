@@ -64,9 +64,9 @@ function formatAddress(hospital: {
 }
 
 /**
- * The CFO report — a closed month's claim volume, deductions and
- * insurer turnaround, for a desk head to forward to whoever signs the
- * deal but has no login here (docs/adr/0018).
+ * The CFO report — a closed month's claim volume, deductions and insurer
+ * turnaround, for a desk head to forward to whoever signs the deal but has
+ * no login here (docs/adr/0018).
  */
 export async function registerReportsRoutes(app: FastifyInstance) {
   app.addHook("preHandler", authenticate);

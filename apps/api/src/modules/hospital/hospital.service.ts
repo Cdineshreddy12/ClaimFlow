@@ -49,10 +49,9 @@ function blankToNull<T extends Record<string, unknown>>(data: T) {
 }
 
 /**
- * Attaches a short-lived preview URL for the settings page to show the
- * logo it already has — the bucket is private, so `logoFileKey` alone
- * can't be put in an <img src>. Never throws: a hospital must still load
- * if S3 is briefly unreachable, it just previews with no image that time.
+ * Attaches a short-lived preview URL for the settings page to show the logo
+ * it already has — the bucket is private, so `logoFileKey` alone can't be
+ * put in an <img src>.
  */
 async function withLogoUrl<T extends { logoFileKey: string | null }>(
   hospital: T,
@@ -79,9 +78,9 @@ export async function requestLogoUploadUrl(body: RequestLogoUploadUrlBody) {
 }
 
 /**
- * Saves one wizard step, then marks onboarding complete once every
- * required field across all three steps is filled — so finishing the
- * last step completes it, but so does coming back later to fill a gap.
+ * Saves one wizard step, then marks onboarding complete once every required
+ * field across all three steps is filled — so finishing the last step
+ * completes it, but so does coming back later to fill a gap.
  */
 export async function updateProfile(
   auth: { userId: string },

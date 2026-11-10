@@ -20,14 +20,8 @@ export interface PeriodReport {
 }
 
 /**
- * One hospital month, for forwarding to the person who signs the deal
- * but never logs in — see docs/adr/0018.
- *
- * This computes nothing new. The claims summary aside, both other
- * pieces already exist for other screens (deductions-by-reason on the
- * dashboard, insurer turnaround on the Turnaround page); this module
- * closes their open-ended "since X" windows into one shared [from, to)
- * and hands all three back together.
+ * One hospital month, for forwarding to the person who signs the deal but
+ * never logs in — see docs/adr/0018.
  */
 export async function getPeriodReport(
   auth: AuthContext,

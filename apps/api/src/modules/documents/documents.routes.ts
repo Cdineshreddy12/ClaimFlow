@@ -102,13 +102,7 @@ export async function registerDocumentsRoutes(app: FastifyInstance) {
     }
   });
 
-  /**
-   * Read it again, against the checklist as it stands now.
-   *
-   * POST rather than PATCH: it spends a model call and overwrites the
-   * suggestion columns, which is an action rather than an edit to a
-   * field the caller supplied.
-   */
+  /** Read it again, against the checklist as it stands now. */
   app.post("/:documentId/reclassify", aiRateLimit(), async (request, reply) => {
     const { claimId, documentId } = DocumentIdParams.parse(request.params);
     try {

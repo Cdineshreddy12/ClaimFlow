@@ -12,10 +12,7 @@ const SinceQuery = z.object({
 export async function registerSlaRoutes(app: FastifyInstance) {
   app.addHook("preHandler", authenticate);
 
-  /**
-   * The live clock list. Any desk user — this is the queue, and a desk
-   * exec watching a patient wait at discharge needs it most.
-   */
+  /** The live clock list. */
   app.get("/watch", async (request, reply) => {
     return reply.send(await service.getSlaWatch(request.authUser!));
   });

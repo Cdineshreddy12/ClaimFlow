@@ -50,7 +50,7 @@ interface AuthContext {
  * desk_executive sees only their own assigned claims, regardless of what
  * the request asked for — this is the role-filtering half of the tenant
  * boundary described in docs/adr/0002 (the repository layer only enforces
- * the org half). desk_head and everyone above sees the full org.
+ * the org half).
  */
 export async function listClaims(auth: AuthContext, query: ListClaimsQuery) {
   // No limit: every match. The dashboard's charts and the
@@ -62,19 +62,7 @@ export async function listClaims(auth: AuthContext, query: ListClaimsQuery) {
   return rows;
 }
 
-/**
- * One page of claims, with the total behind it.
- *
- * The desk's list screen is the one place a hospital's whole history
- * accumulates, and it used to fetch all of it and filter in the
- * browser. Callers that genuinely want every claim — the dashboard's
- * charts, the assistant's claim-matching — go through `listClaims`
- * above and send no limit.
- *
- * The scoping rule is unchanged and still comes first: a desk
- * executive sees their own claims whatever else they ask for
- * (docs/adr/0002).
- */
+/** One page of claims, with the total behind it (docs/adr/0002). */
 export async function listClaimsPage(
   auth: AuthContext,
   query: ListClaimsQuery & ClaimListQuery,
@@ -99,18 +87,7 @@ export async function listClaimsPage(
   });
 }
 
-/**
- * The dashboard, counted rather than fetched.
- *
- * Replaces "send every claim and let the browser work it out". The
- * month boundary and the six-month window are decided here, on the
- * server's clock — the browser's was fine while the browser did the
- * counting, and is not once the counting moves.
- *
- * Empty months are filled in afterwards so the trend chart has six
- * columns whatever the data looks like; a chart that silently drops a
- * quiet month reads as a shorter history rather than a quieter one.
- */
+/** The dashboard, counted rather than fetched. */
 export async function getClaimOverview(
   auth: AuthContext,
   now = new Date(),
@@ -164,15 +141,8 @@ export async function getClaim(auth: AuthContext, id: string) {
     if (claim.assignedTo !== memberId) throw new ClaimNotFoundError(id);
   }
 
-  /*
-    Which stage the query interrupted, so the claim file can offer the
-    one move that will be accepted.
-
-    The transition table lists both stages a query can be answered
-    into, because a query can be raised at either; only the history
-    says which applies here. Without this the file would render two
-    buttons, one of which is a 422 waiting to happen.
-  */
+  // Which stage the query interrupted, so the claim file can offer the one
+  // move that will be accepted.
   if (claim.status === "QUERY_RAISED") {
     return {
       ...claim,
@@ -185,21 +155,13 @@ export async function getClaim(auth: AuthContext, id: string) {
 
 /**
  * Captures the insurer/procedure's current checklist rules onto the claim
- * at the moment it's opened — see docs/adr/0001. Whatever the checklist
- * admin edits afterward never reaches back into claims already in flight.
+ * at the moment it's opened — see docs/adr/0001.
  */
 export class PackageOnNonSchemeClaimError extends Error {}
 
 export async function createClaim(auth: AuthContext, body: CreateClaimBody) {
-  /*
-    A package belongs to a government scheme and to nothing else.
-
-    The schema can see that both fields arrived together; only here is
-    the payer known. Accepting a package rate on a private claim would
-    put a number in `sanctionedAmount` that no insurer ever sanctioned
-    — the one field docs/adr/0012's whole shortfall model is measured
-    against.
-  */
+  // A package belongs to a government scheme and to nothing else
+  // (docs/adr/0012).
   const payer = await insurersRepository.getById(body.insurerId);
   const scheme = isSchemePayer(payer?.type);
   if (body.packageCode && !scheme) {
@@ -210,34 +172,24 @@ export async function createClaim(auth: AuthContext, body: CreateClaimBody) {
     body.insurerId,
     body.procedureId,
   );
-  // Frozen for the same reason the checklist is (docs/adr/0001): an
-  // admin reordering or removing a pre-auth field next month must not
-  // change what this claim asked for. A TPA query six weeks from now
-  // has to be answerable against the form that was actually sent.
+  // Frozen for the same reason the checklist is (docs/adr/0001): an admin
+  // reordering or removing a pre-auth field next month must not change what
+  // this claim asked for.
   const preauthLayoutSnapshot = await preauthLayoutsService.resolveLayout(
     body.insurerId,
   );
-  // Never onto the claim itself: `expectedCost` is what the hospital
-  // thinks the admission will cost, and writing it to `billedAmount`
-  // made a draft claim report a bill it had not raised — then left the
-  // pre-auth form's own total blank, so the desk typed the same figure
-  // twice.
+  // Never onto the claim itself: `expectedCost` is what the hospital thinks
+  // the admission will cost, and writing it to `billedAmount` made a draft
+  // claim report a bill it had not raised — then left the pre-auth form's
+  // own total blank, so the desk typed the same figure twice.
   const { expectedCost, ...claimFields } = body;
 
   const claim = await claimsRepository.createClaim(
     {
       ...claimFields,
-      /*
-        The rate IS the sanctioned amount, written now rather than left
-        waiting on a decision the scheme has no reason to send.
-
-        On a private claim the hospital states a cost and the insurer
-        answers with a sanctioned amount, and the gap between them is
-        the subject of docs/adr/0012. A scheme answers before it is
-        asked: the package says what it pays. Leaving the field null
-        would show "Sanctioned: —" on a claim whose worth was never in
-        doubt, and send a desk looking for an answer that never comes.
-      */
+      // The rate IS the sanctioned amount, written now rather than left
+      // waiting on a decision the scheme has no reason to send
+      // (docs/adr/0012).
       ...(body.packageRate !== undefined
         ? { sanctionedAmount: body.packageRate }
         : {}),
@@ -265,16 +217,16 @@ export async function createClaim(auth: AuthContext, body: CreateClaimBody) {
       patientName: claim.patientName,
       status: claim.status,
       // Recorded on every claim, so "which claims were opened with no
-      // checklist" is answerable afterwards rather than only
-      // noticeable at the time.
+      // checklist" is answerable afterwards rather than only noticeable at
+      // the time.
       checklistRules: checklistSnapshot.length,
     },
   });
 
   if (checklistSnapshot.length === 0) {
-    // Its own entry, because this is the quiet failure: a claim with
-    // no checklist reports nothing missing for the rest of its life,
-    // and at settlement that reads as a complete file.
+    // Its own entry, because this is the quiet failure: a claim with no
+    // checklist reports nothing missing for the rest of its life, and at
+    // settlement that reads as a complete file.
     await auditService.record(auth, {
       action: "claim.opened_without_checklist",
       entityType: "claim",
@@ -290,15 +242,8 @@ export async function createClaim(auth: AuthContext, body: CreateClaimBody) {
 }
 
 /**
- * Moves a claim, and stamps the clock the new status starts.
- *
- * The deadline is computed here, from the shared windows in
- * @claimflow/contracts, and the caller is not consulted. It used to be
- * whatever the client sent, which docs/adr/0004 explicitly forbids —
- * "never computed from the frontend clock" — and which made the SLA a
- * number the browser chose. A caller may still pass a deadline for the
- * statuses that have no regulatory window and get it recorded; it can
- * never override one that does.
+ * Moves a claim, and stamps the clock the new status starts
+ * (docs/adr/0004).
  */
 export async function transitionClaimStatus(
   auth: AuthContext,
@@ -316,15 +261,7 @@ export async function transitionClaimStatus(
     );
   }
 
-  /*
-    A query is answered by returning to the stage it interrupted.
-
-    The table has to list both stages a query can be raised at, which
-    on its own would let a pre-auth query be answered into
-    FINAL_BILL_SUBMITTED and skip approval entirely. The claim's own
-    history is what decides, so it is checked here rather than widened
-    into a table that cannot see it.
-  */
+  // A query is answered by returning to the stage it interrupted.
   if (claim.status === "QUERY_RAISED") {
     // Already resolved by the read above.
     const queriedFrom = claim.queriedFrom;
@@ -335,12 +272,9 @@ export async function transitionClaimStatus(
     }
   }
 
-  /*
-    Settled is a claim about money arriving, so there has to be money —
-    the invariant `db:verify` asserts as "every settled claim records
-    what it was paid". The desk meets this as a dialog rather than a
-    refusal; this is the backstop for the API called directly.
-  */
+  // Settled is a claim about money arriving, so there has to be money — the
+  // invariant `db:verify` asserts as "every settled claim records what it
+  // was paid".
   if (nextStatus === "SETTLED" && claim.settledAmount === null) {
     throw new SettlementNotRecordedError(
       "record what the insurer paid before marking the claim settled",
@@ -355,9 +289,7 @@ export async function transitionClaimStatus(
     nextStatus,
     memberId,
     deadline,
-    // What this whole function validated against. The write refuses if
-    // the claim has moved since, rather than overwriting a decision
-    // somebody else just recorded.
+    // What this whole function validated against.
     claim.status,
   );
   if (!updated) {
@@ -384,7 +316,7 @@ export async function transitionClaimStatus(
 
 /**
  * required docs in the claim's checklist snapshot minus the ones with a
- * *confirmed* document in that slot — the brief's "see at a glance what's
+ * confirmed document in that slot — the brief's "see at a glance what's
  * missing" requirement, computed live, never stored (see docs/adr/0001).
  */
 export async function getClaimGaps(auth: AuthContext, claimId: string) {
@@ -404,46 +336,25 @@ export async function getClaimGaps(auth: AuthContext, claimId: string) {
 }
 
 /**
- * Adds one checklist slot to one claim, after it was opened.
- *
- * This is not a hole in docs/adr/0001. That guarantee is about *rule
- * edits not reaching back*: a desk head tidying the checklist must not
- * silently grow new gaps across forty claims already in flight. This is
- * the opposite act — a person looking at one claim, holding a document
- * that belongs to it, saying "this claim also has one of these". Blast
- * radius one, deliberate, attributed, audited.
- *
- * Without it the two were conflated, and a document that fit no slot
- * had nowhere to go for the life of the claim: the only remedy on offer
- * was a rule change that by definition could not help the claim in
- * hand.
- *
- * **Added slots are never required.** The desk is making a place to put
- * something, not recording a new demand from the insurer — and a
- * required slot added by hand would open a gap that makes the claim
- * look incomplete the moment someone tries to file a document into it.
- * Once a document is confirmed there, it shows as satisfied like any
- * other.
+ * Adds one checklist slot to one claim, after it was opened
+ * (docs/adr/0001).
  */
 export async function addChecklistSlot(
   auth: AuthContext,
   claimId: string,
   documentType: string,
   /**
-   * `required` is optional by default, and the default is the
-   * important half: a slot added because a document turned up that fit
-   * nowhere is a place to put something, not a demand from the
-   * insurer. Restoring a checklist that should have been there is the
-   * other case — those are the insurer's requirements, so that caller
-   * passes both flags.
+   * `required` is optional by default, and the default is the important
+   * half: a slot added because a document turned up that fit nowhere is a
+   * place to put something, not a demand from the insurer.
    */
   options: { required?: boolean; fromRules?: boolean } = {},
 ) {
   const required = options.required ?? false;
   const fromRules = options.fromRules ?? false;
-  // Scopes to what this user may see, and a desk executive may do this
-  // on their own claims — unlike a checklist *rule*, which reaches
-  // every future claim for the pair and stays a desk head's call.
+  // Scopes to what this user may see, and a desk executive may do this on
+  // their own claims — unlike a checklist *rule*, which reaches every
+  // future claim for the pair and stays a desk head's call.
   const claim = await getClaim(auth, claimId);
 
   if (claim.checklistSnapshot.some((i) => i.documentType === documentType)) {
@@ -474,22 +385,7 @@ export async function addChecklistSlot(
   return updated;
 }
 
-/**
- * Takes a hand-added slot back off one claim.
- *
- * **Only a slot a person added.** The slots that came from the rules
- * at creation are the record of what this claim was opened against,
- * and docs/adr/0001 exists to keep that record still. There is also a
- * blunter reason: the gap view is the safety net, and "delete the
- * requirement you cannot satisfy" is the one edit that would turn it
- * into a formality. Dropping an original requirement is a different
- * decision and should be argued for on its own.
- *
- * **Never a slot with a document in it.** Removing one would leave the
- * document on the claim counting toward nothing — the same invisible
- * state the assistant refuses to create when it files into a slot that
- * doesn't exist. Discard the document first.
- */
+/** Takes a hand-added slot back off one claim (docs/adr/0001). */
 export async function removeChecklistSlot(
   auth: AuthContext,
   claimId: string,
@@ -532,19 +428,8 @@ export async function removeChecklistSlot(
 }
 
 /**
- * Gives a claim the checklist it should have been opened with.
- *
- * Only ever for a claim that has none. A claim opened against a pair
- * with no rules is snapshotted empty, and then reports nothing missing
- * for the rest of its life — which at settlement reads exactly like a
- * complete file. Adding the rules to the pair afterwards cannot reach
- * back (docs/adr/0001), so without this the claim stays unprotected
- * until it closes.
- *
- * **Refuses a claim that already has a checklist**, and that refusal is
- * what keeps this from being a hole in the forward-only guarantee. This
- * fills an absence; it never re-snapshots a claim whose requirements
- * were already decided.
+ * Gives a claim the checklist it should have been opened with
+ * (docs/adr/0001).
  */
 export async function applyCurrentRules(auth: AuthContext, claimId: string) {
   const claim = await getClaim(auth, claimId);
@@ -558,16 +443,15 @@ export async function applyCurrentRules(auth: AuthContext, claimId: string) {
   );
   if (rules.length === 0) throw new NoRulesToApplyError(claimId);
 
-  // One at a time, through the same path the assistant uses, so each
-  // slot gets its own audit entry and the "who added this" question
-  // has the same answer however it arrived.
+  // One at a time, through the same path the assistant uses, so each slot
+  // gets its own audit entry and the "who added this" question has the same
+  // answer however it arrived.
   for (const rule of rules) {
     await addChecklistSlot(auth, claimId, rule.documentType, {
       required: rule.required,
       // Marked as the insurer's requirement rather than someone's
       // judgement, so it is no more removable than one snapshotted at
-      // creation. Without this, restoring a checklist would quietly
-      // make every requirement on it deletable.
+      // creation.
       fromRules: true,
     });
   }
@@ -575,17 +459,7 @@ export async function applyCurrentRules(auth: AuthContext, claimId: string) {
   return getClaim(auth, claimId);
 }
 
-/**
- * Where one claim's money stands.
- *
- * Four numbers the app held separately and never compared: what the
- * insurer sanctioned (including approved enhancements), what the
- * hospital expects to spend, what it billed, and what was cut and
- * clawed back after settlement. Put together they produce the only
- * figure a hospital CFO actually manages — the shortfall — and the one
- * the desk can still do something about, which is whether this claim
- * needs more cover before the patient goes home. See docs/adr/0012.
- */
+/** Where one claim's money stands (docs/adr/0012). */
 export async function getClaimFinancials(
   auth: AuthContext,
   claimId: string,
@@ -600,9 +474,7 @@ export async function getClaimFinancials(
     enhancementsRepository.getOpenForClaim(claimId),
   ]);
 
-  // Only a confirmed value counts. An unconfirmed suggestion is the
-  // model's opinion, and basing "ask the insurer for ₹80,000 more" on
-  // an opinion nobody has checked is exactly what adr 0005 forbids.
+  // Only a confirmed value counts.
   const expectedRow = (preauthRows ?? []).find(
     (row) => row.fieldKey === "totalExpectedCost" && row.confirmedAt,
   );
@@ -614,16 +486,12 @@ export async function getClaimFinancials(
     claim.billedAmount === null ? null : Number(claim.billedAmount);
 
   // The bill if there is one, otherwise what the desk expects to spend.
-  // Deliberately the larger of the two when both exist: a bill that has
-  // already outgrown the estimate is the number that matters.
   const costOnRecord =
     billedAmount !== null && expectedCost !== null
       ? Math.max(billedAmount, expectedCost)
       : (billedAmount ?? expectedCost);
 
-  // A shortfall needs both a ceiling and a bill. Against an unrecorded
-  // sanction it isn't a small number, it's an unknown one, and showing
-  // zero there would read as "nothing was lost".
+  // A shortfall needs both a ceiling and a bill.
   const shortfall =
     sanctionedAmount === null || billedAmount === null
       ? null
@@ -655,14 +523,7 @@ export async function getClaimFinancials(
   };
 }
 
-/**
- * Records the two amounts a claim is judged by.
- *
- * Separate from the pre-auth form on purpose. The form holds what the
- * hospital *asked* for; these are what the insurer *authorised* and
- * what was *billed*, which arrive later, from a different document, and
- * which the form has no field for.
- */
+/** Records the two amounts a claim is judged by. */
 export async function updateClaimFinancials(
   auth: AuthContext,
   claimId: string,
@@ -702,23 +563,7 @@ export async function updateClaimFinancials(
 
 export class AssigneeNotFoundError extends Error {}
 
-/**
- * Hands a claim to someone on the desk, or back to the unassigned pool.
- *
- * This is the write half of a scoping rule that shipped with only its
- * read half: `claims.assigned_to` has always decided what a desk
- * executive can see, and nothing in the product could set it. A role
- * scoped to its own claims, with no way to be given any, saw an empty
- * desk on every screen.
- *
- * Restricted to the roles that run the desk, not because assignment is
- * dangerous, but because deciding who works what is their job — an
- * executive reassigning a claim to themselves would route around it.
- *
- * Any member can hold a claim. A desk head carrying a few difficult
- * ones personally is ordinary, so this checks that the assignee exists
- * rather than what their role is.
- */
+/** Hands a claim to someone on the desk, or back to the unassigned pool. */
 export async function assignClaim(
   auth: AuthContext,
   claimId: string,
@@ -747,14 +592,7 @@ export async function assignClaim(
   return updated;
 }
 
-/**
- * Records a payment against a claim.
- *
- * Goes through getClaim so desk_executive scoping applies — an exec
- * can't record money against someone else's claim. Does not change
- * status: a payment can land before or after the desk marks a claim
- * settled, and forcing the order would make one of those impossible.
- */
+/** Records a payment against a claim. */
 export class PaymentExceedsBillError extends Error {}
 
 export async function recordPayment(
@@ -764,21 +602,7 @@ export async function recordPayment(
 ) {
   const claim = await getClaim(auth, claimId);
 
-  /*
-    An insurer does not pay more than it was billed.
-
-    The amount was checked for being a number, under a hundred million
-    and not dated in the future, and never against the claim it was
-    being recorded on. A typo therefore landed in `settled_amount` and
-    flowed straight into settled value, the ageing report and every
-    recovery figure, and the first complaint came from `db:verify`
-    long afterwards.
-
-    Only when the bill is known, and measured against the bill rather
-    than the sanction: an insurer can pay less than it sanctioned, and
-    often does, but a payment above the bill is an error in the typing
-    rather than a windfall.
-  */
+  // An insurer does not pay more than it was billed.
   const billed =
     claim.billedAmount === null ? null : Number(claim.billedAmount);
   if (billed !== null && body.settledAmount > billed) {

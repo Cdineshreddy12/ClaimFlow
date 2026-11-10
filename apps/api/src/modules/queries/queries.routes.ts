@@ -117,11 +117,7 @@ export async function registerQueryInboxRoutes(app: FastifyInstance) {
     }
   });
 
-  /*
-    A retry, asked for by a human after the automatic attempt failed.
-    POST rather than PATCH: it is not an edit to the query, it runs
-    work and costs a model call, and running it twice is two calls.
-  */
+  // A retry, asked for by a human after the automatic attempt failed.
   app.post("/:id/summarise", aiRateLimit(), async (request, reply) => {
     const { id } = QueryIdParams.parse(request.params);
     try {

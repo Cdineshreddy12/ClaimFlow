@@ -20,15 +20,7 @@ export function listProcedures(includeInactive = false) {
   return repo.list(includeInactive);
 }
 
-/**
- * Retiring, not deleting. Claims already opened keep the procedure they
- * were opened under; it just stops being offered on new ones.
- *
- * This is the operation a hospital actually needs on a list that lives
- * for years. Deleting is refused the moment a claim references the row,
- * so without this a procedure the hospital had stopped doing stayed in
- * the picker permanently.
- */
+/** Retiring, not deleting. */
 export async function setProcedureActive(
   auth: AuthContext,
   id: string,
@@ -95,15 +87,7 @@ export async function updateProcedure(
   return updated;
 }
 
-/**
- * Only ever removes one nothing depends on.
- *
- * A procedure with claims against it cannot go: those claims were
- * opened under that name, and a checklist snapshot six weeks old has
- * to stay answerable. Retiring is the move for a procedure the hospital
- * has stopped doing — the claims keep their history, the picker stops
- * offering it, and it can be put back.
- */
+/** Only ever removes one nothing depends on. */
 export async function deleteProcedure(auth: AuthContext, id: string) {
   const existing = await repo.getById(id);
   if (!existing) throw new ProcedureNotFoundError(id);

@@ -66,22 +66,7 @@ export async function requestAttachmentUpload(
   return { uploadUrl, key };
 }
 
-/**
- * Takes a file that has no claim yet and works out where it goes.
- *
- * Two passes rather than one. The recogniser answers "whose claim is
- * this" from the whole open list; the existing classifier then answers
- * "which slot" against that one claim's checklist. They could have been
- * a single prompt, but the slots depend on which claim was picked — and
- * keeping them apart means a desk can see which half was unsure, which
- * matters because the two failures are not comparable. A wrong slot on
- * the right claim is a drag of the mouse. A right slot on the wrong
- * patient's claim is a data breach with a confirmation button on it.
- *
- * Never throws on a recognition failure: the file is uploaded and the
- * row exists, and a desk that has to pick the claim by hand is exactly
- * where they were before this feature existed.
- */
+/** Takes a file that has no claim yet and works out where it goes. */
 export async function registerAttachment(
   auth: AuthContext,
   body: RegisterAttachmentBody,
@@ -95,11 +80,7 @@ export async function registerAttachment(
   });
 
   try {
-    // Decorated like every other path returns them. Handing back the
-    // bare row meant a file that matched a claim at 0.97 still came
-    // back without `suggestedClaim`, and the panel — which reads that,
-    // not the id — called it "claim not identified" to the one person
-    // who could see it had worked.
+    // Decorated like every other path returns them.
     return await decorate(auth, await recognise(auth, created));
   } catch (err) {
     console.error("attachment recognition failed", {
@@ -120,9 +101,7 @@ async function recognise(
   const readBytes = async () =>
     (cached ??= await getObjectBytes(attachment.fileUrl));
 
-  // Hashed on the way past, from bytes already in hand. Cheap, and it
-  // turns "is this the same file?" from something to reason about into
-  // something to look up.
+  // Hashed on the way past, from bytes already in hand.
   const contentHash = createHash("sha256")
     .update(await readBytes())
     .digest("hex");
@@ -142,10 +121,7 @@ async function recognise(
     }
   }
 
-  // Only what this user can see. A desk executive's assistant must not
-  // be able to identify a claim they'd be refused on the claims list —
-  // claims.service is the boundary (docs/adr/0002), so the candidate
-  // list comes from there rather than from the repository.
+  // Only what this user can see (docs/adr/0002).
   const claims = await claimsService.listClaims(auth, { scope: "all" });
   const recognition = await getRecogniser().recognise({
     fileName: attachment.fileName,
@@ -177,12 +153,7 @@ async function recognise(
         readBytes,
         ocrText,
       });
-      // A floor the upload row deliberately doesn't apply. There, a
-      // weak suggestion sits beside a dropdown and costs a glance to
-      // reject. Here it becomes a proposal to file, and a desk
-      // approving a row of cards reads the filename and the claim far
-      // more carefully than the slot — so a guess at the slot is the
-      // one most likely to be waved through.
+      // A floor the upload row deliberately doesn't apply.
       const confident = classification.confidence >= LOW_CONFIDENCE_THRESHOLD;
       slot = confident ? classification.slot : null;
       slotConfidence = slot ? classification.confidence : null;
@@ -190,8 +161,8 @@ async function recognise(
   }
 
   // Falls back to the row we already hold: a vanished attachment means
-  // someone dismissed it mid-read, which costs the recognition and
-  // nothing else.
+  // someone dismissed it mid-read, which costs the recognition and nothing
+  // else.
   return (
     (await assistantRepository.saveRecognition(attachment.id, {
       contentHash,
@@ -240,9 +211,7 @@ async function decorate(auth: AuthContext, row: Attachment) {
 export interface DuplicateOf {
   /**
    * `same_file` is the bytes; `same_name` is a filename already on the
-   * matched claim. The second is weaker and says so — documents
-   * uploaded through a claim page carry no hash, so a name is the only
-   * evidence available for them.
+   * matched claim.
    */
   kind: "same_file" | "same_name";
   claimId: string;
@@ -252,18 +221,7 @@ export interface DuplicateOf {
   fileName: string;
 }
 
-/**
- * Whether this file is already on a claim.
- *
- * The same estimate dropped in twice used to produce five sentences
- * weighing whether it might be a duplicate, a different patient, or a
- * second episode — a model reasoning carefully around a fact nothing
- * had bothered to record.
- *
- * Never throws and never blocks. A second copy is sometimes exactly
- * what a desk wants; what they cannot do is notice it themselves
- * across forty files.
- */
+/** Whether this file is already on a claim. */
 async function findDuplicate(
   auth: AuthContext,
   row: Attachment,
@@ -288,9 +246,7 @@ async function findDuplicate(
       }
     }
 
-    // Falls back to the name, on the claim the recogniser picked. Only
-    // there: the same filename on an unrelated claim means nothing, and
-    // IMG_0423.jpg is a name a thousand phones produce.
+    // Falls back to the name, on the claim the recogniser picked.
     if (!row.suggestedClaimId) return null;
     const claim = await claimsService.getClaim(auth, row.suggestedClaimId);
     const documents = await documentsService.listDocuments(auth, claim.id);
@@ -321,15 +277,7 @@ function displayFileName(key: string): string {
   );
 }
 
-/**
- * A link to look at the file itself.
- *
- * A filing decision is being made about a page nobody in the panel can
- * see — the recogniser's one-line quote is good evidence, and it is
- * still somebody else's reading of a document. Being able to open the
- * scan before approving is the difference between confirming and
- * agreeing.
- */
+/** A link to look at the file itself. */
 export async function getAttachmentDownloadUrl(auth: AuthContext, id: string) {
   const attachment = await requireOwnAttachment(auth, id);
   return { downloadUrl: await getDownloadUrl(attachment.fileUrl) };
@@ -344,23 +292,14 @@ async function requireOwnAttachment(auth: AuthContext, id: string) {
   const attachment = await assistantRepository.getById(id);
   if (!attachment) throw new AttachmentNotFoundError(id);
   const memberId = await getMemberId(auth.userId);
-  // Not a hospital-wide pile: see assistant.repository's note. Reading
-  // someone else's unsorted scans is also the one way this feature
-  // could leak a document before anyone has decided where it belongs.
+  // Not a hospital-wide pile: see assistant.repository's note.
   if (attachment.uploadedBy !== memberId) throw new AttachmentNotFoundError(id);
   return attachment;
 }
 
 // --- chat -------------------------------------------------------------
 
-/**
- * One turn of conversation.
- *
- * Attachments are described to the chat model, not re-sent to it: the
- * recogniser has already read the bytes and its answer is the useful
- * part. Sending four scans again with every follow-up question would
- * pay for the same reading over and over.
- */
+/** One turn of conversation. */
 export async function chat(
   auth: AuthContext,
   body: ChatBody,
@@ -392,10 +331,10 @@ export async function chat(
           [
             `- attachment_id: ${a.id}`,
             `  filename: ${a.fileName}`,
-            // The id as well as the reference, and labelled as the
-            // thing to pass: given only "CLM-0001" the model will
-            // naturally propose that, because it is what a human would
-            // say — and the reference is not what the tool takes.
+            // The id as well as the reference, and labelled as the thing to
+            // pass: given only "CLM-0001" the model will naturally propose
+            // that, because it is what a human would say — and the
+            // reference is not what the tool takes.
             `  claim_id to use: ${a.suggestedClaim?.id ?? "unknown — ask the desk"}`,
             `  looks like: ${a.suggestedClaim ? `${a.suggestedClaim.reference} — ${a.suggestedClaim.patientName}, ${a.suggestedClaim.procedureName}` : "no claim identified"}`,
             `  identified by: ${a.recognitionReason ?? "—"}`,
@@ -446,9 +385,9 @@ export async function chat(
     content.push({ type: "text", text: body.message.trim() });
   }
 
-  // Resolved before the model is called, not after: refusing someone
-  // else's conversation should cost nothing, and a turn that is going
-  // to be rejected should not be paid for first.
+  // Resolved before the model is called, not after: refusing someone else's
+  // conversation should cost nothing, and a turn that is going to be
+  // rejected should not be paid for first.
   const existing = body.conversationId
     ? await requireOwnConversation(auth, body.conversationId)
     : null;
@@ -476,10 +415,7 @@ export async function chat(
     })),
   );
 
-  // Created only now that there is something to put in it. Creating it
-  // up front left an empty, titled conversation in the history list
-  // every time a turn failed — a row recording that someone typed a
-  // sentence the assistant never answered.
+  // Created only now that there is something to put in it.
   const conversation =
     existing ??
     (await assistantRepository.createConversation(
@@ -487,9 +423,7 @@ export async function chat(
       body.message,
     ));
 
-  // The readable record and the machinery, saved together. `turns` is
-  // what a person comes back to; `transcript` only exists so the next
-  // message can continue the thread.
+  // The readable record and the machinery, saved together.
   const turns = [
     ...(conversation.turns as ChatTurn[]),
     {
@@ -540,9 +474,7 @@ export async function listConversations(auth: AuthContext) {
 
 export async function getConversation(auth: AuthContext, id: string) {
   const conversation = await requireOwnConversation(auth, id);
-  // The transcript stays on the server. It is the provider's wire
-  // format, the panel has no use for it, and shipping it would put it
-  // back on the wire this change took it off.
+  // The transcript stays on the server.
   return {
     id: conversation.id,
     title: conversation.title,
@@ -562,19 +494,7 @@ export async function deleteConversation(auth: AuthContext, id: string) {
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-/**
- * Turns a claim reference back into a claim id.
- *
- * The model is told to pass ids and mostly does, but "CLM-0001" is what
- * the page says, what the desk says, and what it will reach for when it
- * slips — it did exactly that the first time this ran end to end.
- * Without this the proposal fails validation at approval, which is safe
- * but useless: the desk sees a card that can't be clicked.
- *
- * Deterministic and no wider than the user's own view — the reference
- * is matched against the claims they can already list, so this
- * translates a name they are allowed to see and never reaches past it.
- */
+/** Turns a claim reference back into a claim id. */
 async function resolveClaimReference(
   auth: AuthContext,
   input: Record<string, unknown>,
@@ -595,15 +515,7 @@ export function assistantAvailable(): boolean {
 
 // --- approval ---------------------------------------------------------
 
-/**
- * Executes what the human approved — never what the model said.
- *
- * The payload is re-parsed here and every branch goes through the
- * ordinary service, so the role checks and the audit row are the same
- * ones a click anywhere else in the app would produce. The extra audit
- * entry records only the provenance: that this particular action was
- * suggested by the assistant rather than typed by someone.
- */
+/** Executes what the human approved — never what the model said. */
 export async function approveProposal(
   auth: AuthContext,
   body: ApproveProposalBody,
@@ -618,10 +530,8 @@ export async function approveProposal(
     after: { kind, input: body.input },
   });
 
-  // Bookkeeping, after the fact and deliberately non-fatal: the filing
-  // has happened and is audited. Failing the request now because a card
-  // could not be ticked off would report a success as an error and
-  // invite the desk to do it twice.
+  // Bookkeeping, after the fact and deliberately non-fatal: the filing has
+  // happened and is audited.
   if (body.conversationId && body.proposalId) {
     try {
       const conversation = await requireOwnConversation(
@@ -649,13 +559,7 @@ export async function approveProposal(
   return result.payload;
 }
 
-/**
- * Moves a staged attachment onto a claim and confirms it into a slot.
- *
- * Shared by both filing proposals so that the one that invents a slot
- * and the one that uses an existing one cannot drift apart in how they
- * register, classify or audit the document.
- */
+/** Moves a staged attachment onto a claim and confirms it into a slot. */
 async function fileOntoClaim(
   auth: AuthContext,
   attachment: Attachment,
@@ -672,26 +576,20 @@ async function fileOntoClaim(
     claimId,
     key,
     attachment.contentType,
-    // Already read once on the way in. Classifying again would be a
-    // second bill for an answer we have and the human has already
-    // looked at.
+    // Already read once on the way in.
     {
       slot: checklistSlot,
       confidence: Number(attachment.slotConfidence ?? 0),
-      // Says where it came from, because what's stored is the reason
-      // the *claim* was matched, not the slot. On a document filed this
-      // way that's the more useful of the two — it is the sentence the
-      // desk read before approving — but it would be wrong to present
-      // it as the classifier's own words.
+      // Says where it came from, because what's stored is the reason the
+      // *claim* was matched, not the slot.
       reason:
         `Filed from the desk assistant. ${attachment.recognitionReason ?? ""}`.trim(),
       classifiedBy: "claude",
     },
   );
 
-  // Approving the card *is* the confirmation — the human read the
-  // claim, the slot and the reason, and clicked file. There is no
-  // second gate to ask for (docs/adr/0005).
+  // Approving the card *is* the confirmation — the human read the claim,
+  // the slot and the reason, and clicked file (docs/adr/0005).
   const confirmed = await documentsService.confirmDocument(
     auth,
     claimId,
@@ -718,10 +616,9 @@ async function execute(
       const claim = await claimsService.getClaim(auth, input.claim_id);
       const slots = claim.checklistSnapshot.map((i) => i.documentType);
       if (!slots.includes(input.checklist_slot)) {
-        // A slot that isn't on this claim would be filed against
-        // nothing and would never count toward the checklist, so the
-        // desk would see a document vanish into a gap that stays open.
-        // `file_as_new_slot` is the deliberate way to add one.
+        // A slot that isn't on this claim would be filed against nothing
+        // and would never count toward the checklist, so the desk would see
+        // a document vanish into a gap that stays open.
         throw new SlotNotOnClaimError(input.checklist_slot);
       }
 
@@ -735,28 +632,16 @@ async function execute(
     }
 
     /**
-     * The document belongs here; the checklist just never had a place
-     * for it.
-     *
-     * Adds the slot to this one claim and files into it, as a single
-     * approval, because they are one decision — "this claim also has a
-     * cost estimate, here it is". Splitting them would leave a desk
-     * holding a card that makes an empty slot and another that fills
-     * it, and a half-done job in between if they stopped.
-     *
-     * Distinct from `add_checklist_slot`, which changes the rules for
-     * every future claim and helps this one not at all. The two often
-     * belong together and the assistant can propose both; they are
-     * separate cards because they have different blast radii and
-     * different people are entitled to approve them.
+     * The document belongs here; the checklist just never had a place for
+     * it.
      */
     case "file_as_new_slot": {
       const input = PROPOSAL_INPUT.file_as_new_slot.parse(rawInput);
       const attachment = await requireOwnAttachment(auth, input.attachment_id);
-      // Checked before the slot is added, not inside fileOntoClaim:
-      // adding a slot and then refusing to fill it would leave an empty
-      // requirement on the claim that nobody asked for and nothing
-      // would ever remove.
+      // Checked before the slot is added, not inside fileOntoClaim: adding
+      // a slot and then refusing to fill it would leave an empty
+      // requirement on the claim that nobody asked for and nothing would
+      // ever remove.
       if (attachment.filedAt) throw new AlreadyFiledError(attachment.id);
 
       // Does its own getClaim, so authorization is checked before the
@@ -776,20 +661,7 @@ async function execute(
       return { entityId: input.claim_id, payload: confirmed };
     }
 
-    /**
-     * The checklist was wrong, not the document.
-     *
-     * A document that clearly belongs to a claim but fits none of its
-     * slots is usually evidence about the checklist — the same argument
-     * docs/adr/0016 makes from TPA queries, arriving here from the
-     * paper instead. So the assistant can propose the rule, and a desk
-     * head approves it.
-     *
-     * It changes nothing about the claim in hand. Rules are snapshotted
-     * at claim creation and never reach back (docs/adr/0001), so the
-     * file that prompted this still has nowhere to go on that claim —
-     * the card says so rather than implying the problem is solved.
-     */
+    /** The checklist was wrong, not the document (docs/adr/0016). */
     case "add_checklist_slot": {
       const input = PROPOSAL_INPUT.add_checklist_slot.parse(rawInput);
       // The tool isn't offered to a desk executive, but the offer is a
@@ -812,12 +684,9 @@ async function execute(
       return { entityId: claim.id, payload: rule };
     }
 
-    /*
-      Each appeal goes through `contestDeduction`, so the audit row and
-      the already-contested guard are the ones the appeal worklist
-      would produce. One contested in the meantime is counted, not
-      thrown: it is the outcome the desk wanted, already done.
-    */
+    // Each appeal goes through `contestDeduction`, so the audit row and the
+    // already-contested guard are the ones the appeal worklist would
+    // produce.
     case "open_appeal": {
       const input = PROPOSAL_INPUT.open_appeal.parse(rawInput);
       // The tool isn't offered to a desk executive; this is the gate.
@@ -835,9 +704,7 @@ async function execute(
           const contested = await deductionsService.contestDeduction(
             auth,
             deductionId,
-            // Never a note. The argument to the insurer is the desk's
-            // to write, and a model-drafted one would land in the
-            // audit record as though a person had made it.
+            // Never a note.
             {},
           );
           opened.push({
@@ -857,8 +724,7 @@ async function execute(
       return {
         // The provenance row only records that the assistant suggested
         // this; `contestDeduction` has already written one per appeal
-        // against its own claim. With nothing opened there is no claim
-        // to name, and the deduction id is the honest stand-in.
+        // against its own claim.
         entityId: opened[0]?.claimId ?? input.deduction_ids[0]!,
         payload: { opened, alreadyOpen },
       };

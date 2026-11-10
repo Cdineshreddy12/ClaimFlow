@@ -16,30 +16,12 @@ interface AuthContext {
   userId: string;
 }
 
-/**
- * Makes sure the 24 IRDAI definitions and the fallback layout exist.
- *
- * Idempotent and safe to call on every resolve: a fresh install, or one
- * upgraded from the hardcoded form, has no rows yet and would otherwise
- * show an empty form. Seeded from PREAUTH_FIELDS rather than a second
- * copy of the list, so the catalogue the extractor and the PDF read
- * can't drift from the one the desk fills in.
- */
+/** Makes sure the 24 IRDAI definitions and the fallback layout exist. */
 export async function ensureSeeded(): Promise<void> {
   const existing = await repo.listDefinitions();
   const byKey = new Map(existing.map((d) => [d.fieldKey, d]));
 
-  /*
-    Six round trips, not sixty.
-
-    This ran one INSERT per definition, per section and per placement —
-    about sixty-two in sequence on a database that answers in a few
-    milliseconds locally and a few hundred from another continent. It
-    sits on the request path (`resolveLayout` calls it), so on a fresh
-    install the first desk to open a claim paid for all of them before
-    seeing anything. The clone path next door was batched for exactly
-    this reason and this one was missed.
-  */
+  // Six round trips, not sixty.
   const missing = PREAUTH_FIELDS.filter((f) => !byKey.has(f.key));
   if (missing.length > 0) {
     const created = await repo.createDefinitions(
@@ -84,12 +66,7 @@ export async function ensureSeeded(): Promise<void> {
     const section = sectionByName.get(PREAUTH_GROUP_LABEL[group]);
     if (!section) return [];
     const fields = PREAUTH_FIELDS.filter((f) => f.group === group);
-    // Counts only the fields that actually pair up. Alternating on the
-    // index into the whole group looked equivalent and wasn't: a prose
-    // field pinned to the left column still consumed an index, which
-    // flipped the parity of everything after it. Two of those in one
-    // section is how Clinical details ended up nine fields against
-    // three, with half the section blank.
+    // Counts only the fields that actually pair up.
     let shortFields = 0;
     return fields.flatMap((field, order) => {
       const definition = byKey.get(field.key);
@@ -103,9 +80,8 @@ export async function ensureSeeded(): Promise<void> {
           // Prose reads badly at half width, so it takes the left
           // column and the short fields pair up around it.
           columnPosition: isProse ? 0 : shortFields++ % 2,
-          // Nothing is required: a desk routinely sends a partial
-          // pre-auth and completes it on query. The gap view surfaces
-          // incompleteness, not a blocked save.
+          // Nothing is required: a desk routinely sends a partial pre-auth
+          // and completes it on query.
           required: false,
         },
       ];
@@ -117,20 +93,7 @@ export async function ensureSeeded(): Promise<void> {
 
 export class AlreadyCustomisedError extends Error {}
 
-/**
- * Gives one insurer a pre-auth form of their own.
- *
- * The schema has carried `preauth_layouts.insurer_id` from the start,
- * and `findLayoutRow` has always preferred an insurer's own layout over
- * the shared default — but nothing could create one. Every write route
- * is addressed by section or placement id, so they were all editing
- * whichever layout they happened to resolve to, which was always the
- * default. The capability was readable and unreachable.
- *
- * Cloned from what that insurer resolves to today rather than started
- * blank: a desk customising Star Health's form wants the IRDAI form
- * with three things moved, not an empty page.
- */
+/** Gives one insurer a pre-auth form of their own. */
 export async function customiseForInsurer(
   auth: AuthContext,
   insurerId: string,
@@ -146,16 +109,7 @@ export async function customiseForInsurer(
   const created = await repo.createLayout(source.name, insurerId);
   if (!created) throw new LayoutNotFoundError(insurerId);
 
-  /*
-    Two statements, not thirty-one.
-
-    This cloned the shared form a row at a time — a section, then its
-    column count, then each of its placements, every one its own
-    awaited round trip to a Postgres that is not on this machine. The
-    endpoint took fourteen seconds, which on screen is a button that
-    looks broken. The sections come back in insert order, so each one
-    keeps its own placements.
-  */
+  // Two statements, not thirty-one.
   const copies = await repo.createSections(
     source.sections.map((section) => ({
       layoutId: created.id,
@@ -191,10 +145,8 @@ export async function customiseForInsurer(
 }
 
 /**
- * Drops an insurer's own form so they fall back to the shared one.
- *
- * Claims already opened are untouched — each carries the layout it was
- * created under (docs/adr/0001's rule, applied to the form).
+ * Drops an insurer's own form so they fall back to the shared one
+ * (docs/adr/0001).
  */
 export async function revertToDefault(auth: AuthContext, insurerId: string) {
   const own = await repo.findLayoutRow(insurerId);
@@ -216,21 +168,14 @@ export async function resolveLayout(
 ): Promise<PreauthLayout> {
   await ensureSeeded();
   const row = await repo.findLayoutRow(insurerId);
-  // Falls back to the in-code IRDAI form rather than an empty one: a
-  // blank pre-auth screen looks like data loss, and this is always a
-  // correct answer.
+  // Falls back to the in-code IRDAI form rather than an empty one: a blank
+  // pre-auth screen looks like data loss, and this is always a correct
+  // answer.
   if (!row) return defaultLayout();
   return (await repo.hydrate(row.id)) ?? defaultLayout();
 }
 
-/**
- * The layout a given claim was opened under.
- *
- * The snapshot wins whenever there is one. Same rule as the document
- * checklist (docs/adr/0001) and for the same reason: a TPA query six
- * weeks later has to be answerable against the form that was actually
- * sent, not whatever the form looks like today.
- */
+/** The layout a given claim was opened under (docs/adr/0001). */
 export async function layoutForClaim(claimId: string): Promise<PreauthLayout> {
   const claim = await claimsRepository.getClaimById(claimId);
   if (!claim) throw new LayoutNotFoundError(claimId);
@@ -239,9 +184,9 @@ export async function layoutForClaim(claimId: string): Promise<PreauthLayout> {
   if (snapshot) {
     const parsed = PreauthLayout.safeParse(snapshot);
     if (parsed.success) return parsed.data;
-    // A snapshot that no longer parses means the shape changed under
-    // it. Falling back to the live layout is better than failing the
-    // screen, but it is a real inconsistency, so say so.
+    // A snapshot that no longer parses means the shape changed under it.
+    // Editing the live layout must never change what an in-flight claim
+    // asked for, which is why the claim carries its own copy.
     console.error("unreadable preauth layout snapshot, using live layout", {
       claimId,
     });
@@ -336,9 +281,9 @@ export async function updatePlacement(
     required?: boolean | undefined;
   },
 ) {
-  // Built explicitly rather than spread: exactOptionalPropertyTypes
-  // means an explicit `undefined` is not the same as an absent key, and
-  // passing one through would blank the column.
+  // Built explicitly rather than spread: exactOptionalPropertyTypes means
+  // an explicit `undefined` is not the same as an absent key, and passing
+  // one through would blank the column.
   const patch: { labelOverride?: string | null; required?: boolean } = {};
   if (values.labelOverride !== undefined) {
     patch.labelOverride = values.labelOverride;
@@ -398,12 +343,7 @@ export async function setSectionColumns(
   return section;
 }
 
-/**
- * A field the hospital invented. Standard fields are seeded, never
- * created here — and a custom key may not shadow one, or a value would
- * be filed under a name the extractor and the PDF already mean
- * something else by.
- */
+/** A field the hospital invented. */
 export async function createCustomField(
   auth: AuthContext,
   input: {

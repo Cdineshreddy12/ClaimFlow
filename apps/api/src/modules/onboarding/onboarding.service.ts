@@ -16,17 +16,7 @@ interface AuthContext {
   role: Role;
 }
 
-/**
- * Claims the install for one hospital and makes the caller its admin.
- *
- * Runs once per deployment. Anyone arriving after that joins through an
- * invite instead — there is no second hospital for them to create.
- *
- * The gate is "does anyone have an account yet", not "does a hospital
- * row exist": a migrated or seeded database has the hospital already,
- * and refusing on that basis would leave the first real user with no
- * way in and nobody to invite them.
- */
+/** Claims the install for one hospital and makes the caller its admin. */
 export async function setUpHospital(userId: string, name: string) {
   const existing = await onboardingRepository.getMembershipForUser(userId);
   if (existing) throw new AlreadyOnboardedError(userId);

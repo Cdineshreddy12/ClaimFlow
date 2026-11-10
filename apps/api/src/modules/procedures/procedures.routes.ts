@@ -16,14 +16,7 @@ const ListQuery = z.object({
   includeInactive: z.enum(["true", "false"]).optional(),
 });
 
-/**
- * The procedure master.
- *
- * Reading is open to every desk user — a claim screen cannot render
- * without a procedure name. Writing is held to the two roles that
- * administer the desk, the same gate the insurer master uses: a
- * checklist hangs on this list, and a stray entry splits a rule set.
- */
+/** The procedure master. */
 export async function registerProceduresRoutes(app: FastifyInstance) {
   app.addHook("preHandler", authenticate);
 

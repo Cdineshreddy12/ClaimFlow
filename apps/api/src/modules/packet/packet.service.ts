@@ -31,12 +31,7 @@ function formatAddress(org: {
 
 /**
  * Builds the merged packet and stores it alongside the claim's other
- * objects, then hands back a pre-signed URL.
- *
- * Only *confirmed* documents go in. An unconfirmed upload hasn't been
- * checked by a human against its checklist slot yet (docs/adr/0005), and
- * the packet is the thing that actually goes to a TPA — so the same
- * human-confirm boundary that gates the gap view gates this too.
+ * objects, then hands back a pre-signed URL (docs/adr/0005).
  */
 export async function generatePacket(auth: AuthContext, claimId: string) {
   // Goes through claims.service so desk_executive scoping applies —

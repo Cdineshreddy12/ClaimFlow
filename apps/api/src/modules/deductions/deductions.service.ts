@@ -40,11 +40,7 @@ export async function recordDeduction(
   claimId: string,
   body: RecordDeductionBody,
 ) {
-  /*
-    The cuts cannot come to more than the bill. Only checked once the
-    bill is known: before that there is nothing to measure against, and
-    refusing would be worse than allowing.
-  */
+  // The cuts cannot come to more than the bill.
   const claim = await claimsRepository.getClaimById(claimId);
   if (!claim) throw new ClaimNotFoundError(claimId);
 
@@ -101,10 +97,8 @@ export interface DeductionsSummary {
 
 /**
  * Totals for the dashboard, defaulting to the current calendar month —
- * "deductions this month" is how the client already talks about it.
- *
- * `until` is open-ended unless given — the dashboard wants "so far";
- * the period report (docs/adr/0018) passes both ends for a closed month.
+ * "deductions this month" is how the client already talks about it
+ * (docs/adr/0018).
  */
 export async function summarise(
   auth: AuthContext,
@@ -143,15 +137,6 @@ export async function summarise(
 /**
  * What this hospital's own history says is likely to be cut from this
  * claim, while there is still time to prevent it.
- *
- * The product's premise is that most deducted money is avoidable
- * paperwork, and the deduction reasons were chosen to match that. This
- * closes the loop: the same reasons, read back at the claim that is
- * about to repeat them.
- *
- * No model is involved. Counts and sums over rows the desk entered
- * itself, so every warning carries the evidence that produced it and
- * can be argued with.
  */
 export async function assessRisk(
   auth: AuthContext,
@@ -160,10 +145,7 @@ export async function assessRisk(
   const claim = await claimsRepository.getClaimById(claimId);
   if (!claim) throw new ClaimNotFoundError(claimId);
 
-  // Prefer what this insurer does to this procedure. Fall back to the
-  // insurer alone when that's too thin to mean anything — a wider slice
-  // of real history beats a narrow slice of noise, and the response
-  // says which one it used so the UI can't imply the narrow one.
+  // Prefer what this insurer does to this procedure.
   let scope: DeductionRiskScope = "insurer_procedure";
   let history = await repo.settledHistoryForScope({
     insurerId: claim.insurerId,
@@ -197,9 +179,7 @@ export async function assessRisk(
       // A reason with no affected claims can't come back from the query,
       // but dividing by it would be silent nonsense if it ever did.
       const affected = Math.max(row.claimsAffected, 1);
-      // Net, not gross. A reason this insurer cuts often but gives back
-      // on appeal is a smaller risk than its gross total implies, and
-      // ranking on gross would send the desk chasing the wrong one.
+      // Net, not gross.
       const netTotal = Math.max(row.total - row.recovered, 0);
       const averagePerClaim = netTotal / affected;
       return {
@@ -213,15 +193,11 @@ export async function assessRisk(
         averagePerClaim,
         expectedCost: (row.claimsAffected / claimsConsidered) * averagePerClaim,
         // The live join: history says this insurer cuts for missing
-        // documents, and the claim is missing documents right now. Any
-        // other reason has no equivalent on-claim fact to point at, so
-        // it stays empty rather than guessing at one.
+        // documents, and the claim is missing documents right now.
         openGaps: reason === "missing_document" ? gaps.missing : [],
       };
     })
-    // Preventable first, then by what it costs. Sorting purely by money
-    // would let a policy mismatch — which the desk cannot do anything
-    // about — head a panel whose entire job is to be acted on.
+    // Preventable first, then by what it costs.
     .sort(
       (a, b) =>
         Number(b.avoidable) - Number(a.avoidable) ||
@@ -231,13 +207,7 @@ export async function assessRisk(
   return { scope, claimsConsidered, enoughHistory: true, risks };
 }
 
-/**
- * Opens an appeal against one deduction.
- *
- * Contesting is the point of docs/adr/0013: knowing what was cut only
- * becomes money if something is done about it. Recording the attempt is
- * what makes the next step — and the recovery rate — visible at all.
- */
+/** Opens an appeal against one deduction (docs/adr/0013). */
 export async function contestDeduction(
   auth: AuthContext,
   deductionId: string,
@@ -266,14 +236,7 @@ export async function contestDeduction(
   return updated;
 }
 
-/**
- * Records what the insurer gave back.
- *
- * The outcome is derived from the amount rather than chosen, and a
- * recovery can never exceed what was cut: the appeal is an argument
- * about one deduction, so getting back more than it took isn't a
- * generous insurer, it's a typo.
- */
+/** Records what the insurer gave back. */
 export async function resolveAppeal(
   auth: AuthContext,
   deductionId: string,

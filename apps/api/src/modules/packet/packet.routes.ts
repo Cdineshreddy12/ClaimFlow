@@ -11,8 +11,8 @@ export async function registerPacketRoutes(app: FastifyInstance) {
   app.addHook("preHandler", authenticate);
 
   /**
-   * POST, not GET: this writes a new object to S3 every call, so it
-   * isn't safe to retry blindly or cache.
+   * POST, not GET: this writes a new object to S3 every call, so it isn't
+   * safe to retry blindly or cache.
    */
   app.post("/", async (request, reply) => {
     const { claimId } = ClaimIdParams.parse(request.params);

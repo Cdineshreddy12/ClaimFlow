@@ -75,17 +75,6 @@ export async function listFields(auth: AuthContext, claimId: string) {
 /**
  * Reads the claim's confirmed documents and proposes values for the
  * pre-auth fields still blank.
- *
- * Only confirmed documents, and only unconfirmed fields. The first is
- * because an unconfirmed upload hasn't been vouched for as being what
- * the classifier guessed, and reading a figure off a misfiled page puts
- * it on a form nobody re-checks. The second is so re-running this after
- * uploading one more document can't disturb values a human already
- * stood behind.
- *
- * Explicitly triggered rather than firing on every document confirm: a
- * desk uploading six files would otherwise pay for six multi-document
- * reads, five of them superseded.
  */
 export async function extractFields(auth: AuthContext, claimId: string) {
   const claim = await claimsRepository.getClaimById(claimId);
@@ -129,9 +118,9 @@ export async function extractFields(auth: AuthContext, claimId: string) {
     };
   });
 
-  // OCR the images first, same reasoning as the classifier: the values
-  // on this form come off handwritten doctors' notes more than anything
-  // else, and that's where character extraction beats a vision model.
+  // OCR the images first, same reasoning as the classifier: the values on
+  // this form come off handwritten doctors' notes more than anything else,
+  // and that's where character extraction beats a vision model.
   await Promise.all(
     documents.map(async (doc) => {
       if (!canOcr(doc.contentType)) return;
@@ -147,10 +136,7 @@ export async function extractFields(auth: AuthContext, claimId: string) {
     }),
   );
 
-  // A failed read is reported, not swallowed. Unlike classification —
-  // which is a side effect of an upload the desk didn't ask for — this
-  // is a button someone pressed, and silently returning "found nothing"
-  // would read as the documents being empty rather than the call failing.
+  // A failed read is reported, not swallowed.
   let outcome;
   try {
     outcome = await getPreauthExtractor().extract({
@@ -198,8 +184,8 @@ export async function extractFields(auth: AuthContext, claimId: string) {
   return {
     extracted: saved.length,
     // What was actually read, not what was offered — a .txt note and a
-    // thumbnail-sized scan get skipped, and saying otherwise would tell
-    // a desk their documents were read when they weren't.
+    // thumbnail-sized scan get skipped, and saying otherwise would tell a
+    // desk their documents were read when they weren't.
     documentsRead: outcome.documentsRead,
     documentsSkipped: documents.length - outcome.documentsRead,
     fieldsRemaining: fields.length - saved.length,
@@ -207,20 +193,8 @@ export async function extractFields(auth: AuthContext, claimId: string) {
   };
 }
 
-/**
- * The human-confirm step docs/adr/0005 requires. The value is validated
- * against the field's own type here, not just at the extractor — a desk
- * executive correcting a figure by hand goes through exactly the same
- * gate the model's answer did.
- */
-/**
- * Finds a field by key on the claim's own form.
- *
- * Resolved from the claim's layout, not the standard catalogue: a
- * hospital's own field is as real as an IRDAI one, and looking only at
- * the fixed 24 made every custom field impossible to confirm — the
- * builder appeared to work and then the field silently 404'd on save.
- */
+/** The human-confirm step docs/adr/0005 requires. */
+/** Finds a field by key on the claim's own form. */
 async function fieldOnClaim(
   claimId: string,
   fieldKey: string,
@@ -242,8 +216,8 @@ async function fieldOnClaim(
     };
   }
   // A value recorded before the field was taken off the form is still
-  // editable — removing a field from a layout isn't meant to strand
-  // what it already held.
+  // editable — removing a field from a layout isn't meant to strand what it
+  // already held.
   const standard = PREAUTH_FIELD_BY_KEY[fieldKey];
   return standard
     ? { type: standard.type, options: standard.options }
@@ -286,41 +260,11 @@ export async function confirmField(
 }
 
 /**
- * Admission date and time are facts the rest of the app reads off
- * `claims`, so confirming them here updates that column and there is
- * one answer rather than two. The form asks for date and time
- * separately; a confirmed date with no time lands at midnight, which is
- * what the desk would write anyway.
- *
- * `totalExpectedCost` used to write through to `claims.billed_amount`,
- * and that was wrong. Expected cost is what the hospital asked the
- * insurer to cover; billed amount is what it charged at discharge. They
- * differ by exactly the thing the money model is for — docs/adr/0012 —
- * and conflating them made every shortfall read as zero. The expected
- * cost now stays on the pre-auth field it belongs to, and the billed
- * amount is recorded explicitly through PATCH /claims/:id/financials.
+ * Admission date and time are facts the rest of the app reads off `claims`,
+ * so confirming them here updates that column and there is one answer
+ * rather than two (docs/adr/0012).
  */
-/**
- * The clock a form's "Time of admission" is written on.
- *
- * `new Date("2026-11-07T18:40:00")` has no offset, so it means
- * whatever the *server's* timezone says — and the container runs UTC.
- * A ward writing 18:40 on a form in Pune had it stored as 18:40Z and
- * read back as "8 Nov, 12:10 am", five and a half hours out, on a
- * product whose every clock is measured against IRDAI's.
- *
- * It worked on every developer's machine, which is how it survived:
- * a laptop set to IST parses the same string correctly. Only the
- * deployed container was wrong, and nothing in the app says which
- * timezone it thinks it is in.
- *
- * Fixed rather than configurable, and fixed here rather than read from
- * the hospital row: this product is India-only by construction — IRDAI
- * windows, ROHINI IDs, Ayushman Bharat, rupees — and IST has no
- * daylight saving, so the offset is exact all year. A second country
- * would need a column on the hospital, and would need this line to be
- * the thing it reads.
- */
+/** The clock a form's "Time of admission" is written on. */
 const IST_OFFSET = "+05:30";
 
 async function writeThroughToClaim(
@@ -369,22 +313,7 @@ export async function clearField(
   return row;
 }
 
-/**
- * Reads the form against itself before it goes to an insurer.
- *
- * Two halves, deliberately separated. The deterministic rules in
- * @claimflow/contracts check the dates, the arithmetic and the form's
- * own branches; the model reads only the clinical coherence the rules
- * can't see. Every finding carries which half produced it, so a desk
- * exec is never left guessing whether a number was computed or
- * believed.
- *
- * The model half is optional in both directions: no key configured and
- * it doesn't run, a failed call and it doesn't run either. The rules
- * still produce the findings that catch most insurer queries, and the
- * response says plainly that the clinical read was skipped rather than
- * implying a clean bill of health.
- */
+/** Reads the form against itself before it goes to an insurer. */
 export async function reviewClaimForm(
   auth: AuthContext,
   claimId: string,
@@ -394,10 +323,7 @@ export async function reviewClaimForm(
 
   const rows = (await preauthRepository.listForClaim(claimId)) ?? [];
 
-  // Confirmed values only. Reviewing an unconfirmed suggestion would be
-  // the product arguing with its own guess in front of the user, and
-  // adr 0005 is clear that a suggestion isn't a value until a human says
-  // so.
+  // Confirmed values only.
   const confirmed = rows.filter((row) => row.confirmedAt && row.value);
   const values: Record<string, string | null> = {};
   for (const row of confirmed) values[row.fieldKey] = row.value;
@@ -435,19 +361,12 @@ export async function reviewClaimForm(
   };
 }
 
+/** Renders the filled form as a printable PDF (docs/adr/0005). */
 /**
- * Renders the filled form as a printable PDF.
- *
- * Only confirmed values are printed. A suggestion isn't a value until a
- * human says so (docs/adr/0005), and a document leaving the hospital is
- * the least reversible place for an unchecked figure to turn up —
- * unconfirmed fields print as a rule to complete by hand instead.
- */
-/**
- * The upload endpoint only ever accepts these two (see
- * hospital.schema.ts's RequestLogoUploadUrlBody), and buildHospitalLogoKey
- * keeps the original extension — so the key alone says which one a given
- * logo is without a content-type column to keep in sync.
+ * The upload endpoint only ever accepts these two (see hospital.schema.ts's
+ * RequestLogoUploadUrlBody), and buildHospitalLogoKey keeps the original
+ * extension — so the key alone says which one a given logo is without a
+ * content-type column to keep in sync.
  */
 function logoContentTypeFromKey(key: string): "image/png" | "image/jpeg" {
   return key.toLowerCase().endsWith(".png") ? "image/png" : "image/jpeg";
@@ -461,8 +380,8 @@ export async function renderPreauthForm(auth: AuthContext, claimId: string) {
   if (!hospital) throw new ClaimNotFoundError(claimId);
 
   // Never fatal: a logo that's briefly unreachable in S3 must not stop a
-  // desk from printing a form they need right now — it just prints
-  // without the mark that time.
+  // desk from printing a form they need right now — it just prints without
+  // the mark that time.
   const logo = hospital.logoFileKey
     ? await getObjectBytes(hospital.logoFileKey)
         .then((bytes) => ({
@@ -535,10 +454,7 @@ export async function renderPreauthForm(auth: AuthContext, claimId: string) {
   return { bytes, fileName: `preauth-${claim.reference}.pdf` };
 }
 
-/**
- * Print form of a stored value. Enums print their label, currency gets
- * grouped digits — a TPA reads "surgical_management" as a bug.
- */
+/** Print form of a stored value. */
 function formatForPrint(
   field: {
     fieldType: string;

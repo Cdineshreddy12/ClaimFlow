@@ -31,14 +31,7 @@ import {
 export async function registerClaimsRoutes(app: FastifyInstance) {
   app.addHook("preHandler", authenticate);
 
-  /*
-    Sends a page when asked for one, every match otherwise.
-
-    The list screen always sends a limit; the dashboard's charts and
-    the assistant's claim matching want the whole set and send none.
-    One endpoint rather than two, because the filtering, the scoping
-    and the search are identical either way — only the slice differs.
-  */
+  // Sends a page when asked for one, every match otherwise.
   app.get("/", async (request, reply) => {
     const query = ListClaimsQuery.parse(request.query);
     const page = ClaimListQuery.parse(request.query);
@@ -55,13 +48,8 @@ export async function registerClaimsRoutes(app: FastifyInstance) {
     );
   });
 
-  /*
-    The dashboard, as six numbers rather than every claim.
-
-    Declared before "/:id" so "overview" is never read as a claim id.
-    Fastify matches static segments first regardless, but the order
-    says the intent to whoever reads this next.
-  */
+  // The dashboard, as six numbers rather than every claim. Declared
+  // before "/:id" so "overview" is never read as a claim id.
   app.get("/overview", async (request, reply) => {
     return reply.send(await claimsService.getClaimOverview(request.authUser!));
   });
@@ -94,10 +82,7 @@ export async function registerClaimsRoutes(app: FastifyInstance) {
     }
   });
 
-  /**
-   * Adds one slot to one claim. Not a rule change: this touches the
-   * claim's own snapshot and nothing else (docs/adr/0001's amendment).
-   */
+  /** Adds one slot to one claim (docs/adr/0001). */
   app.post("/:id/checklist-slots", async (request, reply) => {
     const { id } = ClaimIdParams.parse(request.params);
     const body = AddChecklistSlotBody.parse(request.body);
@@ -122,14 +107,7 @@ export async function registerClaimsRoutes(app: FastifyInstance) {
     }
   });
 
-  /**
-   * Removes a hand-added slot from one claim.
-   *
-   * The document type travels as a query parameter, not a path
-   * segment: real slot names contain slashes ("Policy / e-card copy")
-   * and would be read as extra path segments however they were
-   * encoded.
-   */
+  /** Removes a hand-added slot from one claim. */
   app.delete("/:id/checklist-slots", async (request, reply) => {
     const { id } = ClaimIdParams.parse(request.params);
     const query = RemoveChecklistSlotQuery.parse(request.query);
@@ -220,8 +198,8 @@ export async function registerClaimsRoutes(app: FastifyInstance) {
   });
 
   /**
-   * The sanctioned amount decides whether the hospital is owed money,
-   * so it's a desk-head fact — same reasoning as recording a deduction.
+   * The sanctioned amount decides whether the hospital is owed money, so
+   * it's a desk-head fact — same reasoning as recording a deduction.
    */
   app.patch(
     "/:id/financials",
@@ -282,14 +260,7 @@ export async function registerClaimsRoutes(app: FastifyInstance) {
     }
   });
 
-  /**
-   * Who on the desk owns this claim.
-   *
-   * Desk-management roles only: an executive is scoped to their own
-   * claims, so letting them assign would let them choose their own
-   * workload — and the point of the scoping is that someone else
-   * decides it.
-   */
+  /** Who on the desk owns this claim. */
   app.patch(
     "/:id/assignee",
     { preHandler: requireRole("org_admin", "desk_head") },

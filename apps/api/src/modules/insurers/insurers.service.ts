@@ -67,10 +67,7 @@ export async function updateInsurer(
   return updated;
 }
 
-/**
- * Retiring, not deleting. Claims already filed keep the insurer they
- * were filed under; it just stops being offered on new ones.
- */
+/** Retiring, not deleting. */
 export async function setInsurerActive(
   auth: AuthContext,
   id: string,
@@ -88,11 +85,7 @@ export async function setInsurerActive(
   return updated;
 }
 
-/**
- * Only ever possible for one created by mistake. The moment a claim or
- * a checklist rule points at it, deleting would strand them, so this
- * refuses and the caller is told to retire it instead.
- */
+/** Only ever possible for one created by mistake. */
 export async function deleteInsurer(auth: AuthContext, id: string) {
   const existing = await repo.getById(id);
   if (!existing) throw new InsurerNotFoundError(id);

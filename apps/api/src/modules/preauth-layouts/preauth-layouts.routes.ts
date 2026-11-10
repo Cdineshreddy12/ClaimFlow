@@ -53,9 +53,9 @@ const ReorderSectionsBody = z.object({
 });
 
 const CustomFieldBody = z.object({
-  // Lower snake_case: it becomes a storage key, and a key with spaces
-  // or casing drift is a bug waiting to happen in the PDF and the
-  // extractor prompt alike.
+  // Lower snake_case: it becomes a storage key, and a key with spaces or
+  // casing drift is a bug waiting to happen in the PDF and the extractor
+  // prompt alike.
   fieldKey: z
     .string()
     .trim()
@@ -73,11 +73,7 @@ const CustomFieldBody = z.object({
     .optional(),
 });
 
-/**
- * The form builder. Reading is open to any member — the claim screen
- * renders from it — but editing is admin-only: the layout is shared
- * configuration that every future claim is snapshotted from.
- */
+/** The form builder. */
 export async function registerPreauthLayoutRoutes(app: FastifyInstance) {
   app.addHook("preHandler", authenticate);
 
@@ -125,12 +121,7 @@ export async function registerPreauthLayoutRoutes(app: FastifyInstance) {
     }
   });
 
-  /**
-   * Gives one insurer a form of their own, cloned from what they use
-   * today. Every other write route is addressed by section or
-   * placement id, so once this exists the editor edits the clone
-   * without any of them changing.
-   */
+  /** Gives one insurer a form of their own, cloned from what they use today. */
   app.post("/for-insurer", admin, async (request, reply) => {
     const { insurerId } = InsurerBody.parse(request.body);
     try {

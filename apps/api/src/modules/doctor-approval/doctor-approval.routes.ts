@@ -85,8 +85,8 @@ function replyForLinkError(err: unknown, reply: FastifyReply): boolean {
 }
 
 /**
- * Public — the doctor has no account, the token is the credential. See
- * docs/adr/0010 for why that trade is acceptable and what bounds it.
+ * Public — the doctor has no account, the token is the credential
+ * (docs/adr/0010).
  */
 export async function registerPublicDoctorApprovalRoutes(app: FastifyInstance) {
   app.get("/:token", async (request, reply) => {

@@ -5,13 +5,7 @@ import * as receivablesService from "./receivables.service.js";
 export async function registerReceivablesRoutes(app: FastifyInstance) {
   app.addHook("preHandler", authenticate);
 
-  /**
-   * What the hospital is owed, by age and by insurer.
-   *
-   * Gated like the deduction figures: this is the hospital's cash
-   * position, not one desk's worklist, and a desk executive is scoped
-   * to their own assigned claims everywhere else in the product.
-   */
+  /** What the hospital is owed, by age and by insurer. */
   app.get(
     "/ageing",
     { preHandler: requireRole("org_admin", "desk_head") },

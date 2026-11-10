@@ -33,9 +33,7 @@ export async function listDocuments(auth: AuthContext, claimId: string) {
 
 /**
  * Step 1 of the upload flow (see docs/adr/0003): the API hands back a
- * pre-signed PUT URL and never streams the file through itself. The
- * frontend uploads directly to S3, then calls registerDocument once that
- * succeeds.
+ * pre-signed PUT URL and never streams the file through itself.
  */
 export async function requestUploadUrl(
   auth: AuthContext,
@@ -52,16 +50,7 @@ export async function registerDocument(
   claimId: string,
   key: string,
   contentType: string,
-  /**
-   * A classification that has already been paid for.
-   *
-   * The assistant reads a file to work out which claim it belongs to
-   * before anyone has picked one, and that reading answers the slot
-   * question too. Passing it in rather than classifying again is one
-   * call saved per filing, and — more to the point — stops the desk
-   * being shown a second, differently-worded opinion about a document
-   * they have already approved.
-   */
+  /** A classification that has already been paid for. */
   presetClassification?: DocumentClassification,
 ) {
   const created = await documentsRepository.create(claimId, { fileUrl: key });
@@ -84,23 +73,15 @@ export async function registerDocument(
   }
 
   // Inline rather than queued: a desk exec is watching this upload and
-  // wants the suggestion now, and one classification is a single call,
-  // not the multi-step OCR pipeline docs/adr/0003 reserved a queue for.
-  // Revisit when OCR lands in front of it.
+  // wants the suggestion now, and one classification is a single call, not
+  // the multi-step OCR pipeline docs/adr/0003 reserved a queue for.
   return (
     (await classifyDocument(auth, claimId, created.id, key, contentType)) ??
     created
   );
 }
 
-/**
- * Attaches a slot suggestion to an already-registered document.
- *
- * Never throws. The file is uploaded and the row exists; failing the
- * request now would tell the desk their upload broke when it didn't,
- * and they can always pick a slot by hand. A failure leaves the
- * suggestion columns null, which the UI reads as "unclassified".
- */
+/** Attaches a slot suggestion to an already-registered document. */
 export async function classifyDocument(
   auth: AuthContext,
   claimId: string,
@@ -140,21 +121,6 @@ export async function classifyDocument(
 /**
  * Reads an already-uploaded document again, against the checklist as it
  * stands now.
- *
- * A classification is a point-in-time answer to "which of these slots",
- * and the list it was asked about changes: a cost estimate was read on
- * the 4th against six slots, correctly refused all of them, and on the
- * 5th the claim gained a "Cost estimate" slot. The stored refusal then
- * described a checklist that no longer existed, while the right slot
- * sat in the dropdown underneath it.
- *
- * On demand rather than automatically on every slot addition: that
- * would mean model calls the desk never asked for and cannot see the
- * cost of, for documents nobody is currently filing.
- *
- * Confirmed documents are refused. A filed document is a settled
- * decision, and re-reading it would replace the evidence a human
- * actually acted on with a fresh opinion of the same page.
  */
 export async function reclassifyDocument(
   auth: AuthContext,
@@ -174,23 +140,13 @@ export async function reclassifyDocument(
   );
 
   // classifyDocument swallows its own failures, which is right on the
-  // upload path — the file is stored and the desk can pick a slot by
-  // hand, so failing the upload would report a break that didn't
-  // happen. Here it is wrong: somebody pressed a button and is waiting
-  // to see what it did. An unchanged row returned as success is a
-  // button that silently does nothing.
+  // upload path — the file is stored and the desk can pick a slot by hand,
+  // so failing the upload would report a break that didn't happen.
   if (!updated) throw new DocumentUnreadableError(documentId);
   return updated;
 }
 
-/**
- * The upload recorded no content type, so the extension is what's left.
- *
- * Only has to be good enough for the classifier to decide how to attach
- * the bytes; anything it doesn't recognise comes back as a type the
- * classifier declines to read, which is the honest outcome for a file
- * we can't identify either.
- */
+/** The upload recorded no content type, so the extension is what's left. */
 function contentTypeFromKey(key: string): string {
   const ext = key.toLowerCase().split(".").pop() ?? "";
   switch (ext) {
@@ -210,18 +166,7 @@ function contentTypeFromKey(key: string): string {
   }
 }
 
-/**
- * OCR, when the file is an image Textract can read.
- *
- * Runs in front of the classifier rather than instead of it — the model
- * already reads printed scans well, and this is for the brief's hard
- * case, handwritten doctors' notes, where character extraction is the
- * part a vision model is weakest at.
- *
- * Never throws: OCR is an enhancement to a suggestion that is itself
- * optional, so a Textract outage must not stop a document being
- * classified, let alone uploaded.
- */
+/** OCR, when the file is an image Textract can read. */
 async function extractText(
   contentType: string,
   readBytes: () => Promise<Uint8Array>,
@@ -259,8 +204,7 @@ export async function getDocumentDownloadUrl(
 
 /**
  * The human-confirm step the product brief requires for every AI (or, for
- * now, manually-sorted) classification — see docs/adr/0005. No document
- * counts toward a claim's checklist until this has been clicked.
+ * now, manually-sorted) classification — see docs/adr/0005.
  */
 export async function confirmDocument(
   auth: AuthContext,

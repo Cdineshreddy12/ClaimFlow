@@ -35,9 +35,9 @@ export async function registerEnhancementRoutes(app: FastifyInstance) {
   });
 
   /**
-   * Any desk user can ask: the exec watching the cost cross the ceiling
-   * is the one who knows, and making them find a desk head first is how
-   * the request arrives after discharge.
+   * Any desk user can ask: the exec watching the cost cross the ceiling is
+   * the one who knows, and making them find a desk head first is how the
+   * request arrives after discharge.
    */
   app.post("/", async (request, reply) => {
     const { claimId } = ClaimIdParams.parse(request.params);
@@ -61,9 +61,9 @@ export async function registerEnhancementRoutes(app: FastifyInstance) {
   });
 
   /**
-   * Recording the insurer's answer raises the claim's sanctioned
-   * amount, which is a financial fact — same roles as recording a
-   * deduction, and for the same reason.
+   * Recording the insurer's answer raises the claim's sanctioned amount,
+   * which is a financial fact — same roles as recording a deduction, and
+   * for the same reason.
    */
   app.patch(
     "/:enhancementId",

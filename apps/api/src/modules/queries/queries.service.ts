@@ -38,13 +38,8 @@ export async function createQuery(
   claimId: string,
   body: CreateQueryBody,
 ) {
-  /*
-    The same email pasted onto the same claim moments ago is the same
-    paste, not a second query. Checked before the model runs, so a
-    retry after a timeout costs nothing and returns what the first
-    attempt actually stored — including a summary the desk never got
-    to see land.
-  */
+  // The same email pasted onto the same claim moments ago is the same
+  // paste, not a second query.
   const duplicate = await queriesRepository.findRecentDuplicate(
     claimId,
     body.tpaRawEmail,
@@ -52,14 +47,11 @@ export async function createQuery(
   );
   if (duplicate) return duplicate;
 
-  // Only fill what the desk left blank. Someone who typed their own
-  // summary has already read the email, and overwriting that would be
-  // the model second-guessing a human who was there.
+  // Only fill what the desk left blank.
   const enriched = await summariseIfBlank(body);
 
-  // A deadline that came in on the body was typed by the person
-  // pasting the email, so it is confirmed on arrival. One the
-  // summariser derived is not, and waits for a click — docs/adr/0005.
+  // A deadline that came in on the body was typed by the person pasting the
+  // email, so it is confirmed on arrival (docs/adr/0005).
   if (body.deadline) {
     enriched.deadlineConfirmedBy = await getMemberId(auth.userId);
     enriched.deadlineConfirmedAt = new Date();
@@ -75,21 +67,7 @@ export async function createQuery(
     after: { claimId },
   });
 
-  /*
-    A logged query also moves the claim.
-
-    These were two separate actions: a status button that moved the
-    claim to QUERY_RAISED without an email, and this dialog, which
-    recorded the email and left the claim saying it was still waiting
-    on the insurer. A desk could do either half — and the status button
-    was the easier one to reach, so a claim could sit in QUERY_RAISED
-    with nothing in the inbox explaining why.
-
-    Best-effort on purpose. The email is the thing that must not be
-    lost; a claim already queried, or at a stage with no query edge,
-    simply keeps its status, and the query is still recorded against
-    it.
-  */
+  // A logged query also moves the claim.
   await moveToQueried(auth, claimId);
 
   return created;
@@ -104,20 +82,13 @@ async function moveToQueried(auth: AuthContext, claimId: string) {
       undefined,
     );
   } catch {
-    // Already queried, or a stage the state machine does not allow it
-    // from. Either way the query itself is written and the desk sees
-    // it; forcing the status would be the tail wagging the dog.
+    // Already queried, or a stage the state machine does not allow it from.
   }
 }
 
 /**
- * Generates the summary, requested items and deadline from the raw
- * email when they weren't supplied.
- *
- * Never throws: the query itself is what matters, and failing the
- * create because a summary couldn't be produced would lose the email a
- * desk exec just pasted. A failure simply leaves the fields blank,
- * which is the pre-AI behaviour.
+ * Generates the summary, requested items and deadline from the raw email
+ * when they weren't supplied.
  */
 async function summariseIfBlank(
   body: CreateQueryBody,
@@ -133,10 +104,7 @@ async function summariseIfBlank(
   if (!summariser || !body.tpaRawEmail) return body;
 
   try {
-    // The TPA's clock, not ours. "Within 48 hours" runs from when they
-    // sent it; anchoring it to the paste would quietly hand the desk
-    // the hours between. Only a paste with no readable header falls
-    // back to now, where the email is presumably fresh anyway.
+    // The TPA's clock, not ours.
     const now = new Date();
     const result = await summariser.summarise({
       rawEmail: body.tpaRawEmail,
@@ -159,21 +127,14 @@ async function summariseIfBlank(
     console.error("query summarisation failed", {
       error: err instanceof Error ? err.message : String(err),
     });
-    // Recorded, not just logged: a server log is no use to the desk
-    // exec looking at the empty summary, and this is what lets the
-    // panel offer them a retry.
+    // Recorded, not just logged: a server log is no use to the desk exec
+    // looking at the empty summary, and this is what lets the panel offer
+    // them a retry.
     return { ...body, summarisationStatus: "failed" };
   }
 }
 
-/**
- * Runs the summariser again on a query whose first attempt failed.
- *
- * The one place a button for this belongs: the automatic attempt has
- * already happened and lost, and only a human knows whether the email
- * is worth another call. Still fills blanks only — a desk exec who
- * gave up and typed the summary themselves keeps it.
- */
+/** Runs the summariser again on a query whose first attempt failed. */
 export async function resummarise(auth: AuthContext, id: string) {
   const existing = await queriesRepository.getById(id);
   if (!existing) throw new QueryNotFoundError(id);
@@ -242,9 +203,9 @@ export async function updateQuery(
   id: string,
   body: UpdateQueryBody,
 ) {
-  // Only looked up when a deadline is in play — every other edit here
-  // is attributed by the audit record alone, and a round trip to
-  // members for nothing is a round trip for nothing.
+  // Only looked up when a deadline is in play — every other edit here is
+  // attributed by the audit record alone, and a round trip to members for
+  // nothing is a round trip for nothing.
   const editedBy =
     body.deadline !== undefined ? await getMemberId(auth.userId) : null;
 
@@ -261,19 +222,7 @@ export async function updateQuery(
   return updated;
 }
 
-/**
- * The human-confirm step docs/adr/0005 requires on the reply deadline.
- *
- * The summariser writes `deadline` straight into the column the inbox
- * sorts by and the dashboard counts overdue off — unlike a document's
- * slot or a pre-auth value, which sit in suggestion columns until
- * someone clicks. This is that click. Before it, the countdown renders
- * as unconfirmed and says where the date came from; after it, a named
- * member stands behind the date a claim is being chased against.
- *
- * `deadline` omitted confirms what's stored, a value overrides it, and
- * null says the desk read the email and there is no deadline at all.
- */
+/** The human-confirm step docs/adr/0005 requires on the reply deadline. */
 export async function confirmDeadline(
   auth: AuthContext,
   id: string,
@@ -294,9 +243,9 @@ export async function confirmDeadline(
     action: "query.deadline_confirmed",
     entityType: "query",
     entityId: id,
-    // What the model proposed, next to what the desk accepted — the
-    // same before/after shape preauth.field_confirmed records, so an
-    // audit of "where was the AI wrong" reads the same for both.
+    // What the model proposed, next to what the desk accepted — the same
+    // before/after shape preauth.field_confirmed records, so an audit of
+    // "where was the AI wrong" reads the same for both.
     before: {
       deadline: existing.deadline,
       deadlineInferred: existing.deadlineInferred,
@@ -324,8 +273,8 @@ export async function markReplied(auth: AuthContext, id: string) {
 }
 
 /**
- * desk_executive sees only queries on their own assigned claims, same
- * rule as claims.service.listClaims — see docs/adr/0002.
+ * desk_executive sees only queries on their own assigned claims, same rule
+ * as claims.service.listClaims — see docs/adr/0002.
  */
 export async function listInbox(auth: AuthContext, query: ListInboxQuery) {
   if (auth.role === "desk_executive") {

@@ -28,17 +28,8 @@ export async function listForClaim(auth: AuthContext, claimId: string) {
 }
 
 /**
- * Asks the insurer for more cover, and moves the claim to say so.
- *
- * Refuses a second open request on the same claim. Two live
- * enhancements against one admission is not a workflow an insurer will
- * answer — it's two desk execs who didn't know about each other, and
- * the right outcome is an error that says so rather than a duplicate
- * the TPA gets to pick between.
- *
- * The deadline is stamped here from the shared window, never taken
- * from the caller: docs/adr/0004 requires SLA clocks to be server-side,
- * and a client-supplied deadline is a client-chosen one.
+ * Asks the insurer for more cover, and moves the claim to say so
+ * (docs/adr/0004).
  */
 export async function requestEnhancement(
   auth: AuthContext,
@@ -67,31 +58,10 @@ export async function requestEnhancement(
   );
   if (!created) throw new ClaimNotFoundError(claimId);
 
-  /*
-    The claim's own status follows the request, through the state
-    machine rather than around it.
-
-    This used to write straight to the repository and swallow any
-    failure, with a comment explaining that an approved claim can still
-    need more money. That was true, and the fix belonged in the
-    transition table — which now permits it — rather than in a bypass.
-    Writing the status without consulting `canTransition` meant the one
-    structure guaranteeing a claim cannot move illegally had a door in
-    the back of it.
-
-    Still never fatal: a claim at final bill or already settled can
-    legitimately have an enhancement recorded against it for the
-    history, and losing that record because the claim has moved on
-    would discard the fact that matters most here.
-  */
+  // The claim's own status follows the request, through the state machine
+  // rather than around it.
   if (canTransition(claim.status, "ENHANCEMENT_REQUESTED", auth.role)) {
-    /*
-      The result is deliberately ignored, as it always has been. The
-      write now refuses if the claim has moved since `claim` was read,
-      and a claim that has moved on is exactly the case the comment
-      above calls legitimate: the enhancement is recorded either way,
-      which is the fact that matters here.
-    */
+    // The result is deliberately ignored, as it always has been.
     await claimsRepository.recordStatusChange(
       claimId,
       "ENHANCEMENT_REQUESTED",
@@ -117,13 +87,8 @@ export async function requestEnhancement(
 }
 
 /**
- * Records what the insurer said, and raises the claim's ceiling by what
- * it granted.
- *
- * A decided enhancement is never re-decided: the amount granted has
- * already been added to the claim's sanctioned amount, so a second
- * decision would add it twice. Correcting a mis-entered outcome is a
- * new fact, not an edit of this one.
+ * Records what the insurer said, and raises the claim's ceiling by what it
+ * granted.
  */
 export async function decideEnhancement(
   auth: AuthContext,

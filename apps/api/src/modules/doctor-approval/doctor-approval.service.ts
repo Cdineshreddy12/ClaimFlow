@@ -66,13 +66,7 @@ async function clinicalDocuments(claimId: string) {
   );
 }
 
-/**
- * What the doctor sees on their phone. Unauthenticated — the token is
- * the credential — so this is the narrowest useful view: who the patient
- * is, what procedure, and read links for the clinical documents only.
- * Opening it is audited, because an unauthenticated read of patient data
- * is exactly the thing a DPDP trail needs to show.
- */
+/** What the doctor sees on their phone. */
 export async function viewByToken(token: string) {
   const row = await repo.getByTokenWithContext(token);
   if (!row) throw new LinkNotFoundError(token);
@@ -121,10 +115,7 @@ export async function decide(
   assertUsable(row);
 
   // An approval over an empty set is a clinical attestation to nothing,
-  // filed under a named doctor. The page hides the button, but the
-  // token is a public credential and the page is not the boundary.
-  // Declining is always allowed: "attach the notes" is the useful
-  // answer when there is nothing there.
+  // filed under a named doctor.
   if (
     decision.approved &&
     (await clinicalDocuments(row.claimId)).length === 0

@@ -2,18 +2,8 @@ import type { Role } from "@claimflow/contracts";
 import * as repo from "./receivables.repository.js";
 
 /**
- * What the hospital is owed, and how long it has been owed for.
- *
- * The gap docs/adr/0011 and 0014 left: the product measured what gets
- * *cut* and how long insurers take to *decide*, and never what is
- * simply sitting unpaid. A CFO manages cash timing before either —
- * money approved and not yet arrived is the number that decides
- * whether this month's salaries are comfortable.
- *
- * Computed on read, never stored. An age is a comparison against now,
- * and a persisted "days outstanding" is wrong the moment it is
- * written — the same reasoning the checklist gap view and the SLA
- * clocks are built on.
+ * What the hospital is owed, and how long it has been owed for
+ * (docs/adr/0011).
  */
 
 export interface AgeingBucket {
@@ -45,13 +35,7 @@ interface AuthContext {
   role: Role;
 }
 
-/**
- * Thirty-day steps, and everything past ninety in one bucket.
- *
- * Not a tunable: the point of an ageing report is that it reads the
- * same as every other one a finance team has seen. A bespoke banding
- * would have to be re-explained to anyone it was shown to.
- */
+/** Thirty-day steps, and everything past ninety in one bucket. */
 const BUCKETS: { key: AgeingBucket["key"]; label: string; upTo: number }[] = [
   { key: "0_30", label: "0–30 days", upTo: 30 },
   { key: "31_60", label: "31–60 days", upTo: 60 },

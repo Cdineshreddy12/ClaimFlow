@@ -29,11 +29,7 @@ export async function registerPreauthRoutes(app: FastifyInstance) {
     }
   });
 
-  /**
-   * The pre-submission review. A POST because the clinical half costs a
-   * model call, so it runs when the desk asks rather than on every
-   * render of the claim file.
-   */
+  /** The pre-submission review. */
   app.post("/review", aiRateLimit(), async (request, reply) => {
     const { claimId } = ClaimIdParams.parse(request.params);
     try {
@@ -137,8 +133,7 @@ export async function registerPreauthRoutes(app: FastifyInstance) {
 
   /**
    * The form this claim was opened under — its frozen snapshot, not the
-   * live layout. Editing the form must never change what an in-flight
-   * claim asked for (docs/adr/0001).
+   * live layout (docs/adr/0001).
    */
   app.get("/layout", async (request, reply) => {
     const { claimId } = ClaimIdParams.parse(request.params);

@@ -135,20 +135,7 @@ export async function registerAssistantRoutes(app: FastifyInstance) {
     }
   });
 
-  /**
-   * One turn, streamed.
-   *
-   * Server-sent events rather than a JSON response, because the loop
-   * can spend seconds reading claims before it has a word to say and
-   * silence reads as broken. `text` deltas arrive as the model writes,
-   * `tool` says what it is doing in between, and `done` carries the
-   * parts that only exist once the turn is over — the proposals, and
-   * the id to continue on.
-   *
-   * Errors ride the stream too. Once the headers are out a status code
-   * is no longer available to say anything with, and failing silently
-   * mid-sentence is the worst of the options.
-   */
+  /** One turn, streamed. */
   app.post("/chat", aiRateLimit(), async (request, reply) => {
     const body = ChatBody.parse(request.body);
 
@@ -164,10 +151,9 @@ export async function registerAssistantRoutes(app: FastifyInstance) {
       // token back until the turn ended and undo the whole point.
       "X-Accel-Buffering": "no",
       // Writing to reply.raw skips the reply lifecycle, and with it
-      // @fastify/cors — every other route gets these from the plugin,
-      // this one has to say them itself or the browser drops the
-      // response before a line of it is read. Mirrors the plugin's
-      // `origin: true`, which reflects whatever asked.
+      // @fastify/cors — every other route gets these from the plugin, this
+      // one has to say them itself or the browser drops the response before
+      // a line of it is read.
       ...(request.headers.origin
         ? {
             "Access-Control-Allow-Origin": request.headers.origin,
@@ -189,9 +175,9 @@ export async function registerAssistantRoutes(app: FastifyInstance) {
       );
       send("done", result);
     } catch (err) {
-      // A sentence, not err.message: the not-found errors carry only
-      // the id they were thrown with, and a bare uuid in the panel
-      // tells a desk nothing they can act on.
+      // A sentence, not err.message: the not-found errors carry only the id
+      // they were thrown with, and a bare uuid in the panel tells a desk
+      // nothing they can act on.
       send("failed", { error: streamFailureMessage(err) });
       if (
         !(err instanceof AssistantUnavailableError) &&
@@ -205,14 +191,7 @@ export async function registerAssistantRoutes(app: FastifyInstance) {
     }
   });
 
-  /**
-   * The only place an assistant suggestion becomes a change.
-   *
-   * Everything here re-validates and then calls the same service a
-   * button elsewhere in the app would, so the role checks and the audit
-   * rows are not a second implementation that could drift from the
-   * first.
-   */
+  /** The only place an assistant suggestion becomes a change. */
   app.post("/proposals/approve", async (request, reply) => {
     const body = ApproveProposalBody.parse(request.body);
     try {
@@ -239,8 +218,7 @@ export async function registerAssistantRoutes(app: FastifyInstance) {
         return reply.code(404).send({ error: "query not found" });
       }
       // A deduction id the model invented, or one deleted since the
-      // worklist was read. Already-contested is not here on purpose:
-      // open_appeal counts those and reports them as done.
+      // worklist was read.
       if (err instanceof DeductionNotFoundError) {
         return reply.code(404).send({ error: "deduction not found" });
       }

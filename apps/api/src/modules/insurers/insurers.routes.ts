@@ -14,12 +14,7 @@ const ListQuery = z.object({
   includeInactive: z.enum(["true", "false"]).optional(),
 });
 
-/**
- * The TPA master. Reading it is open to any member — claim creation and
- * the checklist both need the list — but changing it is admin-only,
- * because an insurer is shared reference data that every claim and
- * every checklist rule keys off.
- */
+/** The TPA master. */
 export async function registerInsurersAdminRoutes(app: FastifyInstance) {
   app.addHook("preHandler", authenticate);
 

@@ -75,11 +75,7 @@ export async function updateModule(
   const existing = await repo.getModuleById(id);
   if (!existing) throw new ModuleNotFoundError(id);
 
-  /*
-    The slug is not recomputed from the new name. It is the address
-    these records already live at and the key an export is keyed on;
-    renaming the module on screen should not move them.
-  */
+  // The slug is not recomputed from the new name.
   const updated = await repo.updateModule(id, {
     name: input.name,
     pluralName: input.pluralName,
@@ -115,14 +111,7 @@ export async function setModuleActive(
   return updated;
 }
 
-/**
- * Only ever removes an empty module.
- *
- * Deleting one with records would cascade them away, and a desk that
- * typed two hundred ward rounds into it should not lose them to a
- * misplaced click. Hiding it is the move — same rule the procedure
- * master follows.
- */
+/** Only ever removes an empty module. */
 export async function deleteModule(auth: AuthContext, id: string) {
   const existing = await repo.getModuleById(id);
   if (!existing) throw new ModuleNotFoundError(id);

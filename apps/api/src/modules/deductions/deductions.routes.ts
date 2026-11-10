@@ -38,11 +38,7 @@ export async function registerClaimDeductionRoutes(app: FastifyInstance) {
     }
   });
 
-  /**
-   * Readable by any desk user, unlike recording one below. Recording a
-   * deduction is a financial fact only a desk head owns; being warned
-   * about one is the job of whoever is assembling the claim.
-   */
+  /** Readable by any desk user, unlike recording one below. */
   app.get("/risk", async (request, reply) => {
     const { claimId } = ClaimIdParams.parse(request.params);
     try {
@@ -152,8 +148,7 @@ export async function registerDeductionSummaryRoutes(app: FastifyInstance) {
 
   /**
    * The appeal worklist: every deduction still worth chasing, across
-   * claims. Readable by any desk user — chasing one is the work, and
-   * only recording the outcome is a desk-head fact.
+   * claims.
    */
   app.get("/appeals", async (request, reply) => {
     const query = AppealWorklistQuery.parse(request.query);

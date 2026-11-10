@@ -16,9 +16,9 @@ export class RuleNotFoundError extends Error {}
 export class DuplicateRuleError extends Error {}
 
 interface AuthContext {
-  // Needed to resolve the acting org_member for the audit trail; the
-  // routes already pass the full authUser, this just stops widening it
-  // being silently optional.
+  // Needed to resolve the acting org_member for the audit trail; the routes
+  // already pass the full authUser, this just stops widening it being
+  // silently optional.
   userId: string;
 }
 
@@ -35,14 +35,8 @@ export async function listRules(
 }
 
 /**
- * Which insurer/procedure pairs the desk works on, and which of them
- * have no checklist at all.
- *
- * A pair with claims and no rules is a silent hole: the claim is
- * snapshotted with an empty checklist, so the gap view reports nothing
- * missing and the safety net quietly does not apply. Nothing else in
- * the product surfaces that — you had to pick each pair from two
- * dropdowns and notice a zero.
+ * Which insurer/procedure pairs the desk works on, and which of them have
+ * no checklist at all.
  */
 export async function getCoverage(_auth: AuthContext) {
   const rows = await checklistRepository.listCoverage();
@@ -112,10 +106,9 @@ export async function deleteRule(auth: AuthContext, id: string) {
 }
 
 /**
- * What claims.service.ts calls when a claim is created — captured once
- * and stored on the claim (claims.checklistSnapshot), never re-derived
- * live. See docs/adr/0001: editing the live rules later must not change
- * what an in-flight claim requires.
+ * What claims.service.ts calls when a claim is created — captured once and
+ * stored on the claim (claims.checklistSnapshot), never re-derived live
+ * (docs/adr/0001).
  */
 export async function getRequirementsSnapshot(
   insurerId: string,
@@ -138,23 +131,11 @@ function isUniqueViolation(err: unknown): boolean {
 }
 
 /**
- * Checklist rules the insurers' own queries say are missing.
- *
- * Every TPA query asking for a document is evidence the checklist was
- * wrong — the insurer wanted something the rules didn't require. This
- * reads that back as proposals a desk head can accept or ignore
+ * Checklist rules the insurers' own queries say are missing
  * (docs/adr/0016).
- *
- * Deliberately proposals and not edits. docs/adr/0001 makes rule
- * changes apply going forward only, and the blast radius of a rule is
- * every future claim for that insurer and procedure — not a decision to
- * take automatically from a pattern in a dozen emails.
  */
 export async function proposeRules(
   // Unused: this reads nothing tenant-scoped and writes no audit row.
-  // Kept in the signature because every other service here takes it,
-  // and because applying a proposal — the next thing a caller does —
-  // needs it.
   _auth: AuthContext,
 ): Promise<ChecklistProposal[]> {
   const [requested, rules] = await Promise.all([
@@ -162,9 +143,9 @@ export async function proposeRules(
     checklistRepository.listAllRules(),
   ]);
 
-  // Variants of one document name collapse into a single proposal:
-  // "Copy of discharge summary" and "Discharge summaries" are one slot
-  // the insurer keeps asking for, not two.
+  // Variants of one document name collapse into a single proposal: "Copy of
+  // discharge summary" and "Discharge summaries" are one slot the insurer
+  // keeps asking for, not two.
   const grouped = new Map<
     string,
     {
@@ -195,9 +176,9 @@ export async function proposeRules(
 
   for (const group of grouped.values()) {
     const { row } = group;
-    // Never propose more claims than were submitted: two spellings of
-    // one item on different claims can sum past the denominator, and a
-    // rate above 100% would discredit the whole list.
+    // Never propose more claims than were submitted: two spellings of one
+    // item on different claims can sum past the denominator, and a rate
+    // above 100% would discredit the whole list.
     const claimsRequested = Math.min(
       group.claimsRequested,
       row.claimsSubmitted,
@@ -220,10 +201,8 @@ export async function proposeRules(
       isSameDocument(rule.documentType, row.requestedItem),
     );
 
-    // Already required: the checklist is right and the insurer is
-    // asking for something the desk failed to attach. That's a document
-    // chase, not a rule change, and the deduction-risk panel on the
-    // claim already covers it.
+    // Already required: the checklist is right and the insurer is asking
+    // for something the desk failed to attach.
     if (match?.required) continue;
 
     proposals.push({
@@ -250,15 +229,7 @@ export async function proposeRules(
   );
 }
 
-/**
- * Accepts one proposal.
- *
- * Creating or promoting the rule goes through the same functions a desk
- * head uses by hand, so the audit trail, the duplicate check and the
- * "applies going forward only" guarantee are identical. The only
- * difference is the audit action, which records that a proposal — not a
- * person's memory — is what put this rule here.
- */
+/** Accepts one proposal. */
 export async function applyProposal(
   auth: AuthContext,
   proposal: {

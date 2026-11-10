@@ -33,23 +33,11 @@ export interface SlaWatch {
   items: SlaWatchItem[];
   breached: number;
   dueSoon: number;
-  /**
-   * Of the breaches, how many are the insurer's to answer. Split out
-   * because the desk is held to account for the whole number and only
-   * owns part of it.
-   */
+  /** Of the breaches, how many are the insurer's to answer. */
   breachedOnInsurer: number;
 }
 
-/**
- * Which claims are against the clock right now.
- *
- * The state is computed here rather than stored: a deadline is a fact
- * and a breach is a comparison against the current time, and persisting
- * the comparison would mean a "breached" flag that was true when it was
- * written and wrong a minute later. Same reasoning as the checklist gap
- * view in docs/adr/0001.
- */
+/** Which claims are against the clock right now (docs/adr/0001). */
 export async function getSlaWatch(
   auth: AuthContext,
   now = new Date(),
@@ -73,8 +61,7 @@ export async function getSlaWatch(
       };
     })
     // Claims with no clock at all (a draft, an approved claim waiting on
-    // the hospital) are not on this list. They're not late; they're not
-    // waiting on anybody.
+    // the hospital) are not on this list.
     .filter((item) => item.state !== "none")
     // Worst first: the most overdue at the top, then the nearest due.
     .sort((a, b) => (a.remainingMs ?? 0) - (b.remainingMs ?? 0));
@@ -97,27 +84,13 @@ export interface TurnaroundReport {
     /** Breaches as a share of decisions, 0–1. */
     breachRate: number;
   })[];
-  /**
-   * The same question asked about us.
-   *
-   * IRDAI gives insurers an hour, so the hospital's own lag is the part
-   * it can actually do something about — and every number above this
-   * line is about somebody else's performance.
-   */
+  /** The same question asked about us. */
   desk: (repo.DeskTurnaroundRow & { label: string })[];
 }
 
 /**
- * What each insurer actually does, against what it is supposed to do.
- *
- * This is the report a hospital takes into its next negotiation: the
- * desk's own timestamps, per insurer, next to the regulatory window.
- * Nothing else in the product gives the hospital a number to push back
- * with — see docs/adr/0014.
- *
- * `until` is open-ended unless given, same as `deductions.summarise` —
- * the Turnaround page wants "last 30 days to now", the period report
- * (docs/adr/0018) wants one closed month.
+ * What each insurer actually does, against what it is supposed to do
+ * (docs/adr/0014).
  */
 export async function getTurnaroundReport(
   auth: AuthContext,
@@ -133,9 +106,8 @@ export async function getTurnaroundReport(
     since,
     desk: desk.map((row) => ({
       ...row,
-      // Phrased as the work, not the state: "Draft" is a database
-      // value, "Opened → pre-auth sent" is a gap a desk head can
-      // actually shorten.
+      // Phrased as the work, not the state: "Draft" is a database value,
+      // "Opened → pre-auth sent" is a gap a desk head can actually shorten.
       label: DESK_HOLD_LABEL[row.fromStatus] ?? row.fromStatus,
     })),
     rows: rows.map((row) => ({

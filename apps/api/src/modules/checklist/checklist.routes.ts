@@ -25,11 +25,7 @@ export async function registerChecklistRoutes(app: FastifyInstance) {
     return reply.send(result);
   });
 
-  /**
-   * What the insurers' own queries say the checklist is missing.
-   * Readable by any desk user — seeing why a rule is proposed is useful
-   * to whoever gets queried; only applying one is a desk-head act.
-   */
+  /** What the insurers' own queries say the checklist is missing. */
   /** Read-only, like the rules list itself — the actions are what's gated. */
   app.get("/coverage", async (request, reply) =>
     reply.send(await checklistService.getCoverage(request.authUser!)),
