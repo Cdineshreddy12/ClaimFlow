@@ -37,13 +37,49 @@ TableCard.displayName = "TableCard";
  */
 export const Table = React.forwardRef<
   HTMLTableElement,
-  React.TableHTMLAttributes<HTMLTableElement> & { minWidth?: number }
->(({ className, minWidth = 440, ...props }, ref) => (
-  <div className="w-full overflow-x-auto">
+  React.TableHTMLAttributes<HTMLTableElement> & {
+    minWidth?: number;
+    /**
+     * Keeps the column headers in view while the rows scroll under
+     * them, by making this wrapper the thing that scrolls rather than
+     * the page.
+     *
+     * Opt-in, because it only makes sense inside a parent that gives
+     * the table a bounded height — on an ordinary document-height page
+     * there is nothing to scroll within and the header would simply
+     * never move. The claims list is the case it was built for: long
+     * enough that "which column is this" is a real question by row
+     * twenty.
+     */
+    stickyHeader?: boolean;
+  }
+>(({ className, minWidth = 440, stickyHeader = false, ...props }, ref) => (
+  <div
+    className={cn(
+      "w-full overflow-x-auto",
+      stickyHeader && "min-h-0 flex-1 overflow-y-auto",
+    )}
+  >
     <table
       ref={ref}
       style={{ minWidth }}
-      className={cn("w-full border-collapse text-base", className)}
+      className={cn(
+        "w-full border-collapse text-base",
+        /*
+          On the cells, not on `thead`: Safari still does not position a
+          sticky section, only a sticky cell.
+
+          Opaque, or the rows show through as they pass under. And the
+          bottom edge is an inset shadow rather than the border it
+          looks like, because `border-collapse: collapse` hands the
+          border to the table and drops it the moment the cell leaves
+          the flow — the header would lose its underline exactly when
+          it starts needing one.
+        */
+        stickyHeader &&
+          "[&_thead_th]:sticky [&_thead_th]:top-0 [&_thead_th]:z-10 [&_thead_th]:bg-surface-raised [&_thead_th]:shadow-[inset_0_-1px_0_var(--border)]",
+        className,
+      )}
       {...props}
     />
   </div>

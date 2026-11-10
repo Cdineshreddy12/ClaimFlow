@@ -73,8 +73,18 @@ export const CLAIM_STATUS_ORDER: Record<ClaimStatus, number> = {
   REJECTED: 8,
 };
 
-/** A page a desk can actually scroll. Capped so a caller can't ask for everything by accident. */
-export const CLAIM_PAGE_SIZE = 50;
+/**
+ * A page a desk can actually scroll. Capped so a caller can't ask for
+ * everything by accident.
+ *
+ * Fifty was more than a desk ever reached the end of, which made the
+ * paging controls theoretical: with thirty-seven open claims they
+ * never appeared at all, and the list was one long scroll whose only
+ * navigation was the scrollbar. Twenty-five is about a screen of the
+ * table, so turning a page is a smaller, more deliberate act than
+ * hunting through a hundred rows.
+ */
+export const CLAIM_PAGE_SIZE = 25;
 export const MAX_CLAIM_PAGE_SIZE = 200;
 
 export const ClaimListQuery = z.object({

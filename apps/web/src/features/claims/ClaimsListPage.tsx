@@ -121,8 +121,25 @@ export function ClaimsListPage() {
   const from = total === 0 ? 0 : offset + 1;
   const to = Math.min(offset + visible.length, total);
 
+  /*
+    Takes over the viewport only once there are rows, the same
+    condition the query inbox uses. The point is to move the scrolling
+    off the page and into the table: with the page scrolling, the
+    search box, the status filter and the column headers all left the
+    screen by row fifteen, and a desk scanning "which of these is the
+    one at Star Health" had to scroll back up to remember which column
+    held the insurer. Empty and error states stay on an ordinary
+    document-height page, where a full-height shell would just be a lot
+    of white.
+  */
+  const fillsViewport = !isLoading && !isError && visible.length > 0;
+
   return (
-    <AppShell title="Claims" subtitle="Every claim on the desk">
+    <AppShell
+      title="Claims"
+      subtitle="Every claim on the desk"
+      fill={fillsViewport}
+    >
       <div className="mb-[18px] flex flex-col flex-wrap items-stretch gap-2.5 sm:flex-row sm:items-center">
         <div className="relative flex min-w-0 flex-1 items-center text-ink-faint sm:flex-[1_1_260px] [&_svg]:pointer-events-none [&_svg]:absolute [&_svg]:left-[11px] [&_svg]:size-[15px]">
           <Search aria-hidden focusable="false" />
@@ -193,7 +210,9 @@ export function ClaimsListPage() {
       ) : null}
 
       {!isLoading && !isError ? (
-        <TableCard>
+        <TableCard
+          className={fillsViewport ? "flex min-h-0 flex-1 flex-col" : undefined}
+        >
           {total === 0 ? (
             <p className="px-1 py-2.5 text-base text-ink-faint">
               No claims yet. Open one to start a cashless file — the insurer and
@@ -213,7 +232,7 @@ export function ClaimsListPage() {
               </button>
             </p>
           ) : (
-            <Table>
+            <Table stickyHeader={fillsViewport}>
               <TableHeader>
                 <TableRow>
                   <TableHead>Claim</TableHead>
@@ -306,42 +325,45 @@ export function ClaimsListPage() {
               </TableBody>
             </Table>
           )}
-        </TableCard>
-      ) : null}
-
-      {!isLoading && !isError && total > 0 ? (
-        <TableFooterBar>
-          <span>
-            Showing {from}–{to} of {total}
-          </span>
-          {/* Only rendered when there is more than one page. A desk
+          {/* Inside the card and below the scroll region, so the count
+              and the paging controls stay put while the rows move.
+              Outside it, "Showing 1–25 of 76" was the one thing you
+              had to scroll past every row to read. */}
+          {total > 0 ? (
+            <TableFooterBar>
+              <span>
+                Showing {from}–{to} of {total}
+              </span>
+              {/* Only rendered when there is more than one page. A desk
               with eleven claims should not be looking at paging
               controls that do nothing. */}
-          {total > CLAIM_PAGE_SIZE ? (
-            <span className="flex items-center gap-2">
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                disabled={offset === 0}
-                onClick={() =>
-                  setOffset((o) => Math.max(0, o - CLAIM_PAGE_SIZE))
-                }
-              >
-                Previous
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                disabled={to >= total}
-                onClick={() => setOffset((o) => o + CLAIM_PAGE_SIZE)}
-              >
-                Next
-              </Button>
-            </span>
+              {total > CLAIM_PAGE_SIZE ? (
+                <span className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={offset === 0}
+                    onClick={() =>
+                      setOffset((o) => Math.max(0, o - CLAIM_PAGE_SIZE))
+                    }
+                  >
+                    Previous
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={to >= total}
+                    onClick={() => setOffset((o) => o + CLAIM_PAGE_SIZE)}
+                  >
+                    Next
+                  </Button>
+                </span>
+              ) : null}
+            </TableFooterBar>
           ) : null}
-        </TableFooterBar>
+        </TableCard>
       ) : null}
     </AppShell>
   );
