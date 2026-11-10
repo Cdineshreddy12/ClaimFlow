@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { AuthLayout } from "./AuthLayout";
 import { signIn } from "./api";
 import { Button } from "../../components/ui/button";
@@ -62,9 +62,13 @@ export function LoginPage() {
           {isSubmitting ? "Signing in…" : "Sign in"}
         </Button>
       </form>
-      <p className="mt-[18px] text-center text-base text-ink-soft [&_a]:font-semibold [&_a]:text-accent-ink [&_a]:no-underline">
-        New hospital? <Link to="/signup">Create an account</Link>
-      </p>
+      {/* No "create an account" here. One install serves one hospital,
+          and that hospital exists by the time anyone sees this screen —
+          so the only people who should be signing in are ones an
+          org_admin invited. Offering self-registration on the way in
+          invites exactly the person who was not invited. The /signup
+          route still exists for the first admin of a fresh install and
+          for accepting an invite, which is where it is linked from. */}
     </AuthLayout>
   );
 }
