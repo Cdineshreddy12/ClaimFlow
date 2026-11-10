@@ -30,11 +30,30 @@ interface Check {
 
 const CHECKS: Check[] = [
   {
+    /*
+      `<>` against a null is null, not true — so a settled claim with no
+      settled amount was never an offender and this check passed over it
+      in silence. Two claims reached SETTLED through the UI with no money
+      recorded at all: "Mark settled" and "Record payment received" are
+      deliberately separate actions, and nothing joined them back up.
+
+      A settlement nobody wrote down is the one thing this check exists
+      to catch, so the nulls are named first and the arithmetic second.
+    */
+    name: "every settled claim records what it was paid",
+    offenders: `
+      select reference from claims
+      where status = 'SETTLED'
+        and (settled_amount is null or billed_amount is null)`,
+  },
+  {
     name: "every settled claim's money adds up (billed − deducted = settled)",
     offenders: `
       select c.reference
       from claims c left join deductions d on d.claim_id = c.id
       where c.status = 'SETTLED'
+        and c.billed_amount is not null
+        and c.settled_amount is not null
       group by c.id
       having c.billed_amount - coalesce(sum(d.amount), 0) <> c.settled_amount`,
   },
