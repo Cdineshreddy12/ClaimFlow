@@ -289,6 +289,8 @@ function preauthValues(opts: {
   stay: number;
 }): Record<string, string> {
   const { procedure, billed, admittedAt, stay } = opts;
+  /** The one procedure in this set that is treated rather than operated on. */
+  const medical = procedure === "Dengue with low platelets";
   const DOCTORS = [
     ["Dr. Ananthakrishnan V", "TN/14822/2009"],
     ["Dr. Priyanka Sahni", "DMC/R/8341/2012"],
@@ -373,11 +375,29 @@ function preauthValues(opts: {
     firstConsultationDate: iso(firstSeen),
     provisionalDiagnosis: c[2],
     icd10Code: c[3],
-    lineOfTreatment:
-      procedure === "Dengue with low platelets"
-        ? "Conservative management"
-        : "Surgical management",
-    surgeryName: procedure,
+    /*
+      The stored value, not the label.
+
+      This wrote "Surgical management" and "Conservative management",
+      and the field is an enum whose options are `surgical_management`,
+      `medical_management` and three more. So every seeded claim held a
+      value the form could not match to any option — and the
+      pre-submission check (docs/adr/0015) compares against the value,
+      so all sixty-seven tripped "a surgery is named, but the line of
+      treatment is Surgical management", which is nonsense, while none
+      of them were ever checked for the things a surgical admission is
+      actually checked for.
+
+      "Conservative management" was not even one of the five; the
+      medical pathway is `medical_management`.
+    */
+    lineOfTreatment: medical ? "medical_management" : "surgical_management",
+    // Only on a surgical admission. The field is conditional on exactly
+    // that (PREAUTH_FIELDS), so naming a surgery on a medical one is a
+    // contradiction the pre-submission check is built to catch — and
+    // seeding sixty-seven of them would bury the one claim that means
+    // it.
+    ...(medical ? {} : { surgeryName: procedure }),
     admissionDate: iso(admittedAt),
     admissionTime: `${two(admittedAt.getHours())}:${two(admittedAt.getMinutes())}`,
     admissionType: "Planned",

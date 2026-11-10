@@ -308,6 +308,41 @@ async function seed() {
     ],
   });
 
+  /**
+   * A form with the previous patient's surgery still on it.
+   *
+   * The pre-submission check (docs/adr/0015) has a rule for a surgery
+   * named on a non-surgical admission, and nothing in the seed ever
+   * tripped it — so the one finding a reviewer could reliably see was
+   * the date one, and only after editing a claim by hand to create it.
+   *
+   * This is how the mistake actually happens: a desk opens the last
+   * pre-auth as a template, changes the patient and the clinical
+   * details, and leaves "Name of surgery" filled in. The field is
+   * conditional on a surgical line of treatment, so on this admission
+   * it is not even shown — which is exactly why nobody notices it, and
+   * why the checker reads the stored values rather than the visible
+   * ones.
+   *
+   * Dengue, because a dengue admission naming a cholecystectomy is
+   * unarguable: a reviewer does not have to know any medicine to see
+   * that something was carried over. Everything else on the form is
+   * deliberately clean, so the panel shows one finding rather than a
+   * wall of them.
+   */
+  const templatedFormClaim = await openClaim({
+    patientName: "Harish Bhandari",
+    insurerId: vidal.id,
+    procedureId: dengue.id,
+    status: "PRE_AUTH_SENT",
+    billedAmount: "65000",
+    admittedDaysAgo: 1,
+    chain: [
+      { status: "DRAFT", daysAgo: 1 },
+      { status: "PRE_AUTH_SENT", daysAgo: 0.8 },
+    ],
+  });
+
   /*
     All three carry a filled form, because all three have been sent to
     an insurer and "0 of 25 confirmed" on a claim already sent is a
@@ -330,8 +365,8 @@ async function seed() {
     firstConsultationDate: ago(4).toISOString().slice(0, 10),
     provisionalDiagnosis: "Dengue fever with thrombocytopenia",
     icd10Code: "A90",
-    lineOfTreatment: "Conservative management",
-    surgeryName: "Not applicable — medical management",
+    // The stored value, not the label — see the note in seed-demo.ts.
+    lineOfTreatment: "medical_management",
     admissionDate: ago(2).toISOString().slice(0, 10),
     admissionTime: "22:40",
     admissionType: "Emergency",
@@ -356,7 +391,7 @@ async function seed() {
     firstConsultationDate: ago(21).toISOString().slice(0, 10),
     provisionalDiagnosis: "Symptomatic cholelithiasis",
     icd10Code: "K80.2",
-    lineOfTreatment: "Surgical management",
+    lineOfTreatment: "surgical_management",
     surgeryName: "Laparoscopic cholecystectomy",
     admissionDate: ago(5).toISOString().slice(0, 10),
     admissionTime: "07:30",
@@ -371,9 +406,52 @@ async function seed() {
     totalExpectedCost: "185000",
   };
 
+  /*
+    The same dengue admission, with one field carried over.
+
+    Every other value is deliberately clean — the dates are in order,
+    the estimate sums to 65,000, the registration number is there — so
+    the panel shows this one finding and not a wall of them. The only
+    thing wrong is that `surgeryName` still holds the cholecystectomy
+    from whichever pre-auth this form was copied from, on an admission
+    whose line of treatment is medical.
+
+    That field is conditional on a surgical line of treatment, so the
+    form does not even render it here. A desk cannot see it; the
+    checker reads the stored values rather than the visible ones, which
+    is the entire reason it can catch this.
+  */
+  const templatedForm = {
+    treatingDoctorName: "Dr. Nandita Rege",
+    treatingDoctorRegistrationNo: "MMC/2013/61204",
+    illnessWithComplaints:
+      "Fever with chills for 4 days, retro-orbital pain, myalgia",
+    clinicalFindings:
+      "Platelets 52,000/µL, NS1 antigen positive, no bleeding manifestations",
+    ailmentDurationDays: "4",
+    firstConsultationDate: ago(1).toISOString().slice(0, 10),
+    provisionalDiagnosis: "Dengue fever with thrombocytopenia",
+    icd10Code: "A90",
+    lineOfTreatment: "medical_management",
+    // Left behind by the form this one was copied from.
+    surgeryName: "Laparoscopic cholecystectomy",
+    admissionDate: ago(1).toISOString().slice(0, 10),
+    admissionTime: "16:05",
+    admissionType: "Emergency",
+    expectedStayDays: "5",
+    roomType: "Twin sharing",
+    // 3,200 x 5 = 16,000, and the rest brings it to exactly 65,000.
+    roomRentPerDay: "3200",
+    investigationCost: "18500",
+    professionalFees: "14000",
+    medicinesConsumables: "16500",
+    totalExpectedCost: "65000",
+  };
+
   for (const [claim, values, confirmedDaysAgo] of [
     [dengueClaim, dengueForm, 1.95],
     [gallBladderClaim, gallBladderForm, 4.85],
+    [templatedFormClaim, templatedForm, 0.85],
   ] as const) {
     await db.insert(claimPreauthFields).values(
       Object.entries(values).map(([fieldKey, value]) => ({
@@ -397,7 +475,7 @@ async function seed() {
       firstConsultationDate: ago(34).toISOString().slice(0, 10),
       provisionalDiagnosis: "Primary osteoarthritis of knee",
       icd10Code: "M17.0",
-      lineOfTreatment: "Surgical management",
+      lineOfTreatment: "surgical_management",
       surgeryName: "Total knee replacement",
       admissionDate: ago(1).toISOString().slice(0, 10),
       admissionTime: "09:20",
