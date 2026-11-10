@@ -108,4 +108,78 @@ describe("ClaimDocumentsTab", () => {
     expect(await screen.findByText("Photo ID proof")).toBeInTheDocument();
     expect(screen.getByText("Treating doctor's note")).toBeInTheDocument();
   });
+
+  /*
+    A claim file is seven or eight documents, and the picker used to
+    take one: the input had no `multiple` and the handler read
+    `files[0]`, so choosing a stack silently uploaded the first and
+    dropped the rest without saying so.
+  */
+  describe("uploading a stack", () => {
+    const pdf = (name: string) =>
+      new File(["%PDF-1.4"], name, { type: "application/pdf" });
+
+    function pick(files: File[]) {
+      const input = document.querySelector(
+        'input[type="file"]',
+      ) as HTMLInputElement;
+      return userEvent.upload(input, files);
+    }
+
+    it("takes every file picked, not just the first", async () => {
+      vi.mocked(api.post).mockResolvedValue({
+        uploadUrl: "https://s3.test/put",
+        key: "k",
+      });
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockResolvedValue({ ok: true } as Response),
+      );
+      renderTab();
+
+      await pick([pdf("note.pdf"), pdf("cbc.pdf"), pdf("ecard.pdf")]);
+
+      // Two posts per file: the pre-signed URL, then the row.
+      await vi.waitFor(() => expect(api.post).toHaveBeenCalledTimes(6));
+      for (const name of ["note.pdf", "cbc.pdf", "ecard.pdf"]) {
+        expect(api.post).toHaveBeenCalledWith(
+          "/claims/claim-1/documents/upload-url",
+          expect.objectContaining({ fileName: name }),
+        );
+      }
+    });
+
+    it("keeps the good files when one of them is refused", async () => {
+      vi.mocked(api.post).mockResolvedValue({
+        uploadUrl: "https://s3.test/put",
+        key: "k",
+      });
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockResolvedValue({ ok: true } as Response),
+      );
+      renderTab();
+
+      const video = new File(["x"], "ward-round.mp4", { type: "video/mp4" });
+      await pick([pdf("note.pdf"), video, pdf("cbc.pdf")]);
+
+      // Named, with the reason — not "Upload failed — try again", which
+      // on a batch says neither which file nor what to do about it.
+      expect(await screen.findByText("ward-round.mp4")).toBeInTheDocument();
+      expect(
+        screen.getByText(/isn't a document type this accepts/),
+      ).toBeInTheDocument();
+
+      // And the two PDFs around it still went up: a batch that fails as
+      // a unit would lose work the desk already did.
+      expect(api.post).toHaveBeenCalledWith(
+        "/claims/claim-1/documents/upload-url",
+        expect.objectContaining({ fileName: "note.pdf" }),
+      );
+      expect(api.post).toHaveBeenCalledWith(
+        "/claims/claim-1/documents/upload-url",
+        expect.objectContaining({ fileName: "cbc.pdf" }),
+      );
+    });
+  });
 });
