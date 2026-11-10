@@ -231,6 +231,14 @@ export function useApproveProposal() {
       queryClient.invalidateQueries({ queryKey: ["assistant", "attachments"] });
       queryClient.invalidateQueries({ queryKey: ["claims"] });
       queryClient.invalidateQueries({ queryKey: ["queries"] });
+      /*
+        And the deductions, since open_appeal moves money the hospital
+        counts. Without this the appeal worklist and the dashboard's
+        recovery totals went on showing those deductions as
+        uncontested until something unrelated refetched them — in
+        practice a window focus, which is not a guarantee of anything.
+      */
+      queryClient.invalidateQueries({ queryKey: ["deductions"] });
     },
   });
 }

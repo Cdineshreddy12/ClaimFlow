@@ -350,6 +350,50 @@ describe("the open_appeal card", () => {
     ).toBeDisabled();
   });
 
+  /*
+    Approving refetches the worklist, so every row the card just
+    contested comes back CONTESTED and drops out of the uncontested
+    filter. The card went on computing its heading and empty state
+    from what was left, and rendered "Contest these 0 deductions"
+    above "None of these are still uncontested" above "9 opened" --
+    three statements about the same click, one of them false. The
+    earlier test missed it by mocking a worklist that never changed.
+  */
+  it("describes what it did, not what is left, once the refetch lands", async () => {
+    vi.mocked(api.get)
+      .mockResolvedValueOnce([row(D1), row(D2)] as never)
+      // What the server returns after the appeals are opened.
+      .mockResolvedValue([
+        row(D1, { appealStatus: "CONTESTED" }),
+        row(D2, { appealStatus: "CONTESTED" }),
+      ] as never);
+
+    render(<ProposalCard proposal={appealProposal()} attachments={[]} />, {
+      wrapper,
+    });
+
+    await screen.findByText(/CLM-0001/);
+    await userEvent.click(
+      screen.getByRole("button", { name: "Open the appeals" }),
+    );
+
+    expect(await screen.findByText(/2 opened/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Contested 2 deductions · ₹60,000/),
+    ).toBeInTheDocument();
+    // The three things that made the old success state read as a
+    // contradiction.
+    expect(screen.queryByText(/Contest these 0/)).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/None of these are still uncontested/),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/Marks each one as contested/),
+    ).not.toBeInTheDocument();
+    // The rows it acted on stay readable — the receipt names them.
+    expect(screen.getByText(/CLM-0002/)).toBeInTheDocument();
+  });
+
   it("reports the half that happened, not a flat Done", async () => {
     vi.mocked(api.post).mockResolvedValue({
       opened: [{ id: D1 }],

@@ -91,10 +91,22 @@ export function ProposalCard({
         (id): id is string => typeof id === "string",
       )
     : [];
-  const rows = (worklist.data ?? []).filter(
-    (row) =>
-      proposedIds.includes(row.id) && row.appealStatus === "NOT_CONTESTED",
+  const proposed = (worklist.data ?? []).filter((row) =>
+    proposedIds.includes(row.id),
   );
+  /*
+    Only the ones there is still something to do about. Approving
+    refetches the worklist, so after a click these are all CONTESTED
+    and this list is empty — right for deciding what to send, wrong
+    for describing what was sent. `rows` widens to the whole proposed
+    set once the card is done, because otherwise it rendered "Contest
+    these 0 deductions · nothing left to open" directly above "9
+    opened": three statements, one of them false.
+  */
+  const actionable = proposed.filter(
+    (row) => row.appealStatus === "NOT_CONTESTED",
+  );
+  const rows = done ? proposed : actionable;
   const total = rows.length
     ? rows.reduce((sum, row) => sum + Number(row.amount), 0)
     : null;
@@ -119,7 +131,7 @@ export function ProposalCard({
       // The ids the card actually showed, not the ones the model
       // proposed: approving what was on screen is the whole point of
       // the step, and the two differ whenever the worklist has moved.
-      return { deduction_ids: rows.map((row) => row.id) };
+      return { deduction_ids: actionable.map((row) => row.id) };
     }
     if (proposal.kind !== "file_document") return proposal.input;
     return { ...proposal.input, checklist_slot: slot };
@@ -270,10 +282,10 @@ export function ProposalCard({
       {proposal.kind === "open_appeal" ? (
         <>
           <div className="font-semibold">
-            Contest{" "}
+            {done ? "Contested" : "Contest"}{" "}
             {rows.length === 1
               ? "this deduction"
-              : `these ${rows.length} deductions`}
+              : `${done ? "" : "these "}${rows.length} deductions`}
             {total !== null ? ` · ${formatAmount(String(total))}` : ""}
           </div>
 
@@ -287,9 +299,14 @@ export function ProposalCard({
             </div>
           ) : rows.length === 0 ? (
             <div className="mt-1 text-sm leading-[1.45] text-ink-faint">
-              {/* Either the ids were wrong or somebody got there first.
-                  Saying nothing and showing a button would be worse. */}
-              None of these are still uncontested — nothing left to open.
+              {/* Either the ids were wrong or somebody got there
+                  first. Saying nothing and showing a button would be
+                  worse. Never after approving: there, "nothing left to
+                  open" is the result of the click rather than a reason
+                  not to click. */}
+              {done
+                ? "These are all contested now."
+                : "None of these are still uncontested — nothing left to open."}
             </div>
           ) : (
             <ul className="mt-1.5 flex flex-col gap-1">
@@ -313,11 +330,16 @@ export function ProposalCard({
           {/* What approving does and does not do. ADR 0013's lifecycle
               stops at CONTESTED; the insurer answering is a separate
               act somebody has to come back and record. */}
-          <div className="mt-1.5 text-sm leading-[1.45] text-ink-faint">
-            Marks each one as contested so it shows on the appeal worklist.
-            Nothing is sent to the insurer — the argument is yours to make, and
-            the outcome is recorded when they answer.
-          </div>
+          {/* Describes what the button would do, so it goes once the
+              button has done it — left up, it reads as an instruction
+              standing beside its own result. */}
+          {done ? null : (
+            <div className="mt-1.5 text-sm leading-[1.45] text-ink-faint">
+              Marks each one as contested so it shows on the appeal worklist.
+              Nothing is sent to the insurer — the argument is yours to make,
+              and the outcome is recorded when they answer.
+            </div>
+          )}
 
           {/* The batch is not all-or-nothing, so the result says which
               half happened rather than a flat "Done". */}
@@ -346,7 +368,7 @@ export function ProposalCard({
               // Nothing uncontested left, so the button would do
               // nothing and report success for it.
               (proposal.kind === "open_appeal" &&
-                (worklist.isPending || rows.length === 0))
+                (worklist.isPending || actionable.length === 0))
             }
             onClick={() =>
               approve.mutate({
