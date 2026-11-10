@@ -21,6 +21,32 @@ describe("emailSentAt", () => {
     expect(sent?.getUTCDate()).toBe(5);
   });
 
+  /*
+    Every test above hands the parser an explicit +0530, which is why
+    this went unnoticed: Outlook's Sent: header has no timezone at all,
+    and `new Date` then reads it as the server's local time. In the
+    deployed container that is UTC, so a TPA's 11:20 became 11:20Z and
+    every pasted 24-hour deadline landed five and a half hours late.
+
+    Asserted against an absolute instant and run under a UTC clock,
+    because a test that inherits the host's timezone cannot see this.
+  */
+  it("reads a bare Outlook header on the hospital's clock", () => {
+    const sent = emailSentAt("Sent: Wednesday, 4 November 2026 11:20", NOW);
+    // 11:20 IST is 05:50 UTC — not 11:20 UTC.
+    expect(sent?.toISOString()).toBe("2026-11-04T05:50:00.000Z");
+  });
+
+  it("leaves a header that names its own zone alone", () => {
+    // Already unambiguous: adding an offset would move it.
+    expect(
+      emailSentAt("Date: Wed, 4 Nov 2026 11:20:00 GMT", NOW)?.toISOString(),
+    ).toBe("2026-11-04T11:20:00.000Z");
+    expect(
+      emailSentAt("Date: Wed, 4 Nov 2026 11:20:00 -0500", NOW)?.toISOString(),
+    ).toBe("2026-11-04T16:20:00.000Z");
+  });
+
   it("takes the topmost email in a quoted thread", () => {
     // A forwarded chain runs newest-first. The deadline belongs to the
     // mail that just landed, not the one it quotes underneath.

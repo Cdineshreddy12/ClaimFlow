@@ -300,6 +300,29 @@ export async function confirmField(
  * cost now stays on the pre-auth field it belongs to, and the billed
  * amount is recorded explicitly through PATCH /claims/:id/financials.
  */
+/**
+ * The clock a form's "Time of admission" is written on.
+ *
+ * `new Date("2026-11-07T18:40:00")` has no offset, so it means
+ * whatever the *server's* timezone says — and the container runs UTC.
+ * A ward writing 18:40 on a form in Pune had it stored as 18:40Z and
+ * read back as "8 Nov, 12:10 am", five and a half hours out, on a
+ * product whose every clock is measured against IRDAI's.
+ *
+ * It worked on every developer's machine, which is how it survived:
+ * a laptop set to IST parses the same string correctly. Only the
+ * deployed container was wrong, and nothing in the app says which
+ * timezone it thinks it is in.
+ *
+ * Fixed rather than configurable, and fixed here rather than read from
+ * the hospital row: this product is India-only by construction — IRDAI
+ * windows, ROHINI IDs, Ayushman Bharat, rupees — and IST has no
+ * daylight saving, so the offset is exact all year. A second country
+ * would need a column on the hospital, and would need this line to be
+ * the thing it reads.
+ */
+const IST_OFFSET = "+05:30";
+
 async function writeThroughToClaim(
   auth: AuthContext,
   claimId: string,
@@ -316,7 +339,7 @@ async function writeThroughToClaim(
   const time =
     fieldKey === "admissionTime" ? value : byKey.get("admissionTime")?.value;
 
-  const admittedAt = new Date(`${date}T${time ?? "00:00"}:00`);
+  const admittedAt = new Date(`${date}T${time ?? "00:00"}:00${IST_OFFSET}`);
   if (Number.isNaN(admittedAt.getTime())) return;
 
   await claimsRepository.updateConfirmedFacts(claimId, {

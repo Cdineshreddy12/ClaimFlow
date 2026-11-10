@@ -238,7 +238,17 @@ describe("preauth.service", () => {
       expect(claimsRepository.updateConfirmedFacts).not.toHaveBeenCalled();
     });
 
-    it("combines a confirmed admission date and time into the claim's timestamp", async () => {
+    /*
+      Asserted as an absolute instant, not as `new Date("...T09:40:00")`.
+
+      That expression is the same ambiguous one the code used, so the
+      test agreed with the bug on every machine: a laptop set to IST
+      parsed both sides identically and passed, and the deployed
+      container — running UTC — stored a ward's 18:40 as 18:40Z and
+      showed it back as five and a half hours later. A clock test that
+      inherits the host's timezone tests nothing about timezones.
+    */
+    it("reads the admission time on the hospital's clock, not the server's", async () => {
       vi.mocked(preauthRepository.listForClaim).mockResolvedValue([
         { fieldKey: "admissionTime", value: "09:40" },
       ] as never);
@@ -248,7 +258,9 @@ describe("preauth.service", () => {
 
       const call = vi.mocked(claimsRepository.updateConfirmedFacts).mock
         .calls[0]?.[1];
-      expect(call?.admittedAt).toEqual(new Date("2026-10-30T09:40:00"));
+      // 09:40 IST is 04:10 UTC. Written with an explicit Z so this
+      // fails wherever it runs if the offset is ever dropped again.
+      expect(call?.admittedAt?.toISOString()).toBe("2026-10-30T04:10:00.000Z");
     });
 
     it("takes a date with no time as midnight rather than skipping it", async () => {
@@ -257,7 +269,9 @@ describe("preauth.service", () => {
 
       const call = vi.mocked(claimsRepository.updateConfirmedFacts).mock
         .calls[0]?.[1];
-      expect(call?.admittedAt).toEqual(new Date("2026-10-30T00:00:00"));
+      // Midnight IST is 18:30 UTC the day before — which is the point:
+      // the calendar date a desk means is not the UTC one.
+      expect(call?.admittedAt?.toISOString()).toBe("2026-10-29T18:30:00.000Z");
     });
 
     it("doesn't touch the claim when only the time is known", async () => {
