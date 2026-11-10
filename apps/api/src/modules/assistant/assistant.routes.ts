@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import { authenticate } from "../../middleware/authenticate.js";
+import { aiRateLimit } from "../../middleware/rate-limit.js";
 import {
   ClaimNotFoundError,
   SlotAlreadyOnClaimError,
@@ -65,7 +66,8 @@ export async function registerAssistantRoutes(app: FastifyInstance) {
     return reply.send(result);
   });
 
-  app.post("/attachments", async (request, reply) => {
+  // Registering an attachment runs the recogniser over it.
+  app.post("/attachments", aiRateLimit(), async (request, reply) => {
     const body = RegisterAttachmentBody.parse(request.body);
     const attachment = await assistantService.registerAttachment(
       request.authUser!,
@@ -146,7 +148,7 @@ export async function registerAssistantRoutes(app: FastifyInstance) {
    * is no longer available to say anything with, and failing silently
    * mid-sentence is the worst of the options.
    */
-  app.post("/chat", async (request, reply) => {
+  app.post("/chat", aiRateLimit(), async (request, reply) => {
     const body = ChatBody.parse(request.body);
 
     // Tells Fastify the socket is ours now, so it doesn't also try to

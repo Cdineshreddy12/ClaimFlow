@@ -70,7 +70,18 @@ export const CLAIM_TRANSITIONS: Record<ClaimStatus, Transition> = {
   PRE_AUTH_SENT: {
     to: ["QUERY_RAISED", "ENHANCEMENT_REQUESTED", "APPROVED", "REJECTED"],
   },
-  QUERY_RAISED: { to: ["PRE_AUTH_SENT"] },
+  /*
+    Back to whichever stage was queried.
+
+    Both targets are listed because a query can be raised at either,
+    but only one of them is legal on any given claim: a query is
+    answered by returning to the stage it interrupted, and
+    `transitionClaimStatus` reads the claim's own history to decide
+    which. Listing both here and nothing else would let a pre-auth
+    query be "answered" into FINAL_BILL_SUBMITTED, skipping approval
+    entirely.
+  */
+  QUERY_RAISED: { to: ["PRE_AUTH_SENT", "FINAL_BILL_SUBMITTED"] },
   ENHANCEMENT_REQUESTED: { to: ["PRE_AUTH_SENT", "APPROVED", "REJECTED"] },
   /*
     An approved claim can still need more money, and usually that is
@@ -104,7 +115,16 @@ export const CLAIM_TRANSITIONS: Record<ClaimStatus, Transition> = {
     recording with a patient standing at the counter, which is a poor
     moment to discover you lack the role.
   */
-  FINAL_BILL_SUBMITTED: { to: ["DISCHARGE_AUTHORISED"] },
+  /*
+    A TPA queries the final bill as readily as it queries the pre-auth
+    — a missing break-up, an implant invoice, a discharge summary that
+    stops short of the last day. This stage could only go forward, so
+    there was nowhere to put that: the query could be logged against
+    the claim, and the claim went on insisting it was waiting for a
+    discharge authorisation while the desk was actually answering a
+    question. The stepper said one thing and the inbox another.
+  */
+  FINAL_BILL_SUBMITTED: { to: ["DISCHARGE_AUTHORISED", "QUERY_RAISED"] },
   DISCHARGE_AUTHORISED: {
     to: ["SETTLED"],
     roles: ["org_admin", "desk_head"],

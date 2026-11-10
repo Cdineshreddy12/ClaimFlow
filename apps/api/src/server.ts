@@ -1,6 +1,7 @@
 import Fastify from "fastify";
 import cors from "@fastify/cors";
-import { ZodError } from "zod";
+import { registerRateLimit } from "./middleware/rate-limit.js";
+import { registerErrorHandler } from "./middleware/errors.js";
 import { assertDataResidency } from "./lib/data-residency.js";
 import { loadEnv } from "./config/env.js";
 import { registerClaimsRoutes } from "./modules/claims/claims.routes.js";
@@ -52,21 +53,17 @@ const app = Fastify({
 
 await app.register(cors, { origin: true });
 
+// Before the routes, so it applies to all of them. Registered at the
+// root rather than per module: a ceiling only one half of the API
+// respects is not a ceiling.
+await registerRateLimit(app);
+registerErrorHandler(app);
+
 // Every route validates its body/query/params with `Schema.parse(...)`
 // (see any *.routes.ts) rather than Fastify's own schema hooks, so a bad
 // request throws a raw ZodError — without this, Fastify's default handler
 // turns that into a 500, which is wrong: the client sent bad input, the
 // server didn't fail.
-app.setErrorHandler((error, request, reply) => {
-  if (error instanceof ZodError) {
-    return reply
-      .code(400)
-      .send({ error: "validation failed", details: error.issues });
-  }
-  request.log.error(error);
-  return reply.code(500).send({ error: "internal server error" });
-});
-
 app.get("/health", async () => ({ status: "ok", service: "claimflow-api" }));
 
 await app.register(registerClaimsRoutes, { prefix: "/claims" });

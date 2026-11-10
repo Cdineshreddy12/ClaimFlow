@@ -159,7 +159,23 @@ export async function getClaim(auth: AuthContext, id: string) {
     if (claim.assignedTo !== memberId) throw new ClaimNotFoundError(id);
   }
 
-  return claim;
+  /*
+    Which stage the query interrupted, so the claim file can offer the
+    one move that will be accepted.
+
+    The transition table lists both stages a query can be answered
+    into, because a query can be raised at either; only the history
+    says which applies here. Without this the file would render two
+    buttons, one of which is a 422 waiting to happen.
+  */
+  if (claim.status === "QUERY_RAISED") {
+    return {
+      ...claim,
+      queriedFrom: await claimsRepository.statusBeforeQuery(id),
+    };
+  }
+
+  return { ...claim, queriedFrom: null };
 }
 
 /**
@@ -292,6 +308,24 @@ export async function transitionClaimStatus(
     throw new InvalidTransitionError(
       `${claim.status} -> ${nextStatus} not allowed for ${auth.role}`,
     );
+  }
+
+  /*
+    A query is answered by returning to the stage it interrupted.
+
+    The table has to list both stages a query can be raised at, which
+    on its own would let a pre-auth query be answered into
+    FINAL_BILL_SUBMITTED and skip approval entirely. The claim's own
+    history is what decides, so it is checked here rather than widened
+    into a table that cannot see it.
+  */
+  if (claim.status === "QUERY_RAISED") {
+    const queriedFrom = await claimsRepository.statusBeforeQuery(claimId);
+    if (queriedFrom && nextStatus !== queriedFrom) {
+      throw new InvalidTransitionError(
+        `this query was raised at ${queriedFrom}, so it is answered by going back there, not to ${nextStatus}`,
+      );
+    }
   }
 
   const memberId = await getMemberId(auth.userId);

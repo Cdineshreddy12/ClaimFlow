@@ -21,6 +21,13 @@ export interface Claim {
   procedureName: string;
   status: ClaimStatus;
   assignedTo: string | null;
+  /**
+   * The stage a query interrupted, so the file can offer the one move
+   * back that the API will accept. Null unless the claim is queried —
+   * a query raised at the final bill is answered by returning there,
+   * not to the pre-auth.
+   */
+  queriedFrom: ClaimStatus | null;
   checklistSnapshot: ChecklistSnapshotItem[];
   billedAmount: string | null;
   /** Government scheme claims only — the code picked, and what it pays. */

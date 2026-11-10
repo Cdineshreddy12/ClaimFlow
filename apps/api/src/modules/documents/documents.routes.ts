@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { authenticate } from "../../middleware/authenticate.js";
+import { aiRateLimit } from "../../middleware/rate-limit.js";
 import * as documentsService from "./documents.service.js";
 import {
   ClaimNotFoundError,
@@ -45,7 +46,8 @@ export async function registerDocumentsRoutes(app: FastifyInstance) {
     return reply.send(result);
   });
 
-  app.post("/", async (request, reply) => {
+  // Registering a document classifies it — a model call per upload.
+  app.post("/", aiRateLimit(), async (request, reply) => {
     const { claimId } = ClaimIdParams.parse(request.params);
     const body = RegisterDocumentBody.parse(request.body);
     try {
@@ -107,7 +109,7 @@ export async function registerDocumentsRoutes(app: FastifyInstance) {
    * suggestion columns, which is an action rather than an edit to a
    * field the caller supplied.
    */
-  app.post("/:documentId/reclassify", async (request, reply) => {
+  app.post("/:documentId/reclassify", aiRateLimit(), async (request, reply) => {
     const { claimId, documentId } = DocumentIdParams.parse(request.params);
     try {
       const updated = await documentsService.reclassifyDocument(

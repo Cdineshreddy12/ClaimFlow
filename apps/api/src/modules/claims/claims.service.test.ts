@@ -852,4 +852,98 @@ describe("createClaim · government schemes", () => {
       expect(orgMembersRepository.getMemberById).not.toHaveBeenCalled();
     });
   });
+
+  /*
+    A query can now be raised at the final bill as well as the pre-auth,
+    so the transition table has to list both stages it can be answered
+    into. Only the claim's history says which applies, and this is
+    where that is enforced — without it a pre-auth query could be
+    "answered" into FINAL_BILL_SUBMITTED and skip approval entirely.
+  */
+  describe("answering a query", () => {
+    function queriedClaim() {
+      vi.mocked(claimsRepository.getClaimById).mockResolvedValue({
+        id: CLAIM_ID,
+        status: "QUERY_RAISED",
+      } as never);
+      vi.mocked(claimsRepository.recordStatusChange).mockResolvedValue({
+        id: CLAIM_ID,
+      } as never);
+    }
+
+    it("goes back to the stage the query interrupted", async () => {
+      queriedClaim();
+      vi.mocked(claimsRepository.statusBeforeQuery).mockResolvedValue(
+        "FINAL_BILL_SUBMITTED",
+      );
+
+      const service = await import("./claims.service.js");
+      await service.transitionClaimStatus(
+        auth("desk_head"),
+        CLAIM_ID,
+        "FINAL_BILL_SUBMITTED",
+        undefined,
+      );
+
+      expect(claimsRepository.recordStatusChange).toHaveBeenCalledWith(
+        CLAIM_ID,
+        "FINAL_BILL_SUBMITTED",
+        expect.anything(),
+        expect.anything(),
+      );
+    });
+
+    it("refuses to answer a final-bill query into the pre-auth", async () => {
+      queriedClaim();
+      vi.mocked(claimsRepository.statusBeforeQuery).mockResolvedValue(
+        "FINAL_BILL_SUBMITTED",
+      );
+
+      const service = await import("./claims.service.js");
+      await expect(
+        service.transitionClaimStatus(
+          auth("desk_head"),
+          CLAIM_ID,
+          "PRE_AUTH_SENT",
+          undefined,
+        ),
+      ).rejects.toBeInstanceOf(service.InvalidTransitionError);
+      expect(claimsRepository.recordStatusChange).not.toHaveBeenCalled();
+    });
+
+    it("refuses to answer a pre-auth query into the final bill", async () => {
+      // The back door the widened table would otherwise open: approval
+      // skipped entirely.
+      queriedClaim();
+      vi.mocked(claimsRepository.statusBeforeQuery).mockResolvedValue(
+        "PRE_AUTH_SENT",
+      );
+
+      const service = await import("./claims.service.js");
+      await expect(
+        service.transitionClaimStatus(
+          auth("desk_head"),
+          CLAIM_ID,
+          "FINAL_BILL_SUBMITTED",
+          undefined,
+        ),
+      ).rejects.toBeInstanceOf(service.InvalidTransitionError);
+    });
+
+    it("lets a claim with no recorded origin go back to the pre-auth", async () => {
+      // Seeded or imported history with nothing before the query: the
+      // table's own answer stands rather than the claim becoming stuck.
+      queriedClaim();
+      vi.mocked(claimsRepository.statusBeforeQuery).mockResolvedValue(null);
+
+      const service = await import("./claims.service.js");
+      await service.transitionClaimStatus(
+        auth("desk_head"),
+        CLAIM_ID,
+        "PRE_AUTH_SENT",
+        undefined,
+      );
+      expect(claimsRepository.recordStatusChange).toHaveBeenCalled();
+    });
+  });
 });

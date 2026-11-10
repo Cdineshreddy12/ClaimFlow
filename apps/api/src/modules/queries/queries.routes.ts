@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { authenticate } from "../../middleware/authenticate.js";
+import { aiRateLimit } from "../../middleware/rate-limit.js";
 import * as queriesService from "./queries.service.js";
 import {
   ClaimNotFoundError,
@@ -37,7 +38,8 @@ export async function registerClaimQueriesRoutes(app: FastifyInstance) {
     }
   });
 
-  app.post("/", async (request, reply) => {
+  // Logging a query summarises the pasted email.
+  app.post("/", aiRateLimit(), async (request, reply) => {
     const { claimId } = ClaimIdParams.parse(request.params);
     const body = CreateQueryBody.parse(request.body);
     try {
@@ -120,7 +122,7 @@ export async function registerQueryInboxRoutes(app: FastifyInstance) {
     POST rather than PATCH: it is not an edit to the query, it runs
     work and costs a model call, and running it twice is two calls.
   */
-  app.post("/:id/summarise", async (request, reply) => {
+  app.post("/:id/summarise", aiRateLimit(), async (request, reply) => {
     const { id } = QueryIdParams.parse(request.params);
     try {
       const result = await queriesService.resummarise(request.authUser!, id);

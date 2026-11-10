@@ -2,6 +2,7 @@ import type { Role } from "@claimflow/contracts";
 import { emailSentAt } from "../../lib/email-date.js";
 import { getSummariser } from "../../integrations/summariser/claude.js";
 import * as auditService from "../audit/audit.service.js";
+import * as claimsService from "../claims/claims.service.js";
 import { getMemberId } from "../members/members.repository.js";
 import * as queriesRepository from "./queries.repository.js";
 import type {
@@ -74,7 +75,39 @@ export async function createQuery(
     after: { claimId },
   });
 
+  /*
+    A logged query also moves the claim.
+
+    These were two separate actions: a status button that moved the
+    claim to QUERY_RAISED without an email, and this dialog, which
+    recorded the email and left the claim saying it was still waiting
+    on the insurer. A desk could do either half — and the status button
+    was the easier one to reach, so a claim could sit in QUERY_RAISED
+    with nothing in the inbox explaining why.
+
+    Best-effort on purpose. The email is the thing that must not be
+    lost; a claim already queried, or at a stage with no query edge,
+    simply keeps its status, and the query is still recorded against
+    it.
+  */
+  await moveToQueried(auth, claimId);
+
   return created;
+}
+
+async function moveToQueried(auth: AuthContext, claimId: string) {
+  try {
+    await claimsService.transitionClaimStatus(
+      auth,
+      claimId,
+      "QUERY_RAISED",
+      undefined,
+    );
+  } catch {
+    // Already queried, or a stage the state machine does not allow it
+    // from. Either way the query itself is written and the desk sees
+    // it; forcing the status would be the tail wagging the dog.
+  }
 }
 
 /**

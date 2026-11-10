@@ -48,13 +48,28 @@ const DESTRUCTIVE: ClaimStatus[] = ["REJECTED"];
 const FORWARD: Partial<Record<ClaimStatus, ClaimStatus>> = {
   DRAFT: "PRE_AUTH_SENT",
   PRE_AUTH_SENT: "APPROVED",
-  // Answering a query means sending the pre-auth again, not approving it.
-  QUERY_RAISED: "PRE_AUTH_SENT",
+  // QUERY_RAISED is deliberately absent: a query is answered by
+  // returning to the stage it interrupted, and only the claim knows
+  // which that was. See `forwardFor` below.
   ENHANCEMENT_REQUESTED: "APPROVED",
   APPROVED: "FINAL_BILL_SUBMITTED",
   FINAL_BILL_SUBMITTED: "DISCHARGE_AUTHORISED",
   DISCHARGE_AUTHORISED: "SETTLED",
 };
+
+/**
+ * The move to style as *the* next step.
+ *
+ * A queried claim goes back where it came from. The transition table
+ * has to allow both stages a query can be raised at, so without this
+ * the file would offer two buttons and one of them would be refused.
+ */
+function forwardFor(claim: Claim): ClaimStatus | undefined {
+  if (claim.status === "QUERY_RAISED") {
+    return claim.queriedFrom ?? "PRE_AUTH_SENT";
+  }
+  return FORWARD[claim.status];
+}
 
 export function ClaimActions({ claim }: { claim: Claim }) {
   const { role } = useAuth();
@@ -74,9 +89,15 @@ export function ClaimActions({ claim }: { claim: Claim }) {
 
   // A desk_executive can't settle, so don't offer them a button that
   // 403s — the state machine already knows, so ask it.
-  const nextStatuses = CLAIM_TRANSITIONS[claim.status].to.filter((next) =>
-    role ? canTransition(claim.status, next, role as Role) : false,
-  );
+  const nextStatuses = CLAIM_TRANSITIONS[claim.status].to
+    .filter((next) =>
+      role ? canTransition(claim.status, next, role as Role) : false,
+    )
+    // QUERY_RAISED is never a bare status change: a query is the email
+    // a TPA sent, and logging it moves the claim as a consequence. Two
+    // buttons both labelled "Log a query" sat here otherwise, and the
+    // one that did less was the easier to reach.
+    .filter((next) => next !== "QUERY_RAISED");
 
   const isSettled = claim.status === "SETTLED";
   /** Money can only have arrived once an insurer has agreed to pay something. */
@@ -86,7 +107,7 @@ export function ClaimActions({ claim }: { claim: Claim }) {
     claim.status === "FINAL_BILL_SUBMITTED" ||
     claim.status === "DISCHARGE_AUTHORISED" ||
     isSettled;
-  const forward = FORWARD[claim.status];
+  const forward = forwardFor(claim);
 
   // Forward move first, then the rest, so the eye lands on the common
   // case rather than scanning for it.

@@ -117,9 +117,11 @@ describe("settling", () => {
 */
 describe("discharge authorisation", () => {
   it("sits between the final bill and the money", () => {
-    expect(CLAIM_TRANSITIONS.FINAL_BILL_SUBMITTED.to).toEqual([
+    // Containment, not equality: the final bill can also be queried,
+    // which is a detour rather than a step on this path.
+    expect(CLAIM_TRANSITIONS.FINAL_BILL_SUBMITTED.to).toContain(
       "DISCHARGE_AUTHORISED",
-    ]);
+    );
     expect(CLAIM_TRANSITIONS.DISCHARGE_AUTHORISED.to).toEqual(["SETTLED"]);
   });
 
@@ -139,5 +141,36 @@ describe("discharge authorisation", () => {
         "desk_executive",
       ),
     ).toBe(true);
+  });
+});
+
+/*
+  A TPA queries the final bill as readily as the pre-auth — a missing
+  break-up, an implant invoice, a discharge summary that stops a day
+  short. The stage could only go forward, so the query could be logged
+  against the claim while the claim went on saying it was waiting for a
+  discharge authorisation.
+*/
+describe("a query at the final bill", () => {
+  it("can be raised there, not only at the pre-auth", () => {
+    expect(
+      canTransition("FINAL_BILL_SUBMITTED", "QUERY_RAISED", "desk_executive"),
+    ).toBe(true);
+  });
+
+  it("can be answered back to either stage a query is raised at", () => {
+    // The table cannot tell which applies to a given claim — only its
+    // history can, and transitionClaimStatus is where that is enforced.
+    expect(CLAIM_TRANSITIONS.QUERY_RAISED.to).toEqual([
+      "PRE_AUTH_SENT",
+      "FINAL_BILL_SUBMITTED",
+    ]);
+  });
+
+  it("still cannot jump the pre-auth stages", () => {
+    // Widening QUERY_RAISED must not open a back door into the middle
+    // of the lifecycle.
+    expect(canTransition("QUERY_RAISED", "APPROVED", "org_admin")).toBe(false);
+    expect(canTransition("QUERY_RAISED", "SETTLED", "org_admin")).toBe(false);
   });
 });

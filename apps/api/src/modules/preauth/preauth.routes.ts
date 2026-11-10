@@ -1,6 +1,7 @@
 import { ConfirmPreauthFieldBody } from "@claimflow/contracts";
 import type { FastifyInstance } from "fastify";
 import { authenticate } from "../../middleware/authenticate.js";
+import { aiRateLimit } from "../../middleware/rate-limit.js";
 import * as preauthLayoutsService from "../preauth-layouts/preauth-layouts.service.js";
 import * as preauthService from "./preauth.service.js";
 import {
@@ -33,7 +34,7 @@ export async function registerPreauthRoutes(app: FastifyInstance) {
    * model call, so it runs when the desk asks rather than on every
    * render of the claim file.
    */
-  app.post("/review", async (request, reply) => {
+  app.post("/review", aiRateLimit(), async (request, reply) => {
     const { claimId } = ClaimIdParams.parse(request.params);
     try {
       return reply.send(
@@ -47,7 +48,7 @@ export async function registerPreauthRoutes(app: FastifyInstance) {
     }
   });
 
-  app.post("/extract", async (request, reply) => {
+  app.post("/extract", aiRateLimit(), async (request, reply) => {
     const { claimId } = ClaimIdParams.parse(request.params);
     try {
       return reply.send(

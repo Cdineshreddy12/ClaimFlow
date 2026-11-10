@@ -195,6 +195,36 @@ export async function getClaimById(id: string) {
   return claim;
 }
 
+/**
+ * The stage a query interrupted, or null if the claim has never been
+ * queried.
+ *
+ * A query is answered by going back to where it was raised, and since
+ * a claim can be queried at the pre-auth or at the final bill, the
+ * table alone cannot say which. The history can: it is the last status
+ * recorded before the most recent QUERY_RAISED.
+ *
+ * Read on demand rather than joined onto every claim — only a queried
+ * claim has an answer, and only the claim file asks.
+ */
+export async function statusBeforeQuery(
+  claimId: string,
+): Promise<ClaimStatus | null> {
+  const rows = await db.execute(sql`
+    select e.status
+    from claim_status_events e
+    where e.claim_id = ${claimId}
+      and e.created_at < (
+        select max(q.created_at) from claim_status_events q
+        where q.claim_id = ${claimId} and q.status = 'QUERY_RAISED'
+      )
+    order by e.created_at desc
+    limit 1
+  `);
+  const [row] = rows as unknown as { status: ClaimStatus }[];
+  return row?.status ?? null;
+}
+
 export async function createClaim(
   data: CreateClaimBody & { sanctionedAmount?: number },
   checklistSnapshot: ChecklistSnapshotItem[],
