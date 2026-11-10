@@ -455,3 +455,82 @@ describe("deductions.service.assessRisk with recoveries", () => {
     expect(risks[0]!.netTotal).toBe(0);
   });
 });
+
+/*
+  A deduction is money cut from this bill, and the amount was only ever
+  checked in the abstract -- a positive number under a hundred million.
+  Nothing tied it to the claim, so a stray zero on a ninety-thousand
+  rupee bill went in at nine hundred thousand, and the recovery rate,
+  the ageing report and the avoidable-deduction target were all wrong
+  from that keystroke until `db:verify` happened to run.
+*/
+describe("deductions.service.recordDeduction", () => {
+  const deduction = { reason: "missing_document" as const, amount: 10_000 };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(repo.create).mockResolvedValue({ id: "d1" } as never);
+    vi.mocked(repo.totalsForClaim).mockResolvedValue({
+      deducted: 0,
+      recovered: 0,
+    } as never);
+  });
+
+  function billed(billedAmount: string | null) {
+    vi.mocked(claimsRepository.getClaimById).mockResolvedValue({
+      id: CLAIM_ID,
+      billedAmount,
+    } as never);
+  }
+
+  it("refuses a single deduction larger than the bill", async () => {
+    billed("90000.00");
+    const service = await import("./deductions.service.js");
+    await expect(
+      service.recordDeduction(auth, CLAIM_ID, {
+        ...deduction,
+        amount: 900_000,
+      } as never),
+    ).rejects.toBeInstanceOf(service.DeductionsExceedBillError);
+    expect(repo.create).not.toHaveBeenCalled();
+  });
+
+  it("counts what is already deducted, not just this one", async () => {
+    // Each cut is plausible on its own; it is the running total that
+    // overdraws the bill, which is how this goes wrong in practice --
+    // four reasons recorded one at a time.
+    billed("90000.00");
+    vi.mocked(repo.totalsForClaim).mockResolvedValue({
+      deducted: 85_000,
+      recovered: 0,
+    } as never);
+
+    const service = await import("./deductions.service.js");
+    await expect(
+      service.recordDeduction(auth, CLAIM_ID, deduction as never),
+    ).rejects.toBeInstanceOf(service.DeductionsExceedBillError);
+  });
+
+  it("allows cuts that come to exactly the bill", async () => {
+    // A fully disallowed claim is a real outcome, not an error.
+    billed("90000.00");
+    vi.mocked(repo.totalsForClaim).mockResolvedValue({
+      deducted: 80_000,
+      recovered: 0,
+    } as never);
+
+    const service = await import("./deductions.service.js");
+    await service.recordDeduction(auth, CLAIM_ID, deduction as never);
+    expect(repo.create).toHaveBeenCalled();
+  });
+
+  it("doesn't check against a bill that hasn't been raised", async () => {
+    billed(null);
+    const service = await import("./deductions.service.js");
+    await service.recordDeduction(auth, CLAIM_ID, {
+      ...deduction,
+      amount: 500_000,
+    } as never);
+    expect(repo.create).toHaveBeenCalled();
+  });
+});

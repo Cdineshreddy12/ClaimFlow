@@ -88,7 +88,13 @@ export function RecordDeductionDialog({
         <form id="record-deduction" onSubmit={submit}>
           {record.isError ? (
             <div className="mb-3 flex items-center justify-between gap-3 rounded-md border border-critical bg-critical-bg px-3.5 py-2.5 text-base font-medium text-critical">
-              Couldn&apos;t record that deduction.
+              {/* The server's words when it has better ones. A refusal
+                  for overdrawing the bill names both figures, and
+                  "Couldn't record that deduction" threw that away and
+                  left the desk re-typing the same amount. */}
+              {record.error instanceof Error
+                ? record.error.message
+                : "Couldn't record that deduction."}
             </div>
           ) : null}
 

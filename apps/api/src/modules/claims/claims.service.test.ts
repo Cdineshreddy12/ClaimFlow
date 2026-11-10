@@ -253,6 +253,57 @@ describe("claims.service", () => {
   });
 
   describe("transitionClaimStatus", () => {
+    /*
+      A desk executive is scoped to the claims assigned to them, and
+      this read the claim straight from the repository — so one could
+      not open a colleague's claim and could still move it through its
+      whole lifecycle. The scoping lived in the read path and the write
+      was not on it.
+    */
+    it("won't let a desk executive move a claim that isn't theirs", async () => {
+      vi.mocked(claimsRepository.getClaimById).mockResolvedValue({
+        id: CLAIM_ID,
+        status: "PRE_AUTH_SENT",
+        assignedTo: "55555555-5555-5555-5555-555555555555",
+      } as never);
+
+      const { transitionClaimStatus, ClaimNotFoundError } =
+        await import("./claims.service.js");
+
+      // Not found rather than forbidden: a claim they may not see
+      // should not be confirmed to exist by the error.
+      await expect(
+        transitionClaimStatus(
+          auth("desk_executive"),
+          CLAIM_ID,
+          "APPROVED",
+          undefined,
+        ),
+      ).rejects.toBeInstanceOf(ClaimNotFoundError);
+      expect(claimsRepository.recordStatusChange).not.toHaveBeenCalled();
+    });
+
+    it("still lets a desk head move anyone's claim", async () => {
+      vi.mocked(claimsRepository.getClaimById).mockResolvedValue({
+        id: CLAIM_ID,
+        status: "PRE_AUTH_SENT",
+        assignedTo: "55555555-5555-5555-5555-555555555555",
+      } as never);
+      vi.mocked(claimsRepository.recordStatusChange).mockResolvedValue({
+        id: CLAIM_ID,
+        status: "APPROVED",
+      } as never);
+
+      const { transitionClaimStatus } = await import("./claims.service.js");
+      await transitionClaimStatus(
+        auth("desk_head"),
+        CLAIM_ID,
+        "APPROVED",
+        undefined,
+      );
+      expect(claimsRepository.recordStatusChange).toHaveBeenCalled();
+    });
+
     it("rejects a transition the state machine doesn't allow", async () => {
       vi.mocked(claimsRepository.getClaimById).mockResolvedValue({
         id: CLAIM_ID,
@@ -274,9 +325,12 @@ describe("claims.service", () => {
     });
 
     it("rejects settling a claim when the actor isn't desk_head", async () => {
+      // Assigned to them, so the scoping passes and the role gate is
+      // what the test is actually about.
       vi.mocked(claimsRepository.getClaimById).mockResolvedValue({
         id: CLAIM_ID,
-        status: "FINAL_BILL_SUBMITTED",
+        status: "DISCHARGE_AUTHORISED",
+        assignedTo: MEMBER_ID,
       } as never);
 
       const { transitionClaimStatus, InvalidTransitionError } =
@@ -296,6 +350,7 @@ describe("claims.service", () => {
       vi.mocked(claimsRepository.getClaimById).mockResolvedValue({
         id: CLAIM_ID,
         status: "PRE_AUTH_SENT",
+        assignedTo: MEMBER_ID,
       } as never);
       vi.mocked(claimsRepository.recordStatusChange).mockResolvedValue({
         id: CLAIM_ID,
@@ -944,6 +999,69 @@ describe("createClaim · government schemes", () => {
         undefined,
       );
       expect(claimsRepository.recordStatusChange).toHaveBeenCalled();
+    });
+  });
+
+  /*
+    The amount was checked for being a number, under a hundred million
+    and not in the future, and never against the claim it was recorded
+    on. A mistyped figure went straight into settled value, the ageing
+    report and every recovery number, and the first thing to notice was
+    db:verify long afterwards.
+  */
+  describe("recording a payment", () => {
+    function billedClaim(billedAmount: string | null) {
+      vi.mocked(claimsRepository.getClaimById).mockResolvedValue({
+        id: CLAIM_ID,
+        status: "DISCHARGE_AUTHORISED",
+        assignedTo: MEMBER_ID,
+        billedAmount,
+      } as never);
+      vi.mocked(claimsRepository.recordPayment).mockResolvedValue({
+        id: CLAIM_ID,
+      } as never);
+    }
+
+    const payment = { settledOn: "2026-11-01" };
+
+    it("refuses more than the claim was billed", async () => {
+      billedClaim("65000.00");
+
+      const service = await import("./claims.service.js");
+      await expect(
+        service.recordPayment(auth("desk_head"), CLAIM_ID, {
+          ...payment,
+          settledAmount: 650000,
+        } as never),
+      ).rejects.toBeInstanceOf(service.PaymentExceedsBillError);
+      expect(claimsRepository.recordPayment).not.toHaveBeenCalled();
+    });
+
+    it("takes the full bill, and anything short of it", async () => {
+      // Short payment is the normal case — that is what a deduction is.
+      billedClaim("65000.00");
+      const service = await import("./claims.service.js");
+      await service.recordPayment(auth("desk_head"), CLAIM_ID, {
+        ...payment,
+        settledAmount: 65000,
+      } as never);
+      await service.recordPayment(auth("desk_head"), CLAIM_ID, {
+        ...payment,
+        settledAmount: 51000,
+      } as never);
+      expect(claimsRepository.recordPayment).toHaveBeenCalledTimes(2);
+    });
+
+    it("allows anything when no bill has been raised yet", async () => {
+      // Nothing to measure against; refusing would be worse than
+      // allowing, since the money genuinely did arrive.
+      billedClaim(null);
+      const service = await import("./claims.service.js");
+      await service.recordPayment(auth("desk_head"), CLAIM_ID, {
+        ...payment,
+        settledAmount: 90000,
+      } as never);
+      expect(claimsRepository.recordPayment).toHaveBeenCalled();
     });
   });
 });

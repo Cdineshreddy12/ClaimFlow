@@ -301,8 +301,17 @@ export async function transitionClaimStatus(
   nextStatus: ClaimStatus,
   slaDeadline: Date | undefined,
 ) {
-  const claim = await claimsRepository.getClaimById(claimId);
-  if (!claim) throw new ClaimNotFoundError(claimId);
+  /*
+    Through `getClaim`, not the repository, so a desk executive is held
+    to the claims assigned to them.
+
+    This read the claim raw. An executive could not open someone else's
+    claim and could still move it — send its pre-auth, approve it, bill
+    it, reject it — because the scoping lived in the read path and this
+    was not on it. docs/adr/0002 means the assignment to be a boundary,
+    not a filter on one screen.
+  */
+  const claim = await getClaim(auth, claimId);
 
   if (!canTransition(claim.status, nextStatus, auth.role)) {
     throw new InvalidTransitionError(
@@ -320,7 +329,8 @@ export async function transitionClaimStatus(
     into a table that cannot see it.
   */
   if (claim.status === "QUERY_RAISED") {
-    const queriedFrom = await claimsRepository.statusBeforeQuery(claimId);
+    // Already resolved by the read above.
+    const queriedFrom = claim.queriedFrom;
     if (queriedFrom && nextStatus !== queriedFrom) {
       throw new InvalidTransitionError(
         `this query was raised at ${queriedFrom}, so it is answered by going back there, not to ${nextStatus}`,
@@ -559,8 +569,9 @@ export async function getClaimFinancials(
   auth: AuthContext,
   claimId: string,
 ): Promise<ClaimFinancials> {
-  const claim = await claimsRepository.getClaimById(claimId);
-  if (!claim) throw new ClaimNotFoundError(claimId);
+  // Scoped for the same reason as the transition above: the money on a
+  // claim is the claim. An executive could read any of it.
+  const claim = await getClaim(auth, claimId);
 
   const [preauthRows, deductionTotals, openEnhancement] = await Promise.all([
     preauthRepository.listForClaim(claimId),
@@ -723,12 +734,37 @@ export async function assignClaim(
  * status: a payment can land before or after the desk marks a claim
  * settled, and forcing the order would make one of those impossible.
  */
+export class PaymentExceedsBillError extends Error {}
+
 export async function recordPayment(
   auth: AuthContext,
   claimId: string,
   body: RecordPaymentBody,
 ) {
-  await getClaim(auth, claimId);
+  const claim = await getClaim(auth, claimId);
+
+  /*
+    An insurer does not pay more than it was billed.
+
+    The amount was checked for being a number, under a hundred million
+    and not dated in the future, and never against the claim it was
+    being recorded on. A typo therefore landed in `settled_amount` and
+    flowed straight into settled value, the ageing report and every
+    recovery figure, and the first complaint came from `db:verify`
+    long afterwards.
+
+    Only when the bill is known, and measured against the bill rather
+    than the sanction: an insurer can pay less than it sanctioned, and
+    often does, but a payment above the bill is an error in the typing
+    rather than a windfall.
+  */
+  const billed =
+    claim.billedAmount === null ? null : Number(claim.billedAmount);
+  if (billed !== null && body.settledAmount > billed) {
+    throw new PaymentExceedsBillError(
+      `${body.settledAmount.toLocaleString("en-IN")} is more than the ${billed.toLocaleString("en-IN")} billed`,
+    );
+  }
 
   // Passed straight through as a date string: turning it into a Date
   // parsed at local midnight and stored the previous day in UTC.

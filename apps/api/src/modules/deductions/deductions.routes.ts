@@ -12,6 +12,7 @@ import {
   AppealAlreadyOpenError,
   AppealAlreadyResolvedError,
   ClaimNotFoundError,
+  DeductionsExceedBillError,
   DeductionNotFoundError,
   RecoveryExceedsDeductionError,
 } from "./deductions.service.js";
@@ -125,6 +126,9 @@ export async function registerClaimDeductionRoutes(app: FastifyInstance) {
       } catch (err) {
         if (err instanceof ClaimNotFoundError) {
           return reply.code(404).send({ error: "claim not found" });
+        }
+        if (err instanceof DeductionsExceedBillError) {
+          return reply.code(422).send({ error: err.message });
         }
         throw err;
       }

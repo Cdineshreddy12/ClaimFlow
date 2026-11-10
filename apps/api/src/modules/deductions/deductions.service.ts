@@ -33,11 +33,43 @@ interface AuthContext {
   role: Role;
 }
 
+export class DeductionsExceedBillError extends Error {}
+
 export async function recordDeduction(
   auth: AuthContext,
   claimId: string,
   body: RecordDeductionBody,
 ) {
+  /*
+    A deduction is money cut from this bill, so the cuts cannot come to
+    more than the bill.
+
+    Nothing checked. The amount was bounded in the abstract and never
+    against the claim it belonged to, so a mistyped figure -- a stray
+    zero on a ninety-thousand-rupee claim -- was accepted in full, and
+    the first thing to notice was `db:verify` saying the settled
+    arithmetic no longer worked. The reports built on these totals had
+    been wrong since the keystroke.
+
+    Only when the bill is known. A deduction recorded before the final
+    bill has nothing to be measured against yet, and refusing it would
+    be worse than allowing it.
+  */
+  const claim = await claimsRepository.getClaimById(claimId);
+  if (!claim) throw new ClaimNotFoundError(claimId);
+
+  const billed =
+    claim.billedAmount === null ? null : Number(claim.billedAmount);
+  if (billed !== null) {
+    const { deducted } = await repo.totalsForClaim(claimId);
+    const total = deducted + body.amount;
+    if (total > billed) {
+      throw new DeductionsExceedBillError(
+        `deductions would come to ${total.toLocaleString("en-IN")}, more than the ${billed.toLocaleString("en-IN")} billed`,
+      );
+    }
+  }
+
   const memberId = await getMemberId(auth.userId);
   const created = await repo.create(
     claimId,
