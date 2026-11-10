@@ -166,57 +166,44 @@ depending on that detail of someone else's function staying true.
 
 ## Amendment — an appeal is the first action, not just an answer (2026-11-10)
 
-`get_appeal_worklist` could tell a desk head that ₹4 lakh of
-uncontested deductions were still worth arguing about, and then stop.
-Every other insight the assistant surfaces has somewhere to go: a
-breached clock is resolved by the ordinary claim actions, a risk
-warning by fixing the paperwork before submission. Appeals had no
-action path at all, which is precisely the failure docs/adr/0013
-describes — "nobody tracks the appeals, so the work is invisible and
-therefore never scheduled." Surfacing it and leaving it there is the
-same outcome with better information.
+`get_appeal_worklist` could say that lakhs of uncontested deductions
+were worth arguing about, and then stop. Every other insight here has
+somewhere to go; appeals had no action path, which is the failure
+docs/adr/0013 describes — nobody schedules the work, so it never
+happens.
 
-`open_appeal` is the proposal, and it differs from the other six in two
-ways that were decisions rather than conveniences.
+`open_appeal` is the proposal, and it departs from the other six twice.
 
-**It takes a list.** Every other proposal acts on one claim or one
-query, because every other proposal comes from a claim-level read. This
-one comes from a portfolio read, and a card that opens one deduction at
-a time against a backlog of forty is the invisibility problem with an
-extra click. The cap is ten, which is what a desk can actually read
-before approving; an approval nobody read is not an approval.
+**It takes a list.** The others act on one claim, because they come
+from a claim-level read. This comes from a portfolio read, and one
+card per deduction against a backlog of forty is the same problem with
+extra clicks. Capped at ten: the card is the approval, so it has to be
+readable.
 
-**Its figures are read from the server, never from the proposal.** The
-model passes deduction ids and nothing else. The card resolves them
-against the appeal worklist and shows the claim, the patient, the
-reason and the amount from there. The amount is the whole basis on
-which a desk decides to contest, and approving the model's arithmetic
-is not the same act as approving the appeal. It also means the card
-only ever offers what is still `NOT_CONTESTED`: the worklist the model
-read can be minutes old, and the approval sends the ids the card
-displayed rather than the ids the model chose.
+**Its figures come from the server, never the proposal.** The model
+passes ids; the card resolves them against the worklist. The amount is
+the basis on which a desk decides to contest, and approving the
+model's arithmetic is not the same act as approving the appeal. It
+also means the card offers only what is still `NOT_CONTESTED` and
+sends the ids it displayed, since the worklist it read can be minutes
+old.
 
-The batch is not all-or-nothing. A deduction somebody else contested in
-the meantime is counted and reported — "1 opened · 1 already
-contested" — rather than failing the batch and leaving the desk to work
-out which of the ten landed. Any other error still surfaces; a
-deduction id the model invented is a real problem and should not be
-absorbed into a count.
+The batch is not all-or-nothing: a deduction contested in the meantime
+is counted and reported rather than failing the batch. Other errors
+still surface — an invented deduction id is a real problem.
 
-No note. `contestDeduction` accepts one and this never sends it: the
-argument to the insurer is the desk's to write, and a model-drafted
-sentence in the audit record would read as though a person had made it.
+No note is sent. `contestDeduction` accepts one; the argument to the
+insurer is the desk's to write, and a model-drafted sentence would sit
+in the audit record looking like a person's.
 
-The card is offered to the roles that can read the worklist, which is
-the same pair the contest route gates on — so unlike
-`add_checklist_slot`, there is no audience that can see the need and
-not act on it. A test asserts that parity directly rather than
-trusting two hand-maintained lists to agree.
+The card goes to the roles that can read the worklist, which is the
+pair the contest route gates on, so unlike `add_checklist_slot` there
+is no audience that sees the need and cannot act. A test asserts that
+parity rather than trusting two lists to agree.
 
-What this does not do is finish an appeal. The lifecycle still stops at
-`CONTESTED`; the insurer answering is a separate act somebody has to
-come back and record, and the card says so rather than reading as
-"appeal filed".
+This does not finish an appeal. The lifecycle stops at `CONTESTED`;
+the insurer answering is a separate act somebody records later, and
+the card says so.
 
 ## Amendment — streaming, and keeping the conversation (2026-11-05)
 

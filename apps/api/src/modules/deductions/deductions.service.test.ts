@@ -457,12 +457,8 @@ describe("deductions.service.assessRisk with recoveries", () => {
 });
 
 /*
-  A deduction is money cut from this bill, and the amount was only ever
-  checked in the abstract -- a positive number under a hundred million.
-  Nothing tied it to the claim, so a stray zero on a ninety-thousand
-  rupee bill went in at nine hundred thousand, and the recovery rate,
-  the ageing report and the avoidable-deduction target were all wrong
-  from that keystroke until `db:verify` happened to run.
+  The amount was only checked in the abstract, never against the claim,
+  so a stray zero reached every total built on it.
 */
 describe("deductions.service.recordDeduction", () => {
   const deduction = { reason: "missing_document" as const, amount: 10_000 };

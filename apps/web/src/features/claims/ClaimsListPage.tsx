@@ -122,15 +122,10 @@ export function ClaimsListPage() {
   const to = Math.min(offset + visible.length, total);
 
   /*
-    Takes over the viewport only once there are rows, the same
-    condition the query inbox uses. The point is to move the scrolling
-    off the page and into the table: with the page scrolling, the
-    search box, the status filter and the column headers all left the
-    screen by row fifteen, and a desk scanning "which of these is the
-    one at Star Health" had to scroll back up to remember which column
-    held the insurer. Empty and error states stay on an ordinary
-    document-height page, where a full-height shell would just be a lot
-    of white.
+    Scrolling moves off the page and into the table, so the toolbar and
+    the column headers stay put. Only once there are rows — the same
+    condition the query inbox uses; a full-height shell around an empty
+    state is just a lot of white.
   */
   const fillsViewport = !isLoading && !isError && visible.length > 0;
 
@@ -325,10 +320,8 @@ export function ClaimsListPage() {
               </TableBody>
             </Table>
           )}
-          {/* Inside the card and below the scroll region, so the count
-              and the paging controls stay put while the rows move.
-              Outside it, "Showing 1–25 of 76" was the one thing you
-              had to scroll past every row to read. */}
+          {/* Below the scroll region, so the count and the paging
+              controls stay put while the rows move. */}
           {total > 0 ? (
             <TableFooterBar>
               <span>

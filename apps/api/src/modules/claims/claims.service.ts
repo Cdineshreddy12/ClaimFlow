@@ -306,16 +306,8 @@ export async function transitionClaimStatus(
   nextStatus: ClaimStatus,
   slaDeadline: Date | undefined,
 ) {
-  /*
-    Through `getClaim`, not the repository, so a desk executive is held
-    to the claims assigned to them.
-
-    This read the claim raw. An executive could not open someone else's
-    claim and could still move it — send its pre-auth, approve it, bill
-    it, reject it — because the scoping lived in the read path and this
-    was not on it. docs/adr/0002 means the assignment to be a boundary,
-    not a filter on one screen.
-  */
+  // Through `getClaim`, not the repository: docs/adr/0002 means the
+  // assignment to be a boundary, not a filter on one screen.
   const claim = await getClaim(auth, claimId);
 
   if (!canTransition(claim.status, nextStatus, auth.role)) {
@@ -344,19 +336,10 @@ export async function transitionClaimStatus(
   }
 
   /*
-    Settled means the money arrived, so there has to be money.
-
-    Nothing checked, and the UI offered the button whether or not a
-    payment had been recorded -- so a claim could sit at SETTLED with a
-    bill, no settled amount and no settlement date. `db:verify` has
-    always asserted the opposite ("every settled claim records what it
-    was paid"); the service simply did not, and the demo data grew a
-    claim in exactly that state.
-
-    The desk is not sent here to find out: the settle button opens the
-    payment dialog and does both in one step. This is the backstop for
-    the API being called directly, and for the dialog's second half
-    failing after its first half succeeded.
+    Settled is a claim about money arriving, so there has to be money —
+    the invariant `db:verify` asserts as "every settled claim records
+    what it was paid". The desk meets this as a dialog rather than a
+    refusal; this is the backstop for the API called directly.
   */
   if (nextStatus === "SETTLED" && claim.settledAmount === null) {
     throw new SettlementNotRecordedError(
@@ -378,12 +361,8 @@ export async function transitionClaimStatus(
     claim.status,
   );
   if (!updated) {
-    /*
-      Nothing matched, so either the claim is gone or it has moved.
-      Worth one more read to tell the desk which: "reload" is useless
-      advice for a claim that no longer exists, and a bare 404 is
-      wrong for one that is merely further along than they thought.
-    */
+    // Gone, or moved. Worth one read to say which: "reload" is useless
+    // for a claim that no longer exists.
     const current = await claimsRepository.getClaimById(claimId);
     if (!current) throw new ClaimNotFoundError(claimId);
     throw new ConcurrentTransitionError(

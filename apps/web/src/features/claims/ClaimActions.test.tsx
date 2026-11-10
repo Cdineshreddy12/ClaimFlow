@@ -55,11 +55,8 @@ function renderActions(claim: Claim) {
 }
 
 /*
-  Settling is where the money stops moving, and the button did it with
-  no money on record -- leaving a claim at SETTLED with no settled
-  amount and no date, the one state `db:verify` has always asserted
-  against. The API now refuses that, so the button has to collect the
-  payment rather than walk the desk into a 422.
+  The API refuses SETTLED without a payment on record, so the button
+  collects it rather than walking the desk into a 422.
 */
 describe("marking a claim settled", () => {
   beforeEach(() => {

@@ -795,11 +795,8 @@ describe("assistant.service", () => {
 });
 
 /*
-  The first proposal that comes from a portfolio read, and the only one
-  that writes to more than one thing. docs/adr/0013 says hospitals never
-  contest deductions because nobody schedules the work; a card that
-  opened one at a time against a backlog would be the same problem with
-  an extra click, so these are about the batch behaving honestly.
+  The only proposal that writes to more than one thing (docs/adr/0013),
+  so these are about the batch behaving honestly.
 */
 describe("approveProposal — open_appeal", () => {
   const D1 = "aaaaaaaa-0000-0000-0000-000000000001";

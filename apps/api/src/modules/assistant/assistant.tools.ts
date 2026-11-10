@@ -594,12 +594,9 @@ export const PROPOSAL_KINDS = [
 export type ProposalKind = (typeof PROPOSAL_KINDS)[number];
 
 /**
- * Proposals only a desk head or org admin is offered.
- *
- * Was a single `!==` in `toolsFor`. `open_appeal` makes two, and a
- * chain of name comparisons is how the third one gets forgotten —
- * especially since the gate that matters is in assistant.service, so a
- * miss here fails silently as a card nobody can click.
+ * Proposals only a desk head or org admin is offered. A set rather
+ * than a chain of `!==`, which is how the third one gets forgotten —
+ * and a miss here fails silently, as a card nobody can click.
  */
 const DESK_HEAD_WRITES = new Set<string>(["add_checklist_slot", "open_appeal"]);
 
@@ -684,13 +681,9 @@ const WRITE_TOOLS: Anthropic.Tool[] = [
   {
     name: "open_appeal",
     /*
-      The one proposal that comes from a portfolio read rather than a
-      claim in hand, and the only one that acts on more than one thing
-      at a time. docs/adr/0013 exists because nobody schedules appeal
-      work -- a card that opens one deduction at a time against a
-      backlog of forty is the same invisibility with an extra click, so
-      this takes a list. The cap is what a desk can actually read
-      before approving; an approval nobody read is not an approval.
+      Takes a list because the insight is portfolio-scale (docs/adr/0013)
+      and one card per deduction is the same backlog with extra clicks.
+      The cap is what someone can read before approving.
     */
     description:
       "Propose opening appeals on deductions the hospital has not contested. Takes several at once, from get_appeal_worklist. Pick the ones actually worth contesting — the biggest, or the ones whose reason this insurer has given back before — and say why you chose them. Never a note: the argument to the insurer is the desk's to write. The user must approve before any appeal is opened.",
@@ -769,11 +762,8 @@ export const PROPOSAL_INPUT = {
     deadline: z.coerce.date().nullable().optional(),
   }),
   open_appeal: z.object({
-    /*
-      Capped, and deduplicated, because the card is the approval: ten
-      rows with their amounts is something a desk reads, and the same
-      id listed twice would contest once and look like two.
-    */
+    // The card is the approval, so: few enough to read, and
+    // deduplicated — twice listed would contest once and look like two.
     deduction_ids: z
       .array(z.string().uuid())
       .min(1)

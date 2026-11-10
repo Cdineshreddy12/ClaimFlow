@@ -41,19 +41,9 @@ export async function recordDeduction(
   body: RecordDeductionBody,
 ) {
   /*
-    A deduction is money cut from this bill, so the cuts cannot come to
-    more than the bill.
-
-    Nothing checked. The amount was bounded in the abstract and never
-    against the claim it belonged to, so a mistyped figure -- a stray
-    zero on a ninety-thousand-rupee claim -- was accepted in full, and
-    the first thing to notice was `db:verify` saying the settled
-    arithmetic no longer worked. The reports built on these totals had
-    been wrong since the keystroke.
-
-    Only when the bill is known. A deduction recorded before the final
-    bill has nothing to be measured against yet, and refusing it would
-    be worse than allowing it.
+    The cuts cannot come to more than the bill. Only checked once the
+    bill is known: before that there is nothing to measure against, and
+    refusing would be worse than allowing.
   */
   const claim = await claimsRepository.getClaimById(claimId);
   if (!claim) throw new ClaimNotFoundError(claimId);

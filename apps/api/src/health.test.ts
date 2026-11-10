@@ -13,14 +13,9 @@ async function app() {
 }
 
 /*
-  The check answered 200 from a static object, so it could not fail.
-
-  The connection pool wedged against Supabase's pooler and every
-  request that touched the database went in and never came out — while
-  this returned ok in a third of a millisecond, the balancer kept the
-  task in service, and ECS saw nothing wrong with it for hours. The
-  process was running; the service was not; nothing could tell the
-  difference.
+  The check answered 200 from a static object, so it could not fail:
+  the process was running, the service was not, and nothing could tell
+  the difference.
 */
 describe("the health check", () => {
   beforeEach(() => {
@@ -46,13 +41,8 @@ describe("the health check", () => {
   });
 
   it("gives up on a database that never answers, rather than hanging with it", async () => {
-    /*
-      The actual failure. A refused connection was never the problem —
-      the socket was open and dead, so the query was written and simply
-      waited. Without the bound, the health check waits too, and an
-      endpoint that hangs forever is indistinguishable from one that is
-      merely slow.
-    */
+    // The actual failure: the socket was open and dead, so the query
+    // was written and simply waited. Without the bound, so does this.
     vi.mocked(db.execute).mockReturnValue(
       new Promise(() => {}) as never, // never settles
     );

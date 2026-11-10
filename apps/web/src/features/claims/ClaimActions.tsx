@@ -81,12 +81,8 @@ export function ClaimActions({ claim }: { claim: Claim }) {
   const [recordDeduction, setRecordDeduction] = useState(false);
   const [recordAmounts, setRecordAmounts] = useState(false);
   const [recordPayment, setRecordPayment] = useState(false);
-  /*
-    Set when the payment dialog was opened by *Mark settled* rather
-    than by the money button, so it finishes the job it was opened
-    for. One dialog either way — two instances differing only in a
-    flag would be two places for the copy to drift.
-  */
+  // Set when *Mark settled* opened the dialog rather than the money
+  // button, so it finishes the job it was opened for.
   const [settleAfterPayment, setSettleAfterPayment] = useState(false);
 
   // Every write behind these three is requireRole("org_admin",
@@ -117,18 +113,10 @@ export function ClaimActions({ claim }: { claim: Claim }) {
   const forward = forwardFor(claim);
 
   /*
-    Settling needs the money first.
-
-    The API refuses SETTLED until a payment is on record, and before
-    that it did not -- so this button could leave a claim settled with
-    no settled amount and no date, which is the one state `db:verify`
-    has always called out. Sending the desk into a 422 to learn that
-    would be worse than the bug. The click opens the payment dialog
-    instead, which records both.
-
-    Only when there is nothing on record. A figure already entered
-    means the money arrived first, which is the commoner order and
-    needs no second dialog.
+    The API refuses SETTLED until a payment is on record, so the click
+    collects one rather than returning a 422. Only when nothing is
+    recorded — a figure already there means the money arrived first,
+    which is the commoner order.
   */
   function act(next: ClaimStatus) {
     if (next === "SETTLED" && claim.settledAmount === null) {

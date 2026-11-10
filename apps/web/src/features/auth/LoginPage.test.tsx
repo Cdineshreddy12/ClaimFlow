@@ -30,13 +30,9 @@ function authError(code: string | undefined, status: number | undefined) {
 }
 
 /*
-  Every failure was reported as "Incorrect email or password" — a bare
-  `catch` with no binding, so the error wasn't merely unhandled, it was
-  unreachable. For a mistyped password that's right; for a rate limit
-  or a request that never left the browser it is a confident lie, and
-  it sends someone to retype a password that was correct the first
-  time. Sign-in is also the one screen where there is no other way to
-  find out what happened.
+  Every failure was reported as "Incorrect email or password", which
+  for a rate limit or a failed request sends someone to retype a
+  password that was correct.
 */
 describe("what the sign-in screen says went wrong", () => {
   beforeEach(() => vi.clearAllMocks());

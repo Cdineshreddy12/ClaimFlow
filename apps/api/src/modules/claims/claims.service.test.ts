@@ -253,13 +253,8 @@ describe("claims.service", () => {
   });
 
   describe("transitionClaimStatus", () => {
-    /*
-      A desk executive is scoped to the claims assigned to them, and
-      this read the claim straight from the repository — so one could
-      not open a colleague's claim and could still move it through its
-      whole lifecycle. The scoping lived in the read path and the write
-      was not on it.
-    */
+    // The scoping lived in the read path and the write was not on it,
+    // so an executive could move a colleague's claim.
     it("won't let a desk executive move a claim that isn't theirs", async () => {
       vi.mocked(claimsRepository.getClaimById).mockResolvedValue({
         id: CLAIM_ID,
@@ -324,13 +319,8 @@ describe("claims.service", () => {
       expect(claimsRepository.recordStatusChange).not.toHaveBeenCalled();
     });
 
-    /*
-      Settled means the money arrived. The transition never checked
-      that any had, so a claim could reach SETTLED with a bill, no
-      settled amount and no settlement date -- the exact state
-      `db:verify` has always asserted against, and which the demo data
-      grew once someone clicked the button.
-    */
+    // A claim could reach SETTLED with a bill and no settled amount —
+    // the state `db:verify` asserts against.
     it("won't settle a claim with no payment on record", async () => {
       vi.mocked(claimsRepository.getClaimById).mockResolvedValue({
         id: CLAIM_ID,
@@ -401,12 +391,8 @@ describe("claims.service", () => {
       expect(claimsRepository.recordStatusChange).toHaveBeenCalled();
     });
 
-    /*
-      The repository refuses the write when the claim has moved; this
-      is how that comes back. 409 and not 404: the request was fine
-      and the claim exists, it is just further along than the desk
-      thought, and "reload" is the only useful thing to say.
-    */
+    // 409, not 404: the request was fine and the claim exists, it is
+    // just further along than the desk thought.
     it("reports a claim that moved under the actor, naming where it is now", async () => {
       vi.mocked(claimsRepository.getClaimById)
         // The read that validates.
@@ -1172,11 +1158,8 @@ describe("createClaim · government schemes", () => {
   });
 
   /*
-    The amount was checked for being a number, under a hundred million
-    and not in the future, and never against the claim it was recorded
-    on. A mistyped figure went straight into settled value, the ageing
-    report and every recovery number, and the first thing to notice was
-    db:verify long afterwards.
+    The amount was bounded in the abstract and never against the claim
+    it was recorded on, so a mistyped figure reached every report.
   */
   describe("recording a payment", () => {
     function billedClaim(billedAmount: string | null) {

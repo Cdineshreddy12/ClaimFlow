@@ -230,12 +230,8 @@ describe("ProposalCard", () => {
 });
 
 /*
-  The appeal card is the only one that acts on several things at once,
-  and the only one whose figures do not come from the proposal. The
-  model passes ids; the amounts are read from the worklist, because the
-  amount is the entire basis on which a desk decides to contest and
-  approving the model's arithmetic is not the same as approving the
-  appeal.
+  The only card that acts on several things at once, and the only one
+  whose figures come from the server rather than the proposal.
 */
 describe("the open_appeal card", () => {
   const D1 = "ded-1";
@@ -351,13 +347,9 @@ describe("the open_appeal card", () => {
   });
 
   /*
-    Approving refetches the worklist, so every row the card just
-    contested comes back CONTESTED and drops out of the uncontested
-    filter. The card went on computing its heading and empty state
-    from what was left, and rendered "Contest these 0 deductions"
-    above "None of these are still uncontested" above "9 opened" --
-    three statements about the same click, one of them false. The
-    earlier test missed it by mocking a worklist that never changed.
+    Approving refetches, so the rows it just contested drop out of the
+    uncontested filter. Computing the heading from what was left
+    rendered "Contest these 0 deductions" above "9 opened".
   */
   it("describes what it did, not what is left, once the refetch lands", async () => {
     vi.mocked(api.get)

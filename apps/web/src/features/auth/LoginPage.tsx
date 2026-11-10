@@ -7,16 +7,10 @@ import { Button } from "../../components/ui/button";
 /**
  * What actually went wrong, rather than the commonest guess.
  *
- * Every failure here used to be reported as "Incorrect email or
- * password" — a bare `catch` with no binding, so the error was not
- * merely unhandled but unreachable. For a mistyped password that is
- * right. For a rate limit, an unconfirmed address, or a request that
- * never left the browser, it is a confident lie, and it sends someone
- * to retype a password that was correct the first time. Sign-in is
- * also the one screen where a user has no other way to find out.
- *
- * Supabase distinguishes these on the error it throws; this just stops
- * throwing that away.
+ * Blaming the credentials for a rate limit or a failed request sends
+ * someone to retype a password that was correct, and sign-in is the
+ * one screen with no other way to find out. Supabase distinguishes
+ * these on the error it throws.
  */
 function signInProblem(error: unknown): string {
   const code = (error as { code?: string } | null)?.code;

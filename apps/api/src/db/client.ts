@@ -35,23 +35,11 @@ function getDb(): PostgresJsDatabase<typeof schema> {
       postgres(connectionString, {
         prepare: false,
         /*
-          Timeouts, because the defaults are "wait forever".
-
-          postgres.js holds idle connections indefinitely by default.
-          Supabase's pooler recycles them from its side, and a socket
-          that died while idle gives no indication of it: the next
-          query is written into it and waits for a reply that is never
-          coming. Not an error, not a timeout -- a hang. The API sat
-          like that for hours, answering /health in a third of a
-          millisecond while every request that touched the database
-          went in and never came out, and nothing was logged because
-          nothing had failed.
-
-          `idle_timeout` closes connections before the pooler can drop
-          them underneath us. `max_lifetime` recycles the ones that
-          stay busy enough to never go idle. `connect_timeout` bounds
-          the replacement. Together they mean a stale connection costs
-          one slow request rather than the process.
+          postgres.js holds idle connections indefinitely and Supabase's
+          pooler recycles them from its side, so a query can be written
+          into a socket that died while idle and wait forever — no
+          error, no timeout. These bound it: a stale connection costs
+          one slow request, not the process.
         */
         idle_timeout: 20,
         max_lifetime: 60 * 30,

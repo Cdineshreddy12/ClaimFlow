@@ -184,13 +184,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
     });
 
     /*
-      Two desks on the same claim.
-
-      The update matched on the id alone, so both of these wrote: the
-      claim kept whichever landed last and recorded an event for each,
-      which is how one claim comes to hold both an approval and a
-      rejection. Needs a real database -- the whole fix is a predicate
-      in the WHERE clause, which a mock cannot be wrong about.
+      Two desks on the same claim. Needs a real database: the fix is a
+      predicate in the WHERE clause, which a mock cannot be wrong about.
     */
     it("refuses a status change when the claim has already moved", async () => {
       const created = await claimsRepository.createClaim(

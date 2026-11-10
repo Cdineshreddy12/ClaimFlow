@@ -813,16 +813,10 @@ async function execute(
     }
 
     /*
-      The only proposal that comes from a portfolio read, and the only
-      one that writes to more than one thing.
-
       Each appeal goes through `contestDeduction`, so the audit row and
-      the already-contested guard are the ones a click on the appeal
-      worklist would produce. A deduction somebody else contested
-      between the model reading the worklist and the desk clicking is
-      not an error -- it is the thing the desk wanted, already done --
-      so it is counted and reported rather than failing the batch and
-      leaving them guessing which of the ten landed.
+      the already-contested guard are the ones the appeal worklist
+      would produce. One contested in the meantime is counted, not
+      thrown: it is the outcome the desk wanted, already done.
     */
     case "open_appeal": {
       const input = PROPOSAL_INPUT.open_appeal.parse(rawInput);

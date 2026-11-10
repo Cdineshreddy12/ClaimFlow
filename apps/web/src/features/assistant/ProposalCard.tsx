@@ -49,11 +49,9 @@ export function ProposalCard({
   const approve = useApproveProposal();
   const [dismissed, setDismissed] = useState(false);
   /*
-    The deductions are read from the server, never from the proposal.
-    The model passes ids and nothing else on purpose: a card whose
-    figures came from the model would be asking the desk to approve
-    the model's arithmetic, and the amount is the whole basis of the
-    decision. Only fetched for the card that needs it.
+    Figures come from the server, never the proposal: the amount is the
+    basis of the decision, and approving the model's arithmetic is not
+    the same act as approving the appeal.
   */
   const worklist = useAppealWorklist(
     undefined,
@@ -95,13 +93,10 @@ export function ProposalCard({
     proposedIds.includes(row.id),
   );
   /*
-    Only the ones there is still something to do about. Approving
-    refetches the worklist, so after a click these are all CONTESTED
-    and this list is empty — right for deciding what to send, wrong
-    for describing what was sent. `rows` widens to the whole proposed
-    set once the card is done, because otherwise it rendered "Contest
-    these 0 deductions · nothing left to open" directly above "9
-    opened": three statements, one of them false.
+    Approving refetches the worklist, so afterwards these are all
+    CONTESTED and `actionable` is empty — right for deciding what to
+    send, wrong for describing what was sent. Hence `rows` widening
+    once the card is done.
   */
   const actionable = proposed.filter(
     (row) => row.appealStatus === "NOT_CONTESTED",

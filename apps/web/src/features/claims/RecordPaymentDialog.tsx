@@ -16,20 +16,14 @@ import type { Claim } from "./types";
 /**
  * What the insurer actually paid.
  *
- * Still its own act. The money can land well before the desk gets
- * round to the status, and that order has to stay recordable — so this
- * dialog on its own records a payment and changes nothing else.
+ * Still its own act: the money often lands before anyone updates the
+ * status, and that order has to stay recordable. `thenSettle` is the
+ * other direction — *Mark settled* on a claim with no payment, where
+ * refusing the click helps nobody and letting it through leaves a
+ * settled claim with no settlement.
  *
- * `thenSettle` is the other direction: the desk clicked *Mark settled*
- * on a claim with no payment on record. Settled means the money
- * arrived, so rather than refuse the click or let it through and leave
- * a settled claim with no settlement, the two are done together here.
- * The one order that is now unrecordable is settled-with-no-money,
- * which was never a real state — only an unchecked one.
- *
- * It is never inferred from "sanctioned minus deductions" — the gap
- * between those two is the thing the deductions dashboard exists to
- * measure, so deriving one from the other would make it circular.
+ * Never inferred from "sanctioned minus deductions": that gap is what
+ * the deductions dashboard measures, so deriving it would be circular.
  */
 export function RecordPaymentDialog({
   claim,
@@ -69,13 +63,9 @@ export function RecordPaymentDialog({
       */
       if (thenSettle) await settle.mutateAsync("SETTLED");
     } catch {
-      /*
-        Caught to stop it here, not to decide anything: both mutations
-        carry their own error state and the blocks above render it.
-        Without this, a refused write rejects out of an async event
-        handler into nothing — an unhandled rejection in the console
-        on every failed save, which is also how CI first noticed.
-      */
+      // Both mutations carry their own error state, rendered above.
+      // Caught so a refused write doesn't reject out of an async event
+      // handler into an unhandled rejection.
       return;
     }
     onOpenChange(false);
@@ -183,10 +173,8 @@ export function RecordPaymentDialog({
             {record.isPending || settle.isPending
               ? "Saving…"
               : thenSettle
-                ? // The title already says this settles the claim, so
-                  // the button need not repeat "payment": at the full
-                  // label, it and Cancel overflowed the padded width
-                  // of a max-w-lg dialog on a 360px screen.
+                ? // The title already says this settles the claim, and
+                  // the longer label overflowed the footer at 360px.
                   "Record and settle"
                 : "Record payment"}
           </Button>

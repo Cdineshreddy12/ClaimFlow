@@ -45,23 +45,17 @@ Each transition records: who performed it, what data was required, and the
 resulting audit event — enforced at the same layer (Fastify RBAC) described
 in `0002-authorization-and-tenant-isolation.md`.
 
-`SETTLED` is the one transition with a precondition beyond the role: the
-claim has to carry a settled amount. "Settled" is a claim about money
-having arrived, and without the check it was only a claim about a
-button having been pressed — a claim could sit at `SETTLED` with a
-bill, no settled amount and no settlement date, which is exactly what
-`db:verify` has always asserted against and what the demo data grew
-once someone clicked it. Zero counts: a fully deducted claim settles at
-nothing, and `null` is what "nobody has said" looks like.
+`SETTLED` is the one transition with a precondition beyond the role:
+the claim has to carry a settled amount — the invariant `db:verify`
+states as "every settled claim records what it was paid". Zero counts;
+a fully deducted claim settles at nothing, and `null` is what "nobody
+has said" looks like.
 
-The desk does not meet that refusal. _Mark settled_ on a claim with no
-payment recorded opens the payment dialog and does both in one step;
-the service-level check is the backstop for the API called directly,
-and for the second half failing after the first succeeded. Recording a
-payment stays its own act, because the money usually lands well before
-anyone updates the status and that order has to stay recordable. The
-only order no longer expressible is settled-with-no-money, which was
-never a state the desk meant — just one nothing stopped.
+The desk does not meet that refusal: _Mark settled_ on a claim with no
+payment opens the payment dialog and does both. The service check is
+the backstop for the API called directly, and for the second half
+failing after the first succeeded. Recording a payment stays its own
+act, since the money usually lands before anyone updates the status.
 
 ## Consequences
 
@@ -74,12 +68,9 @@ never a state the desk meant — just one nothing stopped.
 - A transition may have a data precondition, not only a role one. `SETTLED`
   is the only one today; it is checked in `transitionClaimStatus` rather
   than in the transition table, because the table cannot see the claim.
-- The write is conditional on the status the transition was validated
-  against, and the status change and its event go in one transaction.
-  Validating a claim and then writing it unconditionally let two desks
-  both pass `canTransition` against the same status and both write, so a
-  claim could end up holding an approval and a rejection at once;
-  `db:verify` catches that afterwards, which is the wrong end of it. A
-  refused write is a 409 naming where the claim actually is, and the
-  claim file refetches on it — telling someone to reload while showing
-  them the stale status is half an answer.
+- The write is conditional on the status it was validated against, and
+  the change and its event share a transaction. Unconditional, two desks
+  could both pass `canTransition` against the same status and both
+  write, leaving one claim holding an approval and a rejection. A
+  refused write is a 409 naming where the claim is, and the claim file
+  refetches on it.

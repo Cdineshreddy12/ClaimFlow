@@ -2,12 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { sql } from "drizzle-orm";
 import { db } from "./db/client.js";
 
-/*
-  Comfortably under the load balancer's own check timeout, so a wedged
-  pool is reported as degraded by us rather than as a timeout by it.
-  The distinction matters in the logs: one says the database is
-  unreachable, the other says nothing at all.
-*/
+/** Under the load balancer's own timeout, so we report the failure rather than it. */
 const DB_TIMEOUT_MS = 2_000;
 
 function withTimeout<T>(work: Promise<T>, ms: number): Promise<T> {
@@ -23,19 +18,11 @@ function withTimeout<T>(work: Promise<T>, ms: number): Promise<T> {
 }
 
 /**
- * Liveness that reaches the database.
+ * Liveness that reaches the database, because a check that cannot fail
+ * reports that the process is running, not that it can serve.
  *
- * This returned a static object. When the connection pool wedged
- * against Supabase's pooler, every request that touched the database
- * hung forever while this answered 200 in a third of a millisecond —
- * so the balancer kept the task in service and ECS saw nothing wrong
- * with it for hours. A health check that cannot fail is not reporting
- * health, it is reporting that the process is running, and something
- * has to notice when those two stop being the same thing.
- *
- * `select 1`, bounded, so a wedged pool fails the check rather than
- * inheriting its hang. 503 takes the task out of service and ECS
- * replaces it — the recovery this needed and did not have.
+ * Bounded, so a wedged pool fails the check instead of inheriting its
+ * hang; 503 takes the task out of service and ECS replaces it.
  */
 export function registerHealthRoute(app: FastifyInstance) {
   app.get("/health", async (_request, reply) => {
