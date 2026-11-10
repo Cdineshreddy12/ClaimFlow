@@ -22,6 +22,8 @@ import {
 import * as auditService from "../audit/audit.service.js";
 import * as checklistService from "../checklist/checklist.service.js";
 import * as claimsService from "../claims/claims.service.js";
+import { AppealAlreadyOpenError } from "../deductions/deductions.service.js";
+import * as deductionsService from "../deductions/deductions.service.js";
 import * as documentsService from "../documents/documents.service.js";
 import { getMemberId } from "../members/members.repository.js";
 import * as queriesService from "../queries/queries.service.js";
@@ -808,6 +810,64 @@ async function execute(
         action: "add_required",
       });
       return { entityId: claim.id, payload: rule };
+    }
+
+    /*
+      The only proposal that comes from a portfolio read, and the only
+      one that writes to more than one thing.
+
+      Each appeal goes through `contestDeduction`, so the audit row and
+      the already-contested guard are the ones a click on the appeal
+      worklist would produce. A deduction somebody else contested
+      between the model reading the worklist and the desk clicking is
+      not an error -- it is the thing the desk wanted, already done --
+      so it is counted and reported rather than failing the batch and
+      leaving them guessing which of the ten landed.
+    */
+    case "open_appeal": {
+      const input = PROPOSAL_INPUT.open_appeal.parse(rawInput);
+      // The tool isn't offered to a desk executive; this is the gate.
+      // Same pair deductions.routes.ts requires on the contest route.
+      if (!canManageRules(auth.role)) {
+        throw new ForbiddenError(
+          "Contesting a deduction is a desk head's call.",
+        );
+      }
+
+      const opened: { id: string; amount: string; claimId: string }[] = [];
+      const alreadyOpen: string[] = [];
+      for (const deductionId of input.deduction_ids) {
+        try {
+          const contested = await deductionsService.contestDeduction(
+            auth,
+            deductionId,
+            // Never a note. The argument to the insurer is the desk's
+            // to write, and a model-drafted one would land in the
+            // audit record as though a person had made it.
+            {},
+          );
+          opened.push({
+            id: contested.id,
+            amount: contested.amount,
+            claimId: contested.claimId,
+          });
+        } catch (err) {
+          if (err instanceof AppealAlreadyOpenError) {
+            alreadyOpen.push(deductionId);
+            continue;
+          }
+          throw err;
+        }
+      }
+
+      return {
+        // The provenance row only records that the assistant suggested
+        // this; `contestDeduction` has already written one per appeal
+        // against its own claim. With nothing opened there is no claim
+        // to name, and the deduction id is the honest stand-in.
+        entityId: opened[0]?.claimId ?? input.deduction_ids[0]!,
+        payload: { opened, alreadyOpen },
+      };
     }
 
     case "log_query": {

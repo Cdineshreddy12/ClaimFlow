@@ -164,6 +164,60 @@ than `claims.service`, so the role filter is not on their path. The
 tools gate with `claimsService.getClaim` themselves rather than
 depending on that detail of someone else's function staying true.
 
+## Amendment — an appeal is the first action, not just an answer (2026-11-10)
+
+`get_appeal_worklist` could tell a desk head that ₹4 lakh of
+uncontested deductions were still worth arguing about, and then stop.
+Every other insight the assistant surfaces has somewhere to go: a
+breached clock is resolved by the ordinary claim actions, a risk
+warning by fixing the paperwork before submission. Appeals had no
+action path at all, which is precisely the failure docs/adr/0013
+describes — "nobody tracks the appeals, so the work is invisible and
+therefore never scheduled." Surfacing it and leaving it there is the
+same outcome with better information.
+
+`open_appeal` is the proposal, and it differs from the other six in two
+ways that were decisions rather than conveniences.
+
+**It takes a list.** Every other proposal acts on one claim or one
+query, because every other proposal comes from a claim-level read. This
+one comes from a portfolio read, and a card that opens one deduction at
+a time against a backlog of forty is the invisibility problem with an
+extra click. The cap is ten, which is what a desk can actually read
+before approving; an approval nobody read is not an approval.
+
+**Its figures are read from the server, never from the proposal.** The
+model passes deduction ids and nothing else. The card resolves them
+against the appeal worklist and shows the claim, the patient, the
+reason and the amount from there. The amount is the whole basis on
+which a desk decides to contest, and approving the model's arithmetic
+is not the same act as approving the appeal. It also means the card
+only ever offers what is still `NOT_CONTESTED`: the worklist the model
+read can be minutes old, and the approval sends the ids the card
+displayed rather than the ids the model chose.
+
+The batch is not all-or-nothing. A deduction somebody else contested in
+the meantime is counted and reported — "1 opened · 1 already
+contested" — rather than failing the batch and leaving the desk to work
+out which of the ten landed. Any other error still surfaces; a
+deduction id the model invented is a real problem and should not be
+absorbed into a count.
+
+No note. `contestDeduction` accepts one and this never sends it: the
+argument to the insurer is the desk's to write, and a model-drafted
+sentence in the audit record would read as though a person had made it.
+
+The card is offered to the roles that can read the worklist, which is
+the same pair the contest route gates on — so unlike
+`add_checklist_slot`, there is no audience that can see the need and
+not act on it. A test asserts that parity directly rather than
+trusting two hand-maintained lists to agree.
+
+What this does not do is finish an appeal. The lifecycle still stops at
+`CONTESTED`; the insurer answering is a separate act somebody has to
+come back and record, and the card says so rather than reading as
+"appeal filed".
+
 ## Amendment — streaming, and keeping the conversation (2026-11-05)
 
 Two of the decisions above were right about the mechanism and wrong

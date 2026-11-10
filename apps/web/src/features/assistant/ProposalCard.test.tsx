@@ -8,7 +8,7 @@ import type { AssistantAttachment, Proposal } from "./types";
 import { api } from "../../lib/api-client";
 
 vi.mock("../../lib/api-client", () => ({
-  api: { post: vi.fn() },
+  api: { get: vi.fn(), post: vi.fn() },
 }));
 
 function wrapper({ children }: { children: ReactNode }) {
@@ -226,5 +226,158 @@ describe("ProposalCard", () => {
         screen.getByRole("button", { name: "Add slot and file" }),
       ).toBeInTheDocument();
     });
+  });
+});
+
+/*
+  The appeal card is the only one that acts on several things at once,
+  and the only one whose figures do not come from the proposal. The
+  model passes ids; the amounts are read from the worklist, because the
+  amount is the entire basis on which a desk decides to contest and
+  approving the model's arithmetic is not the same as approving the
+  appeal.
+*/
+describe("the open_appeal card", () => {
+  const D1 = "ded-1";
+  const D2 = "ded-2";
+
+  function appealProposal(ids: string[] = [D1, D2]): Proposal {
+    return {
+      id: "toolu_appeal",
+      kind: "open_appeal",
+      input: { deduction_ids: ids },
+    };
+  }
+
+  function row(id: string, overrides: Record<string, unknown> = {}) {
+    return {
+      id,
+      claimId: "claim-1",
+      claimReference: id === D1 ? "CLM-0001" : "CLM-0002",
+      patientName: id === D1 ? "Rajendra Pawar" : "Meera Joshi",
+      insurerName: "Star Health",
+      reason: "missing_document",
+      amount: id === D1 ? "18000.00" : "42000.00",
+      note: null,
+      appealStatus: "NOT_CONTESTED",
+      recoveredAmount: null,
+      contestedAt: null,
+      resolvedAt: null,
+      appealNote: null,
+      createdAt: "2026-11-05T12:00:00.000Z",
+      ...overrides,
+    };
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(api.get).mockResolvedValue([row(D1), row(D2)] as never);
+    vi.mocked(api.post).mockResolvedValue({
+      opened: [{ id: D1 }, { id: D2 }],
+      alreadyOpen: [],
+    } as never);
+  });
+
+  it("lists each deduction with the amount the server reports", async () => {
+    render(<ProposalCard proposal={appealProposal()} attachments={[]} />, {
+      wrapper,
+    });
+
+    expect(await screen.findByText(/CLM-0001/)).toBeInTheDocument();
+    expect(screen.getByText(/CLM-0002/)).toBeInTheDocument();
+    // 18,000 + 42,000, in the heading — the number that decides whether
+    // this is worth anyone's afternoon.
+    expect(screen.getByText(/60,000/)).toBeInTheDocument();
+  });
+
+  it("says plainly that nothing goes to the insurer", async () => {
+    // ADR 0013's lifecycle stops at CONTESTED. A card that read as
+    // "appeal filed" would be the assistant claiming to have done the
+    // part a person still has to do.
+    render(<ProposalCard proposal={appealProposal()} attachments={[]} />, {
+      wrapper,
+    });
+    expect(
+      await screen.findByText(/Nothing is sent to the insurer/),
+    ).toBeInTheDocument();
+  });
+
+  it("sends only the deductions it actually showed", async () => {
+    // The worklist moved between the model reading it and the desk
+    // clicking: D2 is already contested, so it isn't on the card and
+    // must not be in the approval either.
+    vi.mocked(api.get).mockResolvedValue([
+      row(D1),
+      row(D2, { appealStatus: "CONTESTED" }),
+    ] as never);
+
+    render(<ProposalCard proposal={appealProposal()} attachments={[]} />, {
+      wrapper,
+    });
+
+    await screen.findByText(/CLM-0001/);
+    expect(screen.queryByText(/CLM-0002/)).not.toBeInTheDocument();
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "Open the appeals" }),
+    );
+
+    await waitFor(() =>
+      expect(api.post).toHaveBeenCalledWith(
+        "/assistant/proposals/approve",
+        expect.objectContaining({ input: { deduction_ids: [D1] } }),
+      ),
+    );
+  });
+
+  it("won't offer the button when there is nothing left to contest", async () => {
+    // Every id already contested. A button here would report success
+    // for opening nothing.
+    vi.mocked(api.get).mockResolvedValue([
+      row(D1, { appealStatus: "CONTESTED" }),
+      row(D2, { appealStatus: "CONTESTED" }),
+    ] as never);
+
+    render(<ProposalCard proposal={appealProposal()} attachments={[]} />, {
+      wrapper,
+    });
+
+    expect(
+      await screen.findByText(/None of these are still uncontested/),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Open the appeals" }),
+    ).toBeDisabled();
+  });
+
+  it("reports the half that happened, not a flat Done", async () => {
+    vi.mocked(api.post).mockResolvedValue({
+      opened: [{ id: D1 }],
+      alreadyOpen: [D2],
+    } as never);
+
+    render(<ProposalCard proposal={appealProposal()} attachments={[]} />, {
+      wrapper,
+    });
+
+    await screen.findByText(/CLM-0001/);
+    await userEvent.click(
+      screen.getByRole("button", { name: "Open the appeals" }),
+    );
+
+    expect(
+      await screen.findByText(/1 opened · 1 already contested/),
+    ).toBeInTheDocument();
+  });
+
+  it("doesn't read the appeal worklist for any other card", async () => {
+    // The route is gated to a desk head, so an unconditional fetch
+    // would 403 for a desk executive on every proposal shown to them.
+    render(
+      <ProposalCard proposal={fileProposal()} attachments={[ATTACHMENT]} />,
+      { wrapper },
+    );
+    await screen.findByText(/scan_0017.jpg/);
+    expect(api.get).not.toHaveBeenCalled();
   });
 });

@@ -64,13 +64,23 @@ export function useClaimDeductions(claimId: string) {
   });
 }
 
-export function useAppealWorklist(status?: DeductionAppealStatus) {
+/**
+ * `enabled` because the assistant's appeal card needs this list and
+ * every other proposal card does not. The route is gated to a desk
+ * head, so fetching it unconditionally from a shared card would 403
+ * for a desk executive on every proposal they were ever shown.
+ */
+export function useAppealWorklist(
+  status?: DeductionAppealStatus,
+  enabled = true,
+) {
   return useQuery({
     queryKey: ["deductions", "appeals", status ?? "open"],
     queryFn: () =>
       api.get<AppealWorklistRow[]>(
         status ? `/deductions/appeals?status=${status}` : "/deductions/appeals",
       ),
+    enabled,
   });
 }
 

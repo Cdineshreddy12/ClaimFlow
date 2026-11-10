@@ -589,8 +589,19 @@ export const PROPOSAL_KINDS = [
   "confirm_query_deadline",
   "add_checklist_slot",
   "file_as_new_slot",
+  "open_appeal",
 ] as const;
 export type ProposalKind = (typeof PROPOSAL_KINDS)[number];
+
+/**
+ * Proposals only a desk head or org admin is offered.
+ *
+ * Was a single `!==` in `toolsFor`. `open_appeal` makes two, and a
+ * chain of name comparisons is how the third one gets forgotten —
+ * especially since the gate that matters is in assistant.service, so a
+ * miss here fails silently as a card nobody can click.
+ */
+const DESK_HEAD_WRITES = new Set<string>(["add_checklist_slot", "open_appeal"]);
 
 const WRITE_TOOLS: Anthropic.Tool[] = [
   {
@@ -671,6 +682,32 @@ const WRITE_TOOLS: Anthropic.Tool[] = [
     },
   },
   {
+    name: "open_appeal",
+    /*
+      The one proposal that comes from a portfolio read rather than a
+      claim in hand, and the only one that acts on more than one thing
+      at a time. docs/adr/0013 exists because nobody schedules appeal
+      work -- a card that opens one deduction at a time against a
+      backlog of forty is the same invisibility with an extra click, so
+      this takes a list. The cap is what a desk can actually read
+      before approving; an approval nobody read is not an approval.
+    */
+    description:
+      "Propose opening appeals on deductions the hospital has not contested. Takes several at once, from get_appeal_worklist. Pick the ones actually worth contesting — the biggest, or the ones whose reason this insurer has given back before — and say why you chose them. Never a note: the argument to the insurer is the desk's to write. The user must approve before any appeal is opened.",
+    input_schema: {
+      type: "object",
+      properties: {
+        deduction_ids: {
+          type: "array",
+          items: { type: "string" },
+          description:
+            "Deduction ids from get_appeal_worklist, at most ten, each still NOT_CONTESTED.",
+        },
+      },
+      required: ["deduction_ids"],
+    },
+  },
+  {
     name: "mark_query_replied",
     description:
       "Propose recording that a reply to a TPA query has been sent. This only records that it went out through some other channel — nothing is sent from here.",
@@ -731,6 +768,18 @@ export const PROPOSAL_INPUT = {
     query_id: z.string().uuid(),
     deadline: z.coerce.date().nullable().optional(),
   }),
+  open_appeal: z.object({
+    /*
+      Capped, and deduplicated, because the card is the approval: ten
+      rows with their amounts is something a desk reads, and the same
+      id listed twice would contest once and look like two.
+    */
+    deduction_ids: z
+      .array(z.string().uuid())
+      .min(1)
+      .max(10)
+      .transform((ids) => [...new Set(ids)]),
+  }),
 } satisfies Record<ProposalKind, z.ZodTypeAny>;
 
 export function isProposalKind(name: string): name is ProposalKind {
@@ -766,6 +815,6 @@ export function toolsFor(role: Role): Anthropic.Tool[] {
   if (canManageRules(role)) return ASSISTANT_TOOLS;
   return ASSISTANT_TOOLS.filter(
     (tool) =>
-      tool.name !== "add_checklist_slot" && !PORTFOLIO_TOOLS.has(tool.name),
+      !DESK_HEAD_WRITES.has(tool.name) && !PORTFOLIO_TOOLS.has(tool.name),
   );
 }

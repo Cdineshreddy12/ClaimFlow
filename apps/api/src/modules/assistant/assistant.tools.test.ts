@@ -66,9 +66,37 @@ describe("assistant.tools", () => {
     it("doesn't offer a desk executive a tool they'd only be refused on", () => {
       const names = toolsFor("desk_executive").map((t) => t.name);
       expect(names).not.toContain("add_checklist_slot");
-      // Withholds one card; it is not a read-only mode.
+      /*
+        Contesting a deduction is gated to the same pair, and the read
+        that motivates it -- get_appeal_worklist -- is already withheld
+        as a portfolio tool. Offering the card to someone who cannot
+        see the worklist it comes from would be odd twice over.
+      */
+      expect(names).not.toContain("open_appeal");
+      expect(names).not.toContain("get_appeal_worklist");
+      // Withholds a few cards; it is not a read-only mode.
       expect(names).toContain("file_document");
       expect(names).toContain("search_claims");
+    });
+
+    /*
+      The audience for the action and the audience for the insight that
+      prompts it have to be the same set. They were a hand-written
+      `!==` and a Set that nobody checked against each other, so this
+      is the test that notices when a third write tool is added to one
+      and forgotten in the other.
+    */
+    it("offers the appeal card to exactly the roles that can read the worklist", () => {
+      for (const role of [
+        "desk_head",
+        "org_admin",
+        "desk_executive",
+      ] as const) {
+        const names = toolsFor(role).map((t) => t.name);
+        expect(names.includes("open_appeal")).toBe(
+          names.includes("get_appeal_worklist"),
+        );
+      }
     });
 
     it("offers the checklist tool to the roles the admin route allows", () => {

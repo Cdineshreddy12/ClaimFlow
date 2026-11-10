@@ -3,6 +3,7 @@ import { ZodError } from "zod";
 import * as assistantRepository from "./assistant.repository.js";
 import * as checklistService from "../checklist/checklist.service.js";
 import * as claimsService from "../claims/claims.service.js";
+import * as deductionsService from "../deductions/deductions.service.js";
 import * as documentsService from "../documents/documents.service.js";
 import * as queriesService from "../queries/queries.service.js";
 import * as orgMembersRepository from "../members/members.repository.js";
@@ -12,6 +13,7 @@ import * as assistant from "../../integrations/assistant/claude.js";
 vi.mock("./assistant.repository.js");
 vi.mock("../checklist/checklist.service.js");
 vi.mock("../claims/claims.service.js");
+vi.mock("../deductions/deductions.service.js");
 vi.mock("../documents/documents.service.js");
 vi.mock("../queries/queries.service.js");
 vi.mock("../members/members.repository.js");
@@ -789,5 +791,142 @@ describe("assistant.service", () => {
         }),
       ).rejects.toThrow(AttachmentNotFoundError);
     });
+  });
+});
+
+/*
+  The first proposal that comes from a portfolio read, and the only one
+  that writes to more than one thing. docs/adr/0013 says hospitals never
+  contest deductions because nobody schedules the work; a card that
+  opened one at a time against a backlog would be the same problem with
+  an extra click, so these are about the batch behaving honestly.
+*/
+describe("approveProposal — open_appeal", () => {
+  const D1 = "aaaaaaaa-0000-0000-0000-000000000001";
+  const D2 = "aaaaaaaa-0000-0000-0000-000000000002";
+  const D3 = "aaaaaaaa-0000-0000-0000-000000000003";
+
+  function contested(id: string) {
+    return { id, amount: "12000.00", claimId: CLAIM_ID } as never;
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(deductionsService.contestDeduction).mockImplementation((async (
+      _a: unknown,
+      id: string,
+    ) => contested(id)) as never);
+  });
+
+  it("contests each one through the ordinary service, so the audit rows are its own", async () => {
+    const { approveProposal } = await import("./assistant.service.js");
+
+    const result = await approveProposal(auth("desk_head"), {
+      kind: "open_appeal",
+      input: { deduction_ids: [D1, D2] },
+    });
+
+    expect(deductionsService.contestDeduction).toHaveBeenCalledTimes(2);
+    expect(result).toMatchObject({ alreadyOpen: [] });
+    expect((result as { opened: unknown[] }).opened).toHaveLength(2);
+  });
+
+  it("never sends a note, so nothing the model wrote reaches the record", async () => {
+    // The appeal's argument is the desk's to make. A model-drafted note
+    // would sit in the audit trail looking like a person's words.
+    const { approveProposal } = await import("./assistant.service.js");
+    await approveProposal(auth("desk_head"), {
+      kind: "open_appeal",
+      input: { deduction_ids: [D1], note: "They clearly owe this" },
+    });
+
+    expect(deductionsService.contestDeduction).toHaveBeenCalledWith(
+      expect.anything(),
+      D1,
+      {},
+    );
+  });
+
+  it("counts the ones already contested instead of failing the batch", async () => {
+    /*
+      The worklist the model read can be minutes old. Letting the
+      second of three throw would contest the first, abandon the third
+      and tell the desk nothing about which was which.
+    */
+    vi.mocked(deductionsService.contestDeduction).mockImplementation((async (
+      _a: unknown,
+      id: string,
+    ) => {
+      if (id === D2) {
+        throw new deductionsService.AppealAlreadyOpenError("already CONTESTED");
+      }
+      return contested(id);
+    }) as never);
+
+    const { approveProposal } = await import("./assistant.service.js");
+    const result = await approveProposal(auth("desk_head"), {
+      kind: "open_appeal",
+      input: { deduction_ids: [D1, D2, D3] },
+    });
+
+    expect(deductionsService.contestDeduction).toHaveBeenCalledTimes(3);
+    expect(result).toMatchObject({ alreadyOpen: [D2] });
+    expect((result as { opened: unknown[] }).opened).toHaveLength(2);
+  });
+
+  it("still fails on an error that isn't already-contested", async () => {
+    // A deduction id the model invented is a real problem and should
+    // surface, not be absorbed into a count.
+    vi.mocked(deductionsService.contestDeduction).mockRejectedValue(
+      new deductionsService.DeductionNotFoundError(D1),
+    );
+
+    const { approveProposal } = await import("./assistant.service.js");
+    await expect(
+      approveProposal(auth("desk_head"), {
+        kind: "open_appeal",
+        input: { deduction_ids: [D1] },
+      }),
+    ).rejects.toBeInstanceOf(deductionsService.DeductionNotFoundError);
+  });
+
+  it("refuses a desk executive, who is never offered the card either", async () => {
+    // The tool is withheld from them, but withholding is a courtesy
+    // and this is the gate — the same pair the contest route requires.
+    const service = await import("./assistant.service.js");
+    await expect(
+      service.approveProposal(auth("desk_executive"), {
+        kind: "open_appeal",
+        input: { deduction_ids: [D1] },
+      }),
+    ).rejects.toBeInstanceOf(service.ForbiddenError);
+    expect(deductionsService.contestDeduction).not.toHaveBeenCalled();
+  });
+
+  it("contests a repeated id once", async () => {
+    // Two rows in the card and one appeal opened would read as a bug
+    // in the hospital's recovery numbers.
+    const { approveProposal } = await import("./assistant.service.js");
+    await approveProposal(auth("desk_head"), {
+      kind: "open_appeal",
+      input: { deduction_ids: [D1, D1, D2] },
+    });
+    expect(deductionsService.contestDeduction).toHaveBeenCalledTimes(2);
+  });
+
+  it("refuses more than a desk can read before approving", async () => {
+    const { approveProposal } = await import("./assistant.service.js");
+    await expect(
+      approveProposal(auth("desk_head"), {
+        kind: "open_appeal",
+        input: {
+          deduction_ids: Array.from(
+            { length: 11 },
+            (_, i) => `aaaaaaaa-0000-0000-0000-0000000000${String(i + 10)}`,
+          ),
+        },
+      }),
+    ).rejects.toBeInstanceOf(ZodError);
+    expect(deductionsService.contestDeduction).not.toHaveBeenCalled();
   });
 });

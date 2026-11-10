@@ -44,7 +44,8 @@ export type ProposalKind =
   | "mark_query_replied"
   | "confirm_query_deadline"
   | "add_checklist_slot"
-  | "file_as_new_slot";
+  | "file_as_new_slot"
+  | "open_appeal";
 
 /**
  * Something the assistant wants to do, which it cannot do.

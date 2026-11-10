@@ -7,6 +7,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../../components/ui/select";
+import { DEDUCTION_REASON_LABEL } from "@claimflow/contracts";
+import { formatAmount } from "../../lib/format";
+import { useAppealWorklist } from "../deductions/api";
 import { useApproveProposal } from "./api";
 import type { AssistantAttachment, Proposal } from "./types";
 
@@ -45,6 +48,17 @@ export function ProposalCard({
 }) {
   const approve = useApproveProposal();
   const [dismissed, setDismissed] = useState(false);
+  /*
+    The deductions are read from the server, never from the proposal.
+    The model passes ids and nothing else on purpose: a card whose
+    figures came from the model would be asking the desk to approve
+    the model's arithmetic, and the amount is the whole basis of the
+    decision. Only fetched for the card that needs it.
+  */
+  const worklist = useAppealWorklist(
+    undefined,
+    proposal.kind === "open_appeal",
+  );
   const attachment = attachments.find(
     (a) => a.id === proposal.input.attachment_id,
   );
@@ -66,7 +80,47 @@ export function ProposalCard({
       ? Math.round(Number(attachment.claimConfidence) * 100)
       : null;
 
+  /*
+    The proposal's ids, resolved against the worklist and narrowed to
+    the ones still worth a click. An id the model invented, or one
+    someone contested in the meantime, simply isn't here — which is
+    also what makes the empty case meaningful rather than a blank list.
+  */
+  const proposedIds = Array.isArray(proposal.input.deduction_ids)
+    ? (proposal.input.deduction_ids as unknown[]).filter(
+        (id): id is string => typeof id === "string",
+      )
+    : [];
+  const rows = (worklist.data ?? []).filter(
+    (row) =>
+      proposedIds.includes(row.id) && row.appealStatus === "NOT_CONTESTED",
+  );
+  const total = rows.length
+    ? rows.reduce((sum, row) => sum + Number(row.amount), 0)
+    : null;
+
+  /** What actually happened, once the server has said. */
+  const result = approve.data as
+    { opened?: unknown[]; alreadyOpen?: unknown[] } | undefined;
+  const outcome =
+    proposal.kind === "open_appeal" && result
+      ? [
+          `${result.opened?.length ?? 0} opened`,
+          result.alreadyOpen?.length
+            ? `${result.alreadyOpen.length} already contested`
+            : null,
+        ]
+          .filter(Boolean)
+          .join(" · ")
+      : null;
+
   function payload(): Record<string, unknown> {
+    if (proposal.kind === "open_appeal") {
+      // The ids the card actually showed, not the ones the model
+      // proposed: approving what was on screen is the whole point of
+      // the step, and the two differ whenever the worklist has moved.
+      return { deduction_ids: rows.map((row) => row.id) };
+    }
     if (proposal.kind !== "file_document") return proposal.input;
     return { ...proposal.input, checklist_slot: slot };
   }
@@ -213,6 +267,68 @@ export function ProposalCard({
         </>
       ) : null}
 
+      {proposal.kind === "open_appeal" ? (
+        <>
+          <div className="font-semibold">
+            Contest{" "}
+            {rows.length === 1
+              ? "this deduction"
+              : `these ${rows.length} deductions`}
+            {total !== null ? ` · ${formatAmount(String(total))}` : ""}
+          </div>
+
+          {/* Every row the desk is approving, with the figure that
+              makes it worth approving. Read from the appeal worklist,
+              not from the proposal: the model chose which ones, and
+              the server says what they are worth. */}
+          {worklist.isPending ? (
+            <div className="mt-1 text-sm text-ink-faint">
+              Reading the appeal worklist…
+            </div>
+          ) : rows.length === 0 ? (
+            <div className="mt-1 text-sm leading-[1.45] text-ink-faint">
+              {/* Either the ids were wrong or somebody got there first.
+                  Saying nothing and showing a button would be worse. */}
+              None of these are still uncontested — nothing left to open.
+            </div>
+          ) : (
+            <ul className="mt-1.5 flex flex-col gap-1">
+              {rows.map((row) => (
+                <li
+                  key={row.id}
+                  className="flex items-baseline justify-between gap-3 text-sm"
+                >
+                  <span className="text-ink-soft [overflow-wrap:anywhere]">
+                    {row.claimReference} · {row.patientName} ·{" "}
+                    {DEDUCTION_REASON_LABEL[row.reason]}
+                  </span>
+                  <span className="shrink-0 font-mono tabular-nums text-ink">
+                    {formatAmount(row.amount)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {/* What approving does and does not do. ADR 0013's lifecycle
+              stops at CONTESTED; the insurer answering is a separate
+              act somebody has to come back and record. */}
+          <div className="mt-1.5 text-sm leading-[1.45] text-ink-faint">
+            Marks each one as contested so it shows on the appeal worklist.
+            Nothing is sent to the insurer — the argument is yours to make, and
+            the outcome is recorded when they answer.
+          </div>
+
+          {/* The batch is not all-or-nothing, so the result says which
+              half happened rather than a flat "Done". */}
+          {outcome ? (
+            <div className="mt-1.5 text-sm leading-[1.45] text-ink-soft">
+              {outcome}
+            </div>
+          ) : null}
+        </>
+      ) : null}
+
       {approve.isError ? (
         <div className="mt-2 text-sm font-medium text-critical">
           Couldn&apos;t do that — {(approve.error as Error).message}
@@ -225,7 +341,12 @@ export function ProposalCard({
             type="button"
             size="sm"
             disabled={
-              approve.isPending || (proposal.kind === "file_document" && !slot)
+              approve.isPending ||
+              (proposal.kind === "file_document" && !slot) ||
+              // Nothing uncontested left, so the button would do
+              // nothing and report success for it.
+              (proposal.kind === "open_appeal" &&
+                (worklist.isPending || rows.length === 0))
             }
             onClick={() =>
               approve.mutate({
@@ -270,5 +391,7 @@ function approveLabel(kind: Proposal["kind"]): string {
       return "Add the slot";
     case "file_as_new_slot":
       return "Add slot and file";
+    case "open_appeal":
+      return "Open the appeals";
   }
 }

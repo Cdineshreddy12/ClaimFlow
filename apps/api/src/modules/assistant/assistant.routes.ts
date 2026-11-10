@@ -6,6 +6,7 @@ import {
   ClaimNotFoundError,
   SlotAlreadyOnClaimError,
 } from "../claims/claims.service.js";
+import { DeductionNotFoundError } from "../deductions/deductions.service.js";
 import { QueryNotFoundError } from "../queries/queries.service.js";
 import * as assistantService from "./assistant.service.js";
 import {
@@ -236,6 +237,12 @@ export async function registerAssistantRoutes(app: FastifyInstance) {
       }
       if (err instanceof QueryNotFoundError) {
         return reply.code(404).send({ error: "query not found" });
+      }
+      // A deduction id the model invented, or one deleted since the
+      // worklist was read. Already-contested is not here on purpose:
+      // open_appeal counts those and reports them as done.
+      if (err instanceof DeductionNotFoundError) {
+        return reply.code(404).send({ error: "deduction not found" });
       }
       if (err instanceof ForbiddenError) {
         return reply.code(403).send({ error: err.message });
