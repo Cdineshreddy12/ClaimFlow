@@ -51,9 +51,12 @@ Two halves, and every finding says which half produced it.
 
 - `POST /claims/:claimId/preauth-fields/review` returns findings,
   blocker and warning counts, and whether the clinical half ran.
-- The card sits _above_ the twenty-four-field form, not below it. Its
-  whole job is to be read before someone clicks send, and a panel under
-  twenty-four fields is a panel nobody scrolls to.
+- The card sits _above_ the form, not below it. Its whole job is to be
+  read before someone clicks send, and a panel under two dozen fields is
+  a panel nobody scrolls to. Not a fixed count: the layout is per
+  insurer and frozen onto the claim when it opens (docs/adr/0001), so
+  live claims run from twenty-three fields to twenty-six depending on
+  the payer and on when the claim was opened.
 - Without `ANTHROPIC_API_KEY` the rules still run and still catch the
   majority of real insurer queries. Same fallback philosophy as
   document classification in docs/adr/0003.
