@@ -430,13 +430,17 @@ function NavList({
       >
         Query Inbox
       </NavItem>
+      {/* "SLA", matching the path and the clocks themselves. The label
+          said "Turnaround", which is the thing the page *reports* —
+          but the page is read for the hour that is running now, and a
+          desk asks where the SLA screen is. */}
       <NavItem
         to="/sla"
         icon={<Clock />}
         collapsed={collapsed}
         onNavigate={onNavigate}
       >
-        Turnaround
+        SLA
       </NavItem>
       {/* Finance rather than desk work, and gated server-side to
             the same roles — a desk executive following this link

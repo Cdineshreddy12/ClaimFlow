@@ -155,9 +155,20 @@ export function ClaimFilePage() {
       {/* Pinned: which patient, which insurer and what stage are the
           facts you need while scrolling a long document list or a
           twenty-four-field form. */}
+      {/* No negative top margin at `lg`, which is what hid "Back to
+          Claims". The shell renders that link at the top of the main
+          column; this header cancelled the column's top padding to sit
+          flush, which pulled it up over the link — and being opaque, it
+          painted it out entirely. A claim opened from the list had no
+          way back on screen.
+
+          It still pins flush when you scroll, because `top-0` decides
+          that, not the margin. On a phone the margin stays: the header
+          is static there, the shell's link is hidden, and the back
+          chevron lives in the top bar instead. */}
       <div
         ref={headerRef}
-        className="static z-10 -mx-4 -mt-5 mb-4 border-b border-line bg-surface-raised px-4 pb-1 pt-4 lg:sticky lg:top-0 lg:-mx-8 lg:-mt-7 lg:mb-[18px] lg:px-8 lg:pb-1.5 lg:pt-[22px]"
+        className="static z-10 -mx-4 -mt-5 mb-4 border-b border-line bg-surface-raised px-4 pb-1 pt-4 lg:sticky lg:top-0 lg:-mx-8 lg:mt-0 lg:mb-[18px] lg:px-8 lg:pb-1.5 lg:pt-[22px]"
       >
         <div className="mb-[22px] block gap-4 md:flex md:items-start md:justify-between">
           <div className="min-w-0">

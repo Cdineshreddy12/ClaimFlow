@@ -36,7 +36,7 @@ export function SlaPage() {
 
   return (
     <AppShell
-      title="Turnaround"
+      title="SLA"
       subtitle="Live clocks, and how each insurer actually performs"
     >
       {isLoading ? <Loader label="Reading the clocks…" /> : null}

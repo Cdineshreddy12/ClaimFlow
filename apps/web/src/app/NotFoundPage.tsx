@@ -8,9 +8,13 @@ import { Button } from "@/components/ui/button";
  * Without these React Router shows its own developer screen —
  * "Unexpected Application Error! ... Hey developer 👋" — to whoever is
  * at the keyboard, which on this product is a desk executive with a
- * stale bookmark. The nav says "Turnaround" while the path is /sla, so
- * a reasonable guess lands here; it should look like the application
- * it is part of and point back at the work.
+ * stale bookmark, or anyone who typed an address. It should look like
+ * the application it is part of and point back at the work.
+ *
+ * The nav used to say "Turnaround" over a path of /sla, which made a
+ * guessed address a reliable way to land here. That one is fixed; the
+ * screen still has to exist, because a settled claim someone bookmarked
+ * can be removed and the link outlives it.
  */
 export function NotFoundPage() {
   return (
