@@ -400,7 +400,7 @@ function preauthValues(opts: {
     ...(medical ? {} : { surgeryName: procedure }),
     admissionDate: iso(admittedAt),
     admissionTime: `${two(admittedAt.getHours())}:${two(admittedAt.getMinutes())}`,
-    admissionType: "Planned",
+    admissionType: "planned",
     expectedStayDays: String(stay),
     roomType: billed > 200_000 ? "Single private room" : "Twin sharing",
     roomRentPerDay: String(room),

@@ -16,6 +16,22 @@ const DAY = 24 * 60 * 60 * 1000;
 const ago = (days: number) => new Date(Date.now() - days * DAY);
 
 /**
+ * A form records the hospital's own clock, so these are IST — the same
+ * reason preauth.service.ts stamps `+05:30` when it reads them back.
+ * `toISOString()` would write the UTC date, which on anything admitted
+ * after half past six in the evening is yesterday.
+ */
+const IST = "en-CA" as const;
+const istDate = (d: Date) =>
+  d.toLocaleDateString(IST, { timeZone: "Asia/Kolkata" });
+const istTime = (d: Date) =>
+  d.toLocaleTimeString("en-GB", {
+    timeZone: "Asia/Kolkata",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+
+/**
  * Local/dev seed: the three sample claims from the product brief. Run
  * with `tsx src/db/seed.ts`.
  *
@@ -330,16 +346,35 @@ async function seed() {
    * deliberately clean, so the panel shows one finding rather than a
    * wall of them.
    */
+  /*
+    Sent twenty-five minutes ago, so the IRDAI hour is still running.
+
+    At `daysAgo: 0.8` this claim was nineteen hours past a one-hour
+    window the moment the seed finished, and the chip read "18h
+    overdue" — true, but it shows the clock in the one state that is
+    not a clock. Half an hour of countdown is what a desk actually
+    looks at.
+
+    It is perishable by construction: a one-hour window means any
+    seeded countdown becomes an overdue in under an hour, and re-running
+    the seed is the only thing that resets it. Worth knowing before a
+    demo rather than during one.
+  */
+  /** Five hours ago. Shared with the form below so the two agree. */
+  const TEMPLATED_ADMITTED_DAYS_AGO = 0.21;
+  const templatedAdmission = ago(TEMPLATED_ADMITTED_DAYS_AGO);
+
   const templatedFormClaim = await openClaim({
     patientName: "Harish Bhandari",
     insurerId: vidal.id,
     procedureId: dengue.id,
     status: "PRE_AUTH_SENT",
     billedAmount: "65000",
-    admittedDaysAgo: 1,
+    admittedDaysAgo: TEMPLATED_ADMITTED_DAYS_AGO,
     chain: [
-      { status: "DRAFT", daysAgo: 1 },
-      { status: "PRE_AUTH_SENT", daysAgo: 0.8 },
+      { status: "DRAFT", daysAgo: TEMPLATED_ADMITTED_DAYS_AGO },
+      // Twenty-five minutes ago, inside IRDAI's hour.
+      { status: "PRE_AUTH_SENT", daysAgo: 0.017 },
     ],
   });
 
@@ -369,7 +404,7 @@ async function seed() {
     lineOfTreatment: "medical_management",
     admissionDate: ago(2).toISOString().slice(0, 10),
     admissionTime: "22:40",
-    admissionType: "Emergency",
+    admissionType: "emergency",
     expectedStayDays: "4",
     roomType: "Twin sharing",
     roomRentPerDay: "4500",
@@ -395,7 +430,7 @@ async function seed() {
     surgeryName: "Laparoscopic cholecystectomy",
     admissionDate: ago(5).toISOString().slice(0, 10),
     admissionTime: "07:30",
-    admissionType: "Planned",
+    admissionType: "planned",
     expectedStayDays: "3",
     roomType: "Single private room",
     roomRentPerDay: "6000",
@@ -429,15 +464,17 @@ async function seed() {
     clinicalFindings:
       "Platelets 52,000/µL, NS1 antigen positive, no bleeding manifestations",
     ailmentDurationDays: "4",
-    firstConsultationDate: ago(1).toISOString().slice(0, 10),
+    firstConsultationDate: istDate(templatedAdmission),
     provisionalDiagnosis: "Dengue fever with thrombocytopenia",
     icd10Code: "A90",
     lineOfTreatment: "medical_management",
     // Left behind by the form this one was copied from.
     surgeryName: "Laparoscopic cholecystectomy",
-    admissionDate: ago(1).toISOString().slice(0, 10),
-    admissionTime: "16:05",
-    admissionType: "Emergency",
+    // Derived from the same moment the claim was admitted, so the form
+    // and the claim it describes cannot drift apart.
+    admissionDate: istDate(templatedAdmission),
+    admissionTime: istTime(templatedAdmission),
+    admissionType: "emergency",
     expectedStayDays: "5",
     roomType: "Twin sharing",
     // 3,200 x 5 = 16,000, and the rest brings it to exactly 65,000.
@@ -479,7 +516,7 @@ async function seed() {
       surgeryName: "Total knee replacement",
       admissionDate: ago(1).toISOString().slice(0, 10),
       admissionTime: "09:20",
-      admissionType: "Planned",
+      admissionType: "planned",
       expectedStayDays: "5",
       roomType: "Single private room",
       roomRentPerDay: "14000",
