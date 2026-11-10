@@ -280,6 +280,26 @@ not in this repo. A separate web bucket (`WEB_BUCKET`) holds the built
 SPA, written only by the `web` deploy job above, served through
 CloudFront rather than directly.
 
+That CORS rule is load-bearing and easy to miss, because nothing in a
+deploy touches it and nothing in the app notices it is wrong. It listed
+only `http://localhost:*` for the first weeks of this deployment, which
+meant **every browser upload from the deployed app failed** — logos and
+claim documents alike — while the same code worked perfectly in local
+development. The browser reports it as `Failed to fetch`; the only
+place the real answer appears is the preflight `OPTIONS` to S3 coming
+back `403` in the network tab.
+
+So the origins have to include the deployed SPA, not just localhost:
+
+```bash
+aws s3api get-bucket-cors --bucket "$AWS_S3_BUCKET" --region "$AWS_REGION"
+# AllowedOrigins must contain the CloudFront domain the SPA is served
+# from, alongside http://localhost:* for development.
+```
+
+A new web distribution, a custom domain, or a second environment each
+need adding here, or uploads break silently in exactly this way.
+
 **CloudFront** fronts the web bucket — it's what the deploy job
 invalidates after every publish, and it's what makes `index.html`
 `no-cache` meaningful (the edge would otherwise cache it anyway). In
