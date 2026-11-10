@@ -8,11 +8,7 @@ import { claims, documents } from "../../db/schema.js";
  * boundary rule as claims.repository.ts (see docs/adr/0002).
  */
 
-/**
- * A claim has to exist before anything can hang off it. This used to
- * also prove the claim belonged to the caller's organization; with one
- * hospital per install there is nothing left to prove but existence.
- */
+/** A claim has to exist before anything can hang off it. */
 async function claimExists(claimId: string): Promise<boolean> {
   const [claim] = await db
     .select({ id: claims.id })
@@ -35,10 +31,7 @@ export async function create(claimId: string, data: { fileUrl: string }) {
   return document;
 }
 
-/**
- * Stores a suggestion. Deliberately never touches `checklistSlot` or
- * `confirmedAt` — a classifier proposes, a human files (docs/adr/0005).
- */
+/** Stores a suggestion (docs/adr/0005). */
 export async function saveClassification(
   documentId: string,
   classification: {

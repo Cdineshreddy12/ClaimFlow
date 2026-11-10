@@ -29,26 +29,11 @@ import type {
 } from "./claims.schema.js";
 
 /**
- * One hospital per install, so there is no tenant predicate here any
- * more (docs/adr/0002). What still matters is `assignedTo`: a desk
- * executive sees their own claims, a desk head sees all of them, and
- * that filter is applied by the service, not assumed here.
+ * One hospital per install, so there is no tenant predicate here any more
+ * (docs/adr/0002).
  */
 
-/**
- * One page of claims, filtered, searched and sorted in the database.
- *
- * All of this used to happen in the browser over every claim the API
- * had ever returned — fine at three, ruinous at a hospital's two
- * thousand a year, and the same array fed the dashboard's charts.
- *
- * `limit` absent means "every match", which the dashboard still wants:
- * it needs totals, not a page. The list screen always sends one.
- *
- * Status order, the status groups and which columns a search looks at
- * all come from @claimflow/contracts, because the SQL and the UI have
- * to agree about them and two copies would drift.
- */
+/** One page of claims, filtered, searched and sorted in the database. */
 export async function listClaims(filters: {
   status?: ClaimStatus;
   assignedTo?: string | null;
@@ -69,9 +54,7 @@ export async function listClaims(filters: {
 
   const q = filters.q?.trim();
   if (q) {
-    // The four things a desk reads off a TPA email. ILIKE rather than
-    // full-text: these are names and references, not prose, and a
-    // desk types half of one.
+    // The four things a desk reads off a TPA email.
     const like = `%${q.replace(/[%_]/g, (c) => `\\${c}`)}%`;
     conditions.push(
       or(
@@ -135,13 +118,8 @@ function orderFor(sort: ClaimSortKey | undefined, dir: SortDirection) {
 }
 
 /**
- * The clock the claim is currently on, from its latest status event.
- *
- * A correlated subquery rather than a join so one claim stays one row.
- * Shared by the list and the single-claim read because they were
- * written apart and drifted: the file page rendered a countdown and
- * the list it was reached from did not, so the same claim was visibly
- * late on one screen and unremarkable on the other (docs/adr/0014).
+ * The clock the claim is currently on, from its latest status event
+ * (docs/adr/0014).
  */
 const latestSlaDeadline = sql<string | null>`(
   select e.sla_deadline
@@ -198,14 +176,6 @@ export async function getClaimById(id: string) {
 /**
  * The stage a query interrupted, or null if the claim has never been
  * queried.
- *
- * A query is answered by going back to where it was raised, and since
- * a claim can be queried at the pre-auth or at the final bill, the
- * table alone cannot say which. The history can: it is the last status
- * recorded before the most recent QUERY_RAISED.
- *
- * Read on demand rather than joined onto every claim — only a queried
- * claim has an answer, and only the claim file asks.
  */
 export async function statusBeforeQuery(
   claimId: string,
@@ -236,10 +206,8 @@ export async function createClaim(
       patientName: data.patientName,
       insurerId: data.insurerId,
       procedureId: data.procedureId,
-      // Always null on a new claim: nothing has been billed until the
-      // bill is raised at discharge. What the desk types when opening
-      // one is an estimate, and that goes onto the pre-auth form's
-      // total expected cost instead.
+      // Always null on a new claim: nothing has been billed until the bill
+      // is raised at discharge.
       billedAmount: null,
       admittedAt: data.admittedAt ?? null,
       // Government scheme claims only — the service refuses these on
@@ -257,20 +225,7 @@ export async function createClaim(
     .returning();
   // We just inserted exactly one row — this is never actually absent.
 
-  /*
-    The claim's own starting gun.
-
-    Every other status writes an event; opening one did not, so the
-    chain began at PRE_AUTH_SENT and "Opened → pre-auth sent" had
-    nothing to measure from. That gap is the clearest hospital-side
-    delay there is — a claim admitted at nine and sent at four is six
-    hours the desk owns and nobody could see — and it is the one the
-    turnaround table was built to show.
-
-    No SLA deadline: no regulator gives a hospital a window for its own
-    paperwork, and inventing one would put a countdown on the desk that
-    nobody agreed to (docs/adr/0004).
-  */
+  // The claim's own starting gun (docs/adr/0004).
   await db.insert(claimStatusEvents).values({
     claimId: claim!.id,
     status: "DRAFT",
@@ -282,13 +237,8 @@ export async function createClaim(
 }
 
 /**
- * Writes back the two facts the claim header and the dashboard already
- * read off columns, once a human has confirmed them on the pre-auth form.
- *
- * Without this there'd be two answers to "when was this patient
- * admitted" — the pre-auth field and `claims.admittedAt` — and the
- * dashboard would keep showing the one nobody filled in. Only ever
- * called on confirmation, never from a suggestion.
+ * Writes back the two facts the claim header and the dashboard already read
+ * off columns, once a human has confirmed them on the pre-auth form.
  */
 export async function updateConfirmedFacts(
   claimId: string,
@@ -329,8 +279,7 @@ export async function updateConfirmedFacts(
  * Appends one slot to a single claim's checklist snapshot.
  *
  * Concatenated in SQL rather than read-modify-written: two documents
- * being filed into new slots at the same moment would otherwise race,
- * and one of them would be silently dropped.
+ * filed into new slots at the same moment would otherwise race.
  */
 export async function addChecklistSlot(
   claimId: string,
@@ -347,13 +296,7 @@ export async function addChecklistSlot(
   return updated;
 }
 
-/**
- * Takes one slot back off a single claim's snapshot.
- *
- * Filtered in SQL for the same reason the append is concatenated
- * there: a read-modify-write would lose a concurrent addition, and
- * these are the two halves of the same edit.
- */
+/** Takes one slot back off a single claim's snapshot. */
 export async function removeChecklistSlot(
   claimId: string,
   documentType: string,
@@ -373,14 +316,7 @@ export async function removeChecklistSlot(
   return updated;
 }
 
-/**
- * Records what the insurer actually paid, and when.
- *
- * Separate from `sanctionedAmount`: that is what they authorised, this
- * is what arrived. The difference is the deduction the desk is trying
- * to shrink, so inferring one from the other would make the deductions
- * dashboard circular.
- */
+/** Records what the insurer actually paid, and when. */
 export async function recordPayment(
   claimId: string,
   settledAmount: string,
@@ -395,17 +331,11 @@ export async function recordPayment(
 }
 
 /**
- * Updates status and appends the timeline event in one call — the two
- * must never drift apart. Does not validate the transition itself; that's
- * claims.service.ts's job, using the shared state machine in
- * @claimflow/contracts so the API and the UI agree on what's legal.
- */
-/**
  * Points a claim at a desk member, or back at nobody.
  *
- * Deliberately does not touch `updatedAt`: that column is what the
- * list's "time in stage" measures from, and handing a claim to a
- * colleague does not restart the clock the insurer is being judged by.
+ * Deliberately does not touch `updatedAt`: that is what the list's "time
+ * in stage" measures from, and handing a claim to a colleague does not
+ * restart the clock the insurer is judged by.
  */
 export async function assign(claimId: string, assigneeId: string | null) {
   const [updated] = await db
@@ -419,13 +349,6 @@ export async function assign(claimId: string, assigneeId: string | null) {
 /**
  * Moves a claim on and records the event, atomically and only if it is
  * still at `expectedStatus` — the status the caller validated against.
- *
- * Without the predicate, two desks that both read the same status both
- * write, and the claim ends up holding an approval and a rejection at
- * once. The transaction keeps the status and its event together.
- *
- * Returns undefined when nothing matched: gone, or moved under the
- * caller. Only the caller can say which is worth reporting.
  */
 export async function recordStatusChange(
   claimId: string,
@@ -454,17 +377,7 @@ export async function recordStatusChange(
   });
 }
 
-/**
- * Every number the dashboard shows, counted in one round trip.
- *
- * Five separate questions, asked together rather than by shipping the
- * whole claims table to the browser and looping over it five times.
- * Each is a plain aggregate; none of them reads a row the UI then
- * throws away.
- *
- * `assignedTo` carries the desk executive's scoping — their dashboard
- * counts their own claims, the same rule the list obeys.
- */
+/** Every number the dashboard shows, counted in one round trip. */
 export async function claimOverview(opts: {
   assignedTo?: string | undefined;
   monthStart: Date;

@@ -38,20 +38,7 @@ export async function create(claimId: string, data: CreateQueryInput) {
   return query;
 }
 
-/**
- * How long an identical paste counts as the same paste.
- *
- * The window exists because the summariser runs inside the create: a
- * slow model can outlast the client's timeout, the desk sees "couldn't
- * save", presses the button again, and the row that did commit gets a
- * twin — two identical entries in the inbox, both counted overdue.
- *
- * Bounded rather than forever, and a lookup rather than a unique
- * index, because a byte-identical email *is* legitimately loggable
- * twice — a TPA that chases with the same text months later is one
- * query the desk still has to answer. A constraint could not tell the
- * two apart; ten minutes can.
- */
+/** How long an identical paste counts as the same paste. */
 const DUPLICATE_WINDOW_MS = 10 * 60 * 1000;
 
 /** The same email, on the same claim, logged moments ago. */
@@ -75,14 +62,7 @@ export async function findRecentDuplicate(
   return row;
 }
 
-/**
- * Writes a re-run's result onto a query that already exists.
- *
- * Only ever fills blanks, exactly as the create does — a desk exec who
- * typed a summary after the first attempt failed must not have it
- * overwritten by a retry they asked for. The status is always written:
- * it describes the attempt, not the content.
- */
+/** Writes a re-run's result onto a query that already exists. */
 export async function saveSummarisation(
   id: string,
   data: {
@@ -103,9 +83,7 @@ export async function saveSummarisation(
   if (data.requestedItems !== undefined)
     patch.requestedItems = data.requestedItems;
   if (data.deadline !== undefined) {
-    // Unconfirmed, like any summariser deadline — docs/adr/0005. A
-    // retry is still the model talking, however deliberately it was
-    // asked for.
+    // Unconfirmed, like any summariser deadline — docs/adr/0005.
     patch.deadline = data.deadline;
     patch.deadlineInferred = data.deadlineInferred ?? false;
   }
@@ -136,11 +114,8 @@ export async function update(
   if (data.requestedItems !== undefined)
     patch.requestedItems = data.requestedItems;
   if (data.deadline !== undefined) {
-    // A deadline arriving through an edit was typed by a human, so it
-    // is confirmed and no longer inferred by the same keystroke. The
-    // alternative — editing a deadline and then being asked to confirm
-    // the thing you just typed — is the kind of gate that teaches a
-    // desk to click Confirm without reading.
+    // A deadline arriving through an edit was typed by a human, so it is
+    // confirmed and no longer inferred by the same keystroke.
     patch.deadline = data.deadline;
     patch.deadlineInferred = false;
     patch.deadlineConfirmedBy = editedBy;
@@ -155,15 +130,7 @@ export async function update(
   return updated;
 }
 
-/**
- * Stamps a human against the reply deadline, optionally replacing it.
- *
- * `deadline` undefined keeps what's stored and only records that
- * someone vouched for it; `null` clears a deadline the email never
- * actually set. An overridden value stops being inferred — a desk exec
- * who types one has read the email, which is more than the flag was
- * ever claiming.
- */
+/** Stamps a human against the reply deadline, optionally replacing it. */
 export async function confirmDeadline(
   id: string,
   deadline: Date | null | undefined,
@@ -201,10 +168,8 @@ export async function markReplied(id: string) {
 }
 
 /**
- * The brief's "Query Inbox" screen, which spans claims rather than
- * living inside one. assignedTo mirrors claims.service's desk_executive
- * scoping: an exec sees queries on their own claims, a desk head sees
- * the lot.
+ * The brief's "Query Inbox" screen, which spans claims rather than living
+ * inside one.
  */
 export async function listInbox(filters: {
   status: "open" | "replied" | "all";

@@ -5,21 +5,9 @@ import { checklistRules, claims, procedures } from "../../db/schema.js";
 /**
  * The procedure master, with the two counts that decide what a desk is
  * allowed to do to a row.
- *
- * Same shape as the insurer master next door: a procedure with claims
- * filed against it can never be deleted without those claims losing
- * the name they were opened under.
  */
 export async function list(includeInactive = false) {
-  /*
-    Two grouped queries, not correlated subqueries in the select.
-
-    The insurer master next door carries a comment warning about
-    exactly this and I wrote the broken version anyway: the subquery
-    form silently returns 0 for every row, which would show "0 claims"
-    beside a procedure that has them and invite somebody to delete one
-    the desk is actively filing against.
-  */
+  // Two grouped queries, not correlated subqueries in the select.
   const [rows, claimCounts, ruleCounts] = await Promise.all([
     db.select().from(procedures).orderBy(asc(procedures.name)),
     db
@@ -87,14 +75,7 @@ export async function update(
   return row;
 }
 
-/**
- * Takes a procedure off the pickers, or puts it back.
- *
- * The reversible half of the pair. Deleting is refused as soon as a
- * claim references the row, which is every procedure a hospital has
- * actually used — so without this there was no way to stop offering one
- * the hospital no longer does.
- */
+/** Takes a procedure off the pickers, or puts it back. */
 export async function setActive(id: string, isActive: boolean) {
   const [row] = await db
     .update(procedures)

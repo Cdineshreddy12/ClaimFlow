@@ -8,11 +8,6 @@ import {
 /**
  * Attachments are scoped to the member who dropped them, not to the
  * hospital.
- *
- * Not a privacy boundary — a desk head can see every document on every
- * claim the moment one is filed. It's that an unfiled pile is somebody's
- * work in progress, and showing one person's half-sorted scans in
- * another's panel would turn a workspace into a shared junk drawer.
  */
 
 /** One row, as everything downstream passes it around. */
@@ -58,13 +53,7 @@ export async function listPending(uploadedBy: string | null) {
     .orderBy(desc(assistantAttachments.createdAt));
 }
 
-/**
- * An earlier attachment with these exact bytes, already filed.
- *
- * Scoped to the member, like everything else here, and only matches
- * ones that actually became a document — an unfiled twin is not a
- * duplicate, it is the same decision still waiting to be made.
- */
+/** An earlier attachment with these exact bytes, already filed. */
 export async function findFiledByHash(
   contentHash: string,
   uploadedBy: string | null,
@@ -146,13 +135,7 @@ export async function markDismissed(id: string) {
   return row;
 }
 
-/**
- * Conversations are scoped to the member who held them.
- *
- * Same reasoning as attachments above, and more pointedly: a chat is a
- * half-formed train of thought, and a desk head reading a colleague's
- * is a different product from the one this is.
- */
+/** Conversations are scoped to the member who held them. */
 
 export type Conversation = typeof assistantConversations.$inferSelect;
 
@@ -220,9 +203,8 @@ export async function saveConversation(
 /**
  * Marks one proposal spent.
  *
- * Merged in SQL rather than read-modify-written, for the same reason
- * the claim snapshot appends that way: two cards approved in quick
- * succession would otherwise race and one outcome would vanish.
+ * Merged in SQL rather than read-modify-written: two cards approved in
+ * quick succession would otherwise race and one outcome would vanish.
  */
 export async function resolveProposal(
   conversationId: string,

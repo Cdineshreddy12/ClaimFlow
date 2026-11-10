@@ -2,18 +2,7 @@ import { sql } from "drizzle-orm";
 import { statusesHeldBy, type ClaimStatus } from "@claimflow/contracts";
 import { db } from "../../db/client.js";
 
-/**
- * Every open claim's current clock, read across the whole desk.
- *
- * `distinct on (claim_id)` rather than a correlated subquery: this is
- * "the latest status event per claim", which is exactly what distinct
- * on expresses, and Postgres answers it from the claim_id index in one
- * pass. The alternative reads the events table once per claim.
- *
- * Only non-terminal claims. A breach on a settled claim is history, and
- * history belongs in the turnaround report below, not in a worklist
- * that is supposed to be actionable this minute.
- */
+/** Every open claim's current clock, read across the whole desk. */
 export interface SlaWatchRow {
   claimId: string;
   reference: string;
@@ -60,16 +49,7 @@ export async function listOpenClaimClocks(): Promise<SlaWatchRow[]> {
   }));
 }
 
-/**
- * How long each insurer actually took, per decision, over a window.
- *
- * Measured between consecutive status events: the clock starts when the
- * desk sends something and stops when the next status lands, which is
- * the only definition the desk can defend in a meeting with the TPA.
- * Claims still waiting are excluded rather than counted as fast —
- * an unanswered request has no duration yet, and treating it as zero
- * would flatter the insurer it's still waiting on.
- */
+/** How long each insurer actually took, per decision, over a window. */
 export interface TurnaroundRow {
   insurerName: string;
   fromStatus: ClaimStatus;
@@ -79,24 +59,7 @@ export interface TurnaroundRow {
   breaches: number;
 }
 
-/**
- * How long the desk itself held each claim, over a window.
- *
- * The other half of `insurerTurnaround`, and the half the brief
- * actually asks for: IRDAI gives insurers an hour to decide, "so the
- * hospital's own delays must be timed". A desk that takes five hours to
- * send a pre-auth has spent five hours of a patient's admission, and
- * every number on the Turnaround page was previously about somebody
- * else.
- *
- * Grouped by status rather than by insurer. How long we sit on a draft
- * is our habit, not the insurer's doing, and splitting it per insurer
- * would invite reading our own lag as their fault.
- *
- * Same exclusions as the insurer side: a claim still sitting in a desk
- * state has no duration yet, and counting it as zero would flatter
- * exactly the queue that needs looking at.
- */
+/** How long the desk itself held each claim, over a window. */
 export interface DeskTurnaroundRow {
   fromStatus: ClaimStatus;
   /** How many times the desk completed this step in the window. */

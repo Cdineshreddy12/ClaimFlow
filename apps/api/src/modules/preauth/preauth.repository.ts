@@ -8,11 +8,7 @@ import { claimPreauthFields, claims } from "../../db/schema.js";
  * boundary rule as documents.repository.ts (docs/adr/0002).
  */
 
-/**
- * A claim has to exist before anything can hang off it. This used to
- * also prove the claim belonged to the caller's organization; with one
- * hospital per install there is nothing left to prove but existence.
- */
+/** A claim has to exist before anything can hang off it. */
 async function claimExists(claimId: string): Promise<boolean> {
   const [claim] = await db
     .select({ id: claims.id })
@@ -41,8 +37,7 @@ export interface SuggestionRow {
 /**
  * Writes suggestions without touching `value`, `confirmedAt` or
  * `confirmedBy` — re-running the extractor must never quietly replace a
- * figure a human already stood behind (docs/adr/0005). The conflict
- * clause is what enforces that: it updates the suggestion columns only.
+ * figure a human already stood behind (docs/adr/0005).
  */
 export async function saveSuggestions(
   claimId: string,
@@ -79,11 +74,7 @@ export async function saveSuggestions(
     .returning();
 }
 
-/**
- * The human-confirm step. Sets the value a human stands behind and
- * stamps who did it; the suggestion columns stay exactly as they were so
- * the audit trail can still show what the model proposed.
- */
+/** The human-confirm step. */
 export async function confirm(
   claimId: string,
   fieldKey: string,
@@ -110,8 +101,8 @@ export async function confirm(
 }
 
 /**
- * Clears the human value, leaving any suggestion in place so the field
- * goes back to needing a decision rather than disappearing.
+ * Clears the human value, leaving any suggestion in place so the field goes
+ * back to needing a decision rather than disappearing.
  */
 export async function clearValue(claimId: string, fieldKey: string) {
   if (!(await claimExists(claimId))) return undefined;

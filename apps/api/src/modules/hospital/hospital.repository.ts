@@ -1,11 +1,7 @@
 import { db } from "../../db/client.js";
 import { hospitalProfile } from "../../db/schema.js";
 
-/**
- * The one hospital this install belongs to. A unique index on a constant
- * enforces the singleton in the database (migration 0014), so "the first
- * row" and "the only row" are the same thing.
- */
+/** The one hospital this install belongs to. */
 export async function get() {
   const [profile] = await db.select().from(hospitalProfile).limit(1);
   return profile;

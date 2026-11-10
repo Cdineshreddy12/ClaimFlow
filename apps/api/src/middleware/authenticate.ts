@@ -19,13 +19,8 @@ async function verifyRequestToken(
 }
 
 /**
- * Verifies the request's bearer token and populates request.authUser.
- *
- * This is the ONLY place the role claim gets trusted from — route
- * handlers read request.authUser, never the raw token. Since the
- * single-tenant change there is no scope to filter by, so role is the
- * whole of authorization and `requireRole` below is the real boundary
- * (docs/adr/0002 — RLS does not protect this API).
+ * Verifies the request's bearer token and populates request.authUser
+ * (docs/adr/0002).
  */
 export async function authenticate(
   request: FastifyRequest,
@@ -39,10 +34,9 @@ export async function authenticate(
   const roleResult = Role.safeParse(payload.app_metadata?.role);
 
   if (!roleResult.success) {
-    // Validly signed but carries no role — either the Custom Access
-    // Token hook isn't enabled (see migrations 0002 and 0014) or this
-    // user has no `members` row yet. Either way there's nothing to
-    // authorize against.
+    // Validly signed but carries no role — either the Custom Access Token
+    // hook isn't enabled (see migrations 0002 and 0014) or this user has no
+    // `members` row yet.
     return reply.code(403).send({ error: "no desk membership on this token" });
   }
 
@@ -50,10 +44,10 @@ export async function authenticate(
 }
 
 /**
- * Verifies the token but does NOT require a role claim — the one
- * exception to `authenticate`'s rule, for the handful of onboarding
- * routes a just-signed-up user has to reach before a `members` row
- * exists for them at all. See docs/adr/0007.
+ * Verifies the token but does NOT require a role claim — the one exception
+ * to `authenticate`'s rule, for the handful of onboarding routes a
+ * just-signed-up user has to reach before a `members` row exists for them
+ * at all (docs/adr/0007).
  */
 export async function authenticateUserOnly(
   request: FastifyRequest,

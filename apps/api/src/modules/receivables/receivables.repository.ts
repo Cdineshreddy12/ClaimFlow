@@ -1,19 +1,7 @@
 import { sql } from "drizzle-orm";
 import { db } from "../../db/client.js";
 
-/**
- * Claims the hospital has billed for and not been paid for.
- *
- * The clock starts at the **final bill**, not at admission or claim
- * creation. Before the bill goes in there is nothing owed — a claim in
- * pre-auth is work in progress, and ageing it as a receivable would
- * put the hospital's own turnaround into a number meant to measure the
- * insurer's.
- *
- * `distinct on` takes the most recent FINAL_BILL_SUBMITTED event,
- * because a claim can go back to query and be re-submitted; the clock
- * that matters is the one running now.
- */
+/** Claims the hospital has billed for and not been paid for. */
 
 export interface OutstandingClaimRow {
   claimId: string;

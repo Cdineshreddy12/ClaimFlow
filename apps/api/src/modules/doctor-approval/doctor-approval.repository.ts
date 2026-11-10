@@ -45,9 +45,8 @@ export async function listForClaim(claimId: string) {
 
 /**
  * Unauthenticated lookup — the token is the only credential, so this
- * returns just enough for the doctor to know what they're deciding on:
- * the patient, the procedure, the hospital asking. No billing, no
- * insurer correspondence, nothing the clinical decision doesn't need.
+ * returns just enough for the doctor to know what they're deciding on: the
+ * patient, the procedure, the hospital asking.
  */
 export async function getByTokenWithContext(token: string) {
   const [row] = await db

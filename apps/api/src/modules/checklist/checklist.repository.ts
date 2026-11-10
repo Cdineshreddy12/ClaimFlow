@@ -62,23 +62,14 @@ export async function deleteRule(id: string) {
 
 /**
  * Claims still being worked (not SETTLED/REJECTED) against this insurer +
- * procedure — backs the "N active claims" notice the checklist admin
- * screen shows, per docs/adr/0001's versioning rule: editing a rule only
- * affects claims opened after the edit, so this is informational, not a
- * block on saving.
+ * procedure — backs the "N active claims" notice the checklist admin screen
+ * shows, per docs/adr/0001's versioning rule: editing a rule only affects
+ * claims opened after the edit, so this is informational, not a block on
+ * saving.
  */
 /**
- * Every insurer × procedure pair the desk has actually opened a claim
- * on, with how many rules that pair has.
- *
- * Driven from `claims`, not from the cartesian product of insurers and
- * procedures: most of that grid is combinations nobody will ever use,
- * and a coverage report padded with them hides the handful that matter.
- *
- * A pair with claims and zero rules is the case this exists for — the
- * claim gets an empty checklist snapshot, the gap view has nothing to
- * report, and nothing is ever missing. That is worse than a wrong
- * checklist, because it looks fine.
+ * Every insurer × procedure pair the desk has actually opened a claim on,
+ * with how many rules that pair has.
  */
 export interface CoverageRow {
   insurerId: string;
@@ -145,28 +136,14 @@ export async function countActiveClaimsFor(
   return result?.value ?? 0;
 }
 
-/**
- * Every rule, for the proposal pass.
- *
- * One read rather than one per (insurer, procedure) pair: the proposal
- * list spans every pair the desk has queries for, and looking rules up
- * pair by pair would be a query per row of the output. The whole rule
- * set for one hospital is small — a few insurers times a few dozen
- * procedures.
- */
+/** Every rule, for the proposal pass. */
 export async function listAllRules() {
   return db.select().from(checklistRules);
 }
 
 /**
- * What TPAs have actually asked for, per (insurer, procedure), against
- * how many claims were submitted to them.
- *
- * `jsonb_array_elements_text` to unnest the requested items the query
- * summariser stored, and `count(distinct claim_id)` because one claim
- * asking twice for the same document is one claim, not two. DRAFT
- * claims are excluded from both halves: a claim never sent could not
- * have been queried, and counting it would deflate every rate.
+ * What TPAs have actually asked for, per (insurer, procedure), against how
+ * many claims were submitted to them.
  */
 export interface RequestedItemRow {
   insurerId: string;

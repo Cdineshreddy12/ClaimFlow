@@ -7,13 +7,7 @@ import {
   customModules,
 } from "../../db/schema.js";
 
-/**
- * A module and its fields, in two queries rather than one per module.
- *
- * The same lesson the insurer and procedure masters learned the hard
- * way: a correlated subquery in the select silently returned 0 for
- * every row. Counts come from a grouped query joined in memory.
- */
+/** A module and its fields, in two queries rather than one per module. */
 export async function listModules(includeInactive = false) {
   const [modules, fields, counts] = await Promise.all([
     db
@@ -257,13 +251,7 @@ export async function deleteRecord(moduleId: string, recordId: string) {
   return row;
 }
 
-/**
- * Drops a removed field's answers from every record on the module.
- *
- * Without this the data stays in the jsonb forever — invisible,
- * unexportable, and resurrected the day someone recreates a field with
- * the same key. Removing a column removes its answers.
- */
+/** Drops a removed field's answers from every record on the module. */
 export async function pruneFieldFromRecords(
   moduleId: string,
   fieldKey: string,

@@ -10,12 +10,8 @@ export interface PeriodClaimsSummary {
 }
 
 /**
- * Claim volume and turnaround for one closed period — "how October
- * went", as opposed to the dashboard's open-ended "so far this month".
- *
- * `avgTatDays` is measured end to end, `created_at` to `settled_on`,
- * not stage to stage: a CFO reading this wants to know how long money
- * takes to land, not which stage statistic happens to be stored.
+ * Claim volume and turnaround for one closed period — "how October went",
+ * as opposed to the dashboard's open-ended "so far this month".
  */
 export async function periodClaimsSummary(
   from: Date,

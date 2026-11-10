@@ -39,17 +39,7 @@ export async function listForClaim(claimId: string) {
     .orderBy(desc(deductions.createdAt));
 }
 
-/**
- * Totals per reason for the dashboard. Aggregated in Postgres rather
- * than by pulling every row into the API — a desk doing ~650 admissions
- * a month accumulates deductions fast, and this runs on every dashboard
- * load.
- *
- * `until` is optional and open-ended by default, which is what the
- * dashboard wants ("this month so far"). A closed period report (last
- * month, in full) passes it to stop today's deductions leaking into a
- * report about a month that already ended.
- */
+/** Totals per reason for the dashboard. */
 export async function sumByReasonSince(since: Date, until?: Date) {
   return db
     .select({
@@ -70,19 +60,9 @@ export async function sumByReasonSince(since: Date, until?: Date) {
 }
 
 /**
- * This hospital's settled history for one insurer, optionally narrowed
- * to one procedure: how many claims it settled, and what each deduction
- * reason cost across them.
- *
- * `SETTLED` only, and that is the whole denominator question. A claim
- * still in flight hasn't had the chance to lose money yet, so counting
- * it would quietly deflate every rate; a `REJECTED` one lost all of it
- * for reasons a deduction row doesn't describe. Either would make the
- * percentages read lower than the truth, which is the one direction a
- * warning must never err in.
- *
- * The current claim is excluded by id: a claim can't be evidence about
- * itself, and on a re-settled claim it would be.
+ * This hospital's settled history for one insurer, optionally narrowed to
+ * one procedure: how many claims it settled, and what each deduction reason
+ * cost across them.
  */
 export async function settledHistoryForScope(scope: {
   insurerId: string;
@@ -105,14 +85,11 @@ export async function settledHistoryForScope(scope: {
     db
       .select({
         reason: deductions.reason,
-        // distinct: two line items cut for the same reason on one claim
-        // are one claim that lost money that way, not two. Counting rows
-        // here would report a rate above 100% on a bad month.
+        // distinct: two line items cut for the same reason on one claim are
+        // one claim that lost money that way, not two.
         claimsAffected: sql<number>`count(distinct ${deductions.claimId})::int`,
         total: sql<string>`sum(${deductions.amount})`,
-        // What was clawed back on appeal. A reason the hospital reliably
-        // wins back is a smaller risk than its gross total suggests —
-        // see docs/adr/0013.
+        // What was clawed back on appeal (docs/adr/0013).
         recovered: sql<string>`coalesce(sum(${deductions.recoveredAmount}), 0)`,
       })
       .from(deductions)
@@ -132,14 +109,7 @@ export async function settledHistoryForScope(scope: {
   };
 }
 
-/**
- * One claim's deducted and recovered totals.
- *
- * Separate from `sumByReasonSince` because that one answers "what did
- * this month cost the hospital" and this one answers "where did this
- * claim end up" — the first is grouped and time-boxed, the second is a
- * pair of numbers for a single claim's financial line.
- */
+/** One claim's deducted and recovered totals. */
 export async function totalsForClaim(claimId: string) {
   const [row] = await db
     .select({
@@ -174,12 +144,7 @@ export async function contest(id: string, note: string | undefined) {
   return row;
 }
 
-/**
- * Records what the insurer gave back, and the outcome that follows from
- * it. The outcome is derived from the money by the caller rather than
- * chosen, so "recovered in full" can never sit next to a partial
- * amount.
- */
+/** Records what the insurer gave back, and the outcome that follows from it. */
 export async function resolveAppeal(
   id: string,
   outcome: DeductionAppealStatus,
@@ -199,14 +164,7 @@ export async function resolveAppeal(
   return row;
 }
 
-/**
- * Every deduction still worth chasing, newest first, across claims.
- *
- * Read across the whole desk rather than within one claim — an appeal
- * worklist is a different question from "what happened to this claim",
- * and it's the question that gets money back. Joins the claim's
- * reference and patient so the list is readable without N more queries.
- */
+/** Every deduction still worth chasing, newest first, across claims. */
 export async function listAppealWorklist(filters: {
   status?: DeductionAppealStatus;
 }) {

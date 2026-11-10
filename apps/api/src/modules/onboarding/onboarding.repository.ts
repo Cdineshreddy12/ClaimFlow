@@ -16,10 +16,8 @@ export async function getMembershipForUser(userId: string) {
 /**
  * Whether anyone has claimed this install yet.
  *
- * Deliberately "are there any members", not "is there a hospital row".
- * A seeded or migrated database can arrive with a hospital and nobody
- * able to sign into it; keying off the hospital row would lock the
- * first real user out with no way back in.
+ * Deliberately "are there any members", not "is there a hospital row":
+ * a hospital with no one able to sign into it would lock the install.
  */
 export async function hasAnyMember(): Promise<boolean> {
   const [row] = await db.select({ id: members.id }).from(members).limit(1);
@@ -28,14 +26,7 @@ export async function hasAnyMember(): Promise<boolean> {
 
 /**
  * Claims the install: the hospital row and its first admin, together or
- * neither. A signed-up user with a hospital but no membership is a state
- * nobody can get out of, so the transaction is the point.
- *
- * Adopts an existing hospital row rather than insisting on creating one.
- * A database restored from a seed, or migrated off the multi-tenant
- * schema, already has the hospital; what it lacks is somebody who can
- * sign in. The singleton index from migration 0015 would reject a second
- * insert anyway.
+ * neither.
  */
 export async function setUpHospital(userId: string, name: string) {
   return db.transaction(async (tx) => {

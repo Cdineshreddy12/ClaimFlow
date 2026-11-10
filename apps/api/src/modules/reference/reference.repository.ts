@@ -5,13 +5,7 @@ import { insurers, procedures } from "../../db/schema.js";
 /**
  * insurers and procedures are shared reference data, not tenant-scoped —
  * the same insurer is the same real-world entity for every hospital (see
- * docs/ARCHITECTURE.md "Tenancy"). That's why nothing here filters by
- * organizationId, unlike every other repository in this codebase.
- *
- * Read-only on purpose: checklist_rules are per-organization, but the
- * catalogue they point at is curated centrally so two hospitals can't
- * create rival "Company B" rows that make cross-tenant reporting
- * meaningless later.
+ * docs/ARCHITECTURE.md "Tenancy").
  */
 
 export async function listInsurers() {

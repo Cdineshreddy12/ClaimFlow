@@ -65,8 +65,7 @@ export async function listLayouts() {
 
 /**
  * The layout an insurer should use: their own if they have one, the
- * fallback otherwise. Null when neither exists, which means the install
- * has never been seeded.
+ * fallback otherwise.
  */
 export async function findLayoutRow(insurerId: string | null) {
   if (insurerId) {
@@ -83,13 +82,7 @@ export async function findLayoutRow(insurerId: string | null) {
   return fallback;
 }
 
-/**
- * Assembles a whole layout in one go.
- *
- * Three queries and a join in memory rather than a nested select: the
- * shape is a tree, and reconstructing it here keeps the ordering rules
- * in one readable place.
- */
+/** Assembles a whole layout in one go. */
 export async function hydrate(
   layoutId: string,
 ): Promise<PreauthLayout | undefined> {
@@ -115,10 +108,9 @@ export async function hydrate(
       preauthFieldDefinitions,
       eq(preauthPlacements.fieldDefinitionId, preauthFieldDefinitions.id),
     )
-    // Column second, and it matters: displayOrder restarts in each
-    // column, so ordering on it alone leaves every field tied with its
-    // neighbour across the columns and Postgres free to return them
-    // either way round.
+    // Column second, and it matters: displayOrder restarts in each column,
+    // so ordering on it alone leaves every field tied with its neighbour
+    // across the columns and Postgres free to return them either way round.
     .orderBy(
       asc(preauthPlacements.displayOrder),
       asc(preauthPlacements.columnPosition),
@@ -192,15 +184,7 @@ export async function createSection(
   return row;
 }
 
-/**
- * Every section of a cloned layout in one statement.
- *
- * Cloning the shared form into an insurer's own used to insert these a
- * row at a time — three sections, three column updates and
- * twenty-five placements, each its own round trip to a Postgres that
- * is not on this machine. That is about thirty sequential trips, and
- * it took the endpoint fourteen seconds.
- */
+/** Every section of a cloned layout in one statement. */
 export async function createSections(
   rows: {
     layoutId: string;

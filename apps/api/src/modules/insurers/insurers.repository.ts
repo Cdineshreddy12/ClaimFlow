@@ -2,15 +2,7 @@ import { asc, count, eq, sql } from "drizzle-orm";
 import { db } from "../../db/client.js";
 import { checklistRules, claims, insurers } from "../../db/schema.js";
 
-/**
- * The master list, each row carrying how much depends on it.
- *
- * The counts come from two grouped queries rather than correlated
- * subqueries in the select: the subquery version silently returned 0
- * for every insurer, which would have shown "0 claims" beside one that
- * had them and invited somebody to retire a live TPA. Two small
- * round trips that are right beat one that isn't.
- */
+/** The master list, each row carrying how much depends on it. */
 export async function list(includeInactive: boolean) {
   const [rows, claimCounts, ruleCounts] = await Promise.all([
     db.select().from(insurers).orderBy(asc(insurers.name)),

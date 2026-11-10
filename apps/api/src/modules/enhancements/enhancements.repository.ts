@@ -63,11 +63,8 @@ export async function create(
 
 /**
  * Records the insurer's answer and, on an approval, raises the claim's
- * sanctioned amount by what was granted — in one transaction.
- *
- * The two writes cannot be allowed to drift: a claim whose sanctioned
- * amount doesn't include an approved enhancement understates its own
- * ceiling, which is exactly the hole docs/adr/0012 exists to close.
+ * sanctioned amount by what was granted — in one transaction
+ * (docs/adr/0012).
  */
 export async function decide(
   id: string,
@@ -93,9 +90,9 @@ export async function decide(
       .returning();
 
     if (approvedAmount !== undefined && approvedAmount > 0) {
-      // coalesce: the first enhancement on a claim whose sanctioned
-      // amount was never recorded still has to produce a ceiling, and
-      // null + anything would have silently stayed null.
+      // coalesce: the first enhancement on a claim whose sanctioned amount
+      // was never recorded still has to produce a ceiling, and null +
+      // anything would have silently stayed null.
       await tx
         .update(claims)
         .set({
