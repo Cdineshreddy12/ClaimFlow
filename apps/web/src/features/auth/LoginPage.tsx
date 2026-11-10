@@ -4,6 +4,39 @@ import { AuthLayout } from "./AuthLayout";
 import { signIn } from "./api";
 import { Button } from "../../components/ui/button";
 
+/**
+ * What actually went wrong, rather than the commonest guess.
+ *
+ * Every failure here used to be reported as "Incorrect email or
+ * password" — a bare `catch` with no binding, so the error was not
+ * merely unhandled but unreachable. For a mistyped password that is
+ * right. For a rate limit, an unconfirmed address, or a request that
+ * never left the browser, it is a confident lie, and it sends someone
+ * to retype a password that was correct the first time. Sign-in is
+ * also the one screen where a user has no other way to find out.
+ *
+ * Supabase distinguishes these on the error it throws; this just stops
+ * throwing that away.
+ */
+function signInProblem(error: unknown): string {
+  const code = (error as { code?: string } | null)?.code;
+  const status = (error as { status?: number } | null)?.status;
+
+  if (code === "invalid_credentials") return "Incorrect email or password.";
+  if (code === "email_not_confirmed") {
+    return "That address hasn't been confirmed yet — check the sign-up email.";
+  }
+  if (status === 429 || code === "over_request_rate_limit") {
+    return "Too many sign-in attempts. Wait a minute, then try again.";
+  }
+  // No status at all means the request never reached Supabase: offline,
+  // DNS, a blocked request. Retyping the password cannot help.
+  if (status === undefined) {
+    return "Couldn't reach the sign-in service. Check your connection and try again.";
+  }
+  return "Couldn't sign you in. Please try again.";
+}
+
 export function LoginPage() {
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
@@ -18,8 +51,8 @@ export function LoginPage() {
     try {
       await signIn(email, password);
       navigate("/");
-    } catch {
-      setError("Incorrect email or password.");
+    } catch (err) {
+      setError(signInProblem(err));
     } finally {
       setIsSubmitting(false);
     }
