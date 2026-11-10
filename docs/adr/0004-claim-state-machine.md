@@ -45,6 +45,24 @@ Each transition records: who performed it, what data was required, and the
 resulting audit event — enforced at the same layer (Fastify RBAC) described
 in `0002-authorization-and-tenant-isolation.md`.
 
+`SETTLED` is the one transition with a precondition beyond the role: the
+claim has to carry a settled amount. "Settled" is a claim about money
+having arrived, and without the check it was only a claim about a
+button having been pressed — a claim could sit at `SETTLED` with a
+bill, no settled amount and no settlement date, which is exactly what
+`db:verify` has always asserted against and what the demo data grew
+once someone clicked it. Zero counts: a fully deducted claim settles at
+nothing, and `null` is what "nobody has said" looks like.
+
+The desk does not meet that refusal. _Mark settled_ on a claim with no
+payment recorded opens the payment dialog and does both in one step;
+the service-level check is the backstop for the API called directly,
+and for the second half failing after the first succeeded. Recording a
+payment stays its own act, because the money usually lands well before
+anyone updates the status and that order has to stay recordable. The
+only order no longer expressible is settled-with-no-money, which was
+never a state the desk meant — just one nothing stopped.
+
 ## Consequences
 
 - The document lifecycle (uploaded → classified → confirmed) and the query
@@ -53,3 +71,6 @@ in `0002-authorization-and-tenant-isolation.md`.
 - SLA deadlines (IRDAI's 1-hour pre-auth / 3-hour discharge expectations, and
   TPA query reply windows) are persisted as server-side timestamps on the
   relevant status-change event — never computed from the frontend clock.
+- A transition may have a data precondition, not only a role one. `SETTLED`
+  is the only one today; it is checked in `transitionClaimStatus` rather
+  than in the transition table, because the table cannot see the claim.

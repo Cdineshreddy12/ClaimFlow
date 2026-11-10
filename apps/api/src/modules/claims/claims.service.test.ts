@@ -324,6 +324,83 @@ describe("claims.service", () => {
       expect(claimsRepository.recordStatusChange).not.toHaveBeenCalled();
     });
 
+    /*
+      Settled means the money arrived. The transition never checked
+      that any had, so a claim could reach SETTLED with a bill, no
+      settled amount and no settlement date -- the exact state
+      `db:verify` has always asserted against, and which the demo data
+      grew once someone clicked the button.
+    */
+    it("won't settle a claim with no payment on record", async () => {
+      vi.mocked(claimsRepository.getClaimById).mockResolvedValue({
+        id: CLAIM_ID,
+        status: "DISCHARGE_AUTHORISED",
+        assignedTo: MEMBER_ID,
+        billedAmount: "103500.00",
+        settledAmount: null,
+      } as never);
+
+      const service = await import("./claims.service.js");
+      await expect(
+        service.transitionClaimStatus(
+          auth("desk_head"),
+          CLAIM_ID,
+          "SETTLED",
+          undefined,
+        ),
+      ).rejects.toBeInstanceOf(service.SettlementNotRecordedError);
+      expect(claimsRepository.recordStatusChange).not.toHaveBeenCalled();
+    });
+
+    it("settles once the payment is recorded", async () => {
+      vi.mocked(claimsRepository.getClaimById).mockResolvedValue({
+        id: CLAIM_ID,
+        status: "DISCHARGE_AUTHORISED",
+        assignedTo: MEMBER_ID,
+        billedAmount: "103500.00",
+        settledAmount: "103500.00",
+      } as never);
+      vi.mocked(claimsRepository.recordStatusChange).mockResolvedValue({
+        id: CLAIM_ID,
+        status: "SETTLED",
+      } as never);
+
+      const { transitionClaimStatus } = await import("./claims.service.js");
+      await transitionClaimStatus(
+        auth("desk_head"),
+        CLAIM_ID,
+        "SETTLED",
+        undefined,
+      );
+      expect(claimsRepository.recordStatusChange).toHaveBeenCalled();
+    });
+
+    it("zero is a payment on record, not the absence of one", async () => {
+      // A fully deducted claim settles at nothing, and `null` is what
+      // "nobody has said" looks like. Checking truthiness would have
+      // refused the one case the hint in the dialog calls out.
+      vi.mocked(claimsRepository.getClaimById).mockResolvedValue({
+        id: CLAIM_ID,
+        status: "DISCHARGE_AUTHORISED",
+        assignedTo: MEMBER_ID,
+        billedAmount: "103500.00",
+        settledAmount: "0.00",
+      } as never);
+      vi.mocked(claimsRepository.recordStatusChange).mockResolvedValue({
+        id: CLAIM_ID,
+        status: "SETTLED",
+      } as never);
+
+      const { transitionClaimStatus } = await import("./claims.service.js");
+      await transitionClaimStatus(
+        auth("desk_head"),
+        CLAIM_ID,
+        "SETTLED",
+        undefined,
+      );
+      expect(claimsRepository.recordStatusChange).toHaveBeenCalled();
+    });
+
     it("rejects settling a claim when the actor isn't desk_head", async () => {
       // Assigned to them, so the scoping passes and the role gate is
       // what the test is actually about.

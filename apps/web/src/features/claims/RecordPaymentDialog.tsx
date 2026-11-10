@@ -10,34 +10,44 @@ import {
 import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
 import { formatAmount } from "../../lib/format";
-import { useRecordPayment } from "./api";
+import { useRecordPayment, useTransitionStatus } from "./api";
 import type { Claim } from "./types";
 
 /**
  * What the insurer actually paid.
  *
- * Deliberately a separate act from marking the claim settled. The money
- * can land before or after the desk updates the status, and tying them
- * together would make one of those orders impossible to record
- * honestly.
+ * Still its own act. The money can land well before the desk gets
+ * round to the status, and that order has to stay recordable — so this
+ * dialog on its own records a payment and changes nothing else.
  *
- * It is also never inferred from "sanctioned minus deductions" — the
- * gap between those two is the thing the deductions dashboard exists to
+ * `thenSettle` is the other direction: the desk clicked *Mark settled*
+ * on a claim with no payment on record. Settled means the money
+ * arrived, so rather than refuse the click or let it through and leave
+ * a settled claim with no settlement, the two are done together here.
+ * The one order that is now unrecordable is settled-with-no-money,
+ * which was never a real state — only an unchecked one.
+ *
+ * It is never inferred from "sanctioned minus deductions" — the gap
+ * between those two is the thing the deductions dashboard exists to
  * measure, so deriving one from the other would make it circular.
  */
 export function RecordPaymentDialog({
   claim,
   open,
   onOpenChange,
+  thenSettle = false,
 }: {
   claim: Claim;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Mark the claim settled once the payment is recorded. */
+  thenSettle?: boolean;
 }) {
   const today = new Date().toISOString().slice(0, 10);
   const [amount, setAmount] = useState(claim.settledAmount ?? "");
   const [settledOn, setSettledOn] = useState(claim.settledOn ?? today);
   const record = useRecordPayment(claim.id);
+  const settle = useTransitionStatus(claim.id);
 
   const value = Number(amount);
   const valid = amount !== "" && Number.isFinite(value) && value >= 0;
@@ -50,6 +60,13 @@ export function RecordPaymentDialog({
     e.preventDefault();
     if (!valid) return;
     await record.mutateAsync({ settledAmount: value, settledOn });
+    /*
+      Sequential, and the dialog stays open if the second half fails.
+      Closing on the payment alone would report success for a claim
+      that is still at Discharge authorised, and the desk would have no
+      way to tell from the screen which half had landed.
+    */
+    if (thenSettle) await settle.mutateAsync("SETTLED");
     onOpenChange(false);
   }
 
@@ -58,13 +75,20 @@ export function RecordPaymentDialog({
       open={open}
       onOpenChange={(next) => {
         onOpenChange(next);
-        if (!next) record.reset();
+        if (!next) {
+          record.reset();
+          settle.reset();
+        }
       }}
     >
       <DialogContent>
         <DialogHeader
-          title="Record the payment"
-          description={`What ${claim.insurerName} actually paid on ${claim.patientName}'s claim`}
+          title={thenSettle ? "Settle the claim" : "Record the payment"}
+          description={
+            thenSettle
+              ? `What ${claim.insurerName} paid on ${claim.patientName}'s claim. Recording it settles the claim.`
+              : `What ${claim.insurerName} actually paid on ${claim.patientName}'s claim`
+          }
         />
 
         <form id="record-payment" onSubmit={submit}>
@@ -73,6 +97,17 @@ export function RecordPaymentDialog({
               {record.error instanceof Error
                 ? record.error.message
                 : "Couldn't record that payment."}
+            </div>
+          ) : null}
+
+          {/* The payment saved and the status didn't. Said plainly,
+              because the money is already recorded and re-submitting
+              this form would only write the same figure again. */}
+          {settle.isError ? (
+            <div className="mb-3 flex items-center justify-between gap-3 rounded-md border border-critical bg-critical-bg px-3.5 py-2.5 text-base font-medium text-critical">
+              {`Payment saved, but the claim couldn't be marked settled. ${
+                settle.error instanceof Error ? settle.error.message : ""
+              }`.trim()}
             </div>
           ) : null}
 
@@ -132,9 +167,17 @@ export function RecordPaymentDialog({
           <Button
             type="submit"
             form="record-payment"
-            disabled={!valid || record.isPending}
+            disabled={!valid || record.isPending || settle.isPending}
           >
-            {record.isPending ? "Saving…" : "Record payment"}
+            {record.isPending || settle.isPending
+              ? "Saving…"
+              : thenSettle
+                ? // The title already says this settles the claim, so
+                  // the button need not repeat "payment": at the full
+                  // label, it and Cancel overflowed the padded width
+                  // of a max-w-lg dialog on a 360px screen.
+                  "Record and settle"
+                : "Record payment"}
           </Button>
         </DialogFooter>
       </DialogContent>

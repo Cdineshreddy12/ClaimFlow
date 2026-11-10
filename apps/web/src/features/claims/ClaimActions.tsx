@@ -81,6 +81,13 @@ export function ClaimActions({ claim }: { claim: Claim }) {
   const [recordDeduction, setRecordDeduction] = useState(false);
   const [recordAmounts, setRecordAmounts] = useState(false);
   const [recordPayment, setRecordPayment] = useState(false);
+  /*
+    Set when the payment dialog was opened by *Mark settled* rather
+    than by the money button, so it finishes the job it was opened
+    for. One dialog either way — two instances differing only in a
+    flag would be two places for the copy to drift.
+  */
+  const [settleAfterPayment, setSettleAfterPayment] = useState(false);
 
   // Every write behind these three is requireRole("org_admin",
   // "desk_head") on the API, so offering them to a desk executive is
@@ -109,6 +116,29 @@ export function ClaimActions({ claim }: { claim: Claim }) {
     isSettled;
   const forward = forwardFor(claim);
 
+  /*
+    Settling needs the money first.
+
+    The API refuses SETTLED until a payment is on record, and before
+    that it did not -- so this button could leave a claim settled with
+    no settled amount and no date, which is the one state `db:verify`
+    has always called out. Sending the desk into a 422 to learn that
+    would be worse than the bug. The click opens the payment dialog
+    instead, which records both.
+
+    Only when there is nothing on record. A figure already entered
+    means the money arrived first, which is the commoner order and
+    needs no second dialog.
+  */
+  function act(next: ClaimStatus) {
+    if (next === "SETTLED" && claim.settledAmount === null) {
+      setSettleAfterPayment(true);
+      setRecordPayment(true);
+      return;
+    }
+    transition.mutate(next);
+  }
+
   // Forward move first, then the rest, so the eye lands on the common
   // case rather than scanning for it.
   const ordered = [...nextStatuses].sort((a, b) => {
@@ -134,7 +164,7 @@ export function ClaimActions({ claim }: { claim: Claim }) {
                   : "outline"
             }
             disabled={transition.isPending}
-            onClick={() => transition.mutate(next)}
+            onClick={() => act(next)}
           >
             {ACTION_LABEL[next]}
           </Button>
@@ -203,7 +233,10 @@ export function ClaimActions({ claim }: { claim: Claim }) {
             <Button
               type="button"
               variant="outline"
-              onClick={() => setRecordPayment(true)}
+              onClick={() => {
+                setSettleAfterPayment(false);
+                setRecordPayment(true);
+              }}
             >
               {claim.settledAmount === null
                 ? "Record payment received"
@@ -299,7 +332,11 @@ export function ClaimActions({ claim }: { claim: Claim }) {
       <RecordPaymentDialog
         claim={claim}
         open={recordPayment}
-        onOpenChange={setRecordPayment}
+        thenSettle={settleAfterPayment}
+        onOpenChange={(next) => {
+          setRecordPayment(next);
+          if (!next) setSettleAfterPayment(false);
+        }}
       />
     </div>
   );

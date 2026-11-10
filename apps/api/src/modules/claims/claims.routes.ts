@@ -24,6 +24,7 @@ import {
   PackageOnNonSchemeClaimError,
   AssigneeNotFoundError,
   PaymentExceedsBillError,
+  SettlementNotRecordedError,
 } from "./claims.service.js";
 
 export async function registerClaimsRoutes(app: FastifyInstance) {
@@ -266,6 +267,9 @@ export async function registerClaimsRoutes(app: FastifyInstance) {
         return reply.code(404).send({ error: "claim not found" });
       }
       if (err instanceof InvalidTransitionError) {
+        return reply.code(422).send({ error: err.message });
+      }
+      if (err instanceof SettlementNotRecordedError) {
         return reply.code(422).send({ error: err.message });
       }
       throw err;

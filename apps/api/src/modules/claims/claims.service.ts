@@ -35,6 +35,8 @@ export class OriginalSlotError extends Error {}
 export class SlotInUseError extends Error {}
 export class NoRulesToApplyError extends Error {}
 export class InvalidTransitionError extends Error {}
+/** Marking a claim settled with no payment on record. */
+export class SettlementNotRecordedError extends Error {}
 
 interface AuthContext {
   userId: string;
@@ -336,6 +338,27 @@ export async function transitionClaimStatus(
         `this query was raised at ${queriedFrom}, so it is answered by going back there, not to ${nextStatus}`,
       );
     }
+  }
+
+  /*
+    Settled means the money arrived, so there has to be money.
+
+    Nothing checked, and the UI offered the button whether or not a
+    payment had been recorded -- so a claim could sit at SETTLED with a
+    bill, no settled amount and no settlement date. `db:verify` has
+    always asserted the opposite ("every settled claim records what it
+    was paid"); the service simply did not, and the demo data grew a
+    claim in exactly that state.
+
+    The desk is not sent here to find out: the settle button opens the
+    payment dialog and does both in one step. This is the backstop for
+    the API being called directly, and for the dialog's second half
+    failing after its first half succeeded.
+  */
+  if (nextStatus === "SETTLED" && claim.settledAmount === null) {
+    throw new SettlementNotRecordedError(
+      "record what the insurer paid before marking the claim settled",
+    );
   }
 
   const memberId = await getMemberId(auth.userId);
