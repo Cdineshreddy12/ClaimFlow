@@ -8,6 +8,7 @@ import type {
   NabhStatus,
   OwnershipType,
 } from "@claimflow/contracts";
+import { logoRejection } from "@claimflow/contracts";
 import { api } from "../../lib/api-client";
 
 /** Mirrors the hospital_profile row — every profile field is nullable until the wizard fills it. */
@@ -88,12 +89,23 @@ export function useUploadLogo() {
   const updateProfile = useUpdateProfile();
   return useMutation({
     mutationFn: async (file: File) => {
+      // Refused here first, so an oversized or wrong-typed logo fails in
+      // front of whoever picked it with a sentence that names the
+      // reason, rather than a round trip later as a validation error.
+      const rejection = logoRejection(file);
+      if (rejection) throw new Error(rejection);
+
       const { uploadUrl, key } = await api.post<{
         uploadUrl: string;
         key: string;
       }>("/hospital/branding/logo-upload-url", {
         fileName: file.name,
         contentType: file.type,
+        // The server bounds the size and signs it into the URL. Omitting
+        // it did not fail open — it failed closed, on every upload, with
+        // "expected number, received nan", because the schema coerced
+        // the missing field rather than reporting it missing.
+        sizeBytes: file.size,
       });
 
       const putRes = await fetch(uploadUrl, {

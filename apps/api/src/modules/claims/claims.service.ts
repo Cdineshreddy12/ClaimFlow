@@ -22,7 +22,7 @@ import * as preauthLayoutsService from "../preauth-layouts/preauth-layouts.servi
 import * as preauthRepository from "../preauth/preauth.repository.js";
 import { getRequirementsSnapshot } from "../checklist/checklist.service.js";
 import * as documentsRepository from "../documents/documents.repository.js";
-import { getMemberId } from "../members/members.repository.js";
+import { getMemberId, getMemberById } from "../members/members.repository.js";
 import * as auditService from "../audit/audit.service.js";
 import * as claimsRepository from "./claims.repository.js";
 import type { CreateClaimBody, ListClaimsQuery } from "./claims.schema.js";
@@ -629,6 +629,53 @@ export async function updateClaimFinancials(
       billedAmount: updated.billedAmount,
     },
     actorId: memberId,
+  });
+
+  return updated;
+}
+
+export class AssigneeNotFoundError extends Error {}
+
+/**
+ * Hands a claim to someone on the desk, or back to the unassigned pool.
+ *
+ * This is the write half of a scoping rule that shipped with only its
+ * read half: `claims.assigned_to` has always decided what a desk
+ * executive can see, and nothing in the product could set it. A role
+ * scoped to its own claims, with no way to be given any, saw an empty
+ * desk on every screen.
+ *
+ * Restricted to the roles that run the desk, not because assignment is
+ * dangerous, but because deciding who works what is their job — an
+ * executive reassigning a claim to themselves would route around it.
+ *
+ * Any member can hold a claim. A desk head carrying a few difficult
+ * ones personally is ordinary, so this checks that the assignee exists
+ * rather than what their role is.
+ */
+export async function assignClaim(
+  auth: AuthContext,
+  claimId: string,
+  assigneeId: string | null,
+) {
+  const claim = await claimsRepository.getClaimById(claimId);
+  if (!claim) throw new ClaimNotFoundError(claimId);
+
+  if (assigneeId !== null) {
+    const assignee = await getMemberById(assigneeId);
+    if (!assignee) throw new AssigneeNotFoundError(assigneeId);
+  }
+
+  const updated = await claimsRepository.assign(claimId, assigneeId);
+  if (!updated) throw new ClaimNotFoundError(claimId);
+
+  await auditService.record(auth, {
+    action: "claim.assigned",
+    entityType: "claim",
+    entityId: claimId,
+    before: { assignedTo: claim.assignedTo },
+    after: { assignedTo: assigneeId },
+    actorId: await getMemberId(auth.userId),
   });
 
   return updated;

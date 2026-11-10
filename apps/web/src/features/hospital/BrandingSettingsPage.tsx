@@ -138,8 +138,14 @@ export function BrandingSettingsPage() {
           </div>
 
           {uploadLogo.isError ? (
+            // The reason, not "try again". Every way this fails is
+            // deterministic — the file is too big, or it is a type a
+            // letterhead cannot carry — so inviting a retry invites the
+            // same failure, and says nothing about what to change.
             <div className="mt-3 flex items-center justify-between gap-3 rounded-md border border-critical bg-critical-bg px-3.5 py-2.5 text-base font-medium text-critical">
-              Couldn&apos;t upload that logo — try again.
+              {uploadLogo.error instanceof Error && uploadLogo.error.message
+                ? uploadLogo.error.message
+                : "Couldn't upload that logo."}
             </div>
           ) : null}
         </Card>

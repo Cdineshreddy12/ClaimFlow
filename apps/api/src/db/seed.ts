@@ -309,12 +309,82 @@ async function seed() {
   });
 
   /*
-    The knee replacement carries a filled form, because it is the one
-    a pre-auth demo opens and "0 of 25 confirmed" on a claim already
-    sent to an insurer is a contradiction. The costing lines sum to the
-    total they declare — a pre-auth that does not is the first thing a
-    TPA sends back.
+    All three carry a filled form, because all three have been sent to
+    an insurer and "0 of 25 confirmed" on a claim already sent is a
+    contradiction. Only the knee had one, which held until somebody
+    walked the dengue claim through to settled and the verifier asked
+    how an insurer had paid against a blank form.
+
+    The costing lines sum to the total they declare — a pre-auth that
+    does not is the first thing a TPA sends back, and db:verify checks
+    it.
   */
+  const dengueForm = {
+    treatingDoctorName: "Dr. Anjali Deshpande",
+    treatingDoctorRegistrationNo: "MMC/2011/58203",
+    illnessWithComplaints:
+      "High fever 5 days, severe myalgia, petechial rash over both forearms",
+    clinicalFindings:
+      "Platelets 38,000/µL and falling, haematocrit 46%, NS1 antigen positive",
+    ailmentDurationDays: "5",
+    firstConsultationDate: ago(4).toISOString().slice(0, 10),
+    provisionalDiagnosis: "Dengue fever with thrombocytopenia",
+    icd10Code: "A90",
+    lineOfTreatment: "Conservative management",
+    surgeryName: "Not applicable — medical management",
+    admissionDate: ago(2).toISOString().slice(0, 10),
+    admissionTime: "22:40",
+    admissionType: "Emergency",
+    expectedStayDays: "4",
+    roomType: "Twin sharing",
+    roomRentPerDay: "4500",
+    investigationCost: "22000",
+    otCharges: "0",
+    professionalFees: "28000",
+    medicinesConsumables: "27000",
+    totalExpectedCost: "95000",
+  };
+
+  const gallBladderForm = {
+    treatingDoctorName: "Dr. Suresh Iyer",
+    treatingDoctorRegistrationNo: "MMC/2007/33914",
+    illnessWithComplaints:
+      "Recurrent right upper quadrant pain after meals for 4 months",
+    clinicalFindings:
+      "Multiple calculi in gall bladder on ultrasound, wall thickness 4mm",
+    ailmentDurationDays: "120",
+    firstConsultationDate: ago(21).toISOString().slice(0, 10),
+    provisionalDiagnosis: "Symptomatic cholelithiasis",
+    icd10Code: "K80.2",
+    lineOfTreatment: "Surgical management",
+    surgeryName: "Laparoscopic cholecystectomy",
+    admissionDate: ago(5).toISOString().slice(0, 10),
+    admissionTime: "07:30",
+    admissionType: "Planned",
+    expectedStayDays: "3",
+    roomType: "Single private room",
+    roomRentPerDay: "6000",
+    investigationCost: "18500",
+    otCharges: "52000",
+    professionalFees: "61000",
+    medicinesConsumables: "35500",
+    totalExpectedCost: "185000",
+  };
+
+  for (const [claim, values, confirmedDaysAgo] of [
+    [dengueClaim, dengueForm, 1.95],
+    [gallBladderClaim, gallBladderForm, 4.85],
+  ] as const) {
+    await db.insert(claimPreauthFields).values(
+      Object.entries(values).map(([fieldKey, value]) => ({
+        claimId: claim.id,
+        fieldKey,
+        value,
+        confirmedAt: ago(confirmedDaysAgo),
+      })),
+    );
+  }
+
   await db.insert(claimPreauthFields).values(
     Object.entries({
       treatingDoctorName: "Dr. Rameshwar Joshi",

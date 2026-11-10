@@ -10,6 +10,7 @@ import {
   UpdateClaimStatusBody,
   AddChecklistSlotBody,
   RemoveChecklistSlotQuery,
+  AssignClaimBody,
 } from "./claims.schema.js";
 import {
   ClaimNotFoundError,
@@ -21,6 +22,7 @@ import {
   ChecklistAlreadySetError,
   InvalidTransitionError,
   PackageOnNonSchemeClaimError,
+  AssigneeNotFoundError,
 } from "./claims.service.js";
 
 export async function registerClaimsRoutes(app: FastifyInstance) {
@@ -268,6 +270,40 @@ export async function registerClaimsRoutes(app: FastifyInstance) {
       throw err;
     }
   });
+
+  /**
+   * Who on the desk owns this claim.
+   *
+   * Desk-management roles only: an executive is scoped to their own
+   * claims, so letting them assign would let them choose their own
+   * workload — and the point of the scoping is that someone else
+   * decides it.
+   */
+  app.patch(
+    "/:id/assignee",
+    { preHandler: requireRole("org_admin", "desk_head") },
+    async (request, reply) => {
+      const { id } = ClaimIdParams.parse(request.params);
+      const body = AssignClaimBody.parse(request.body);
+      try {
+        return reply.send(
+          await claimsService.assignClaim(
+            request.authUser!,
+            id,
+            body.assigneeId,
+          ),
+        );
+      } catch (err) {
+        if (err instanceof ClaimNotFoundError) {
+          return reply.code(404).send({ error: "claim not found" });
+        }
+        if (err instanceof AssigneeNotFoundError) {
+          return reply.code(422).send({ error: "no such desk member" });
+        }
+        throw err;
+      }
+    },
+  );
 
   /** What the insurer actually paid, as distinct from what they sanctioned. */
   app.patch("/:id/payment", async (request, reply) => {

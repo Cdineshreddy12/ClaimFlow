@@ -2,7 +2,7 @@ import { config } from "dotenv";
 config({ path: "../../.env" });
 config({ path: ".env" });
 
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, notInArray } from "drizzle-orm";
 import { type ClaimStatus, slaDeadlineFor } from "@claimflow/contracts";
 import { db } from "./client.js";
 import {
@@ -12,6 +12,7 @@ import {
   claims,
   deductions,
   insurers,
+  members,
   procedures,
 } from "./schema.js";
 
@@ -418,8 +419,22 @@ async function main(): Promise<void> {
     console.log(`reset: removed ${gone.length} previously generated claims`);
   }
 
-  // --- the payers and procedures this history is spread across -------
-  const payers = await db.select().from(insurers);
+  /*
+    --- the payers and procedures this history is spread across -------
+
+    Only the payers this file actually knows, the same way the
+    procedures below are filtered to the ones it has a profile for.
+
+    Reading every row instead meant reading whatever else was in the
+    table, and the integration tests leave insurers behind when a run
+    is interrupted — so thirteen demo claims came out billed to "Risk
+    Test Insurer 1794235447499-39rrr". A generator that draws from
+    whatever it finds inherits every stray row as content.
+  */
+  const DEMO_PAYERS = new Set(REGULAR_WORK.map(([insurerName]) => insurerName));
+  const payers = (await db.select().from(insurers)).filter((p) =>
+    DEMO_PAYERS.has(p.name),
+  );
   if (payers.length === 0) throw new Error("No insurers — run db:seed first.");
 
   for (const name of EXTRA_PROCEDURES) {
@@ -829,6 +844,8 @@ async function main(): Promise<void> {
     settled++;
   }
 
+  const assigned = await giveTheExecutiveSomeWork();
+
   console.log(
     `seeded ${PATIENTS.length} claims over six months\n` +
       `  ${settled} settled (${deductionRows} deductions)\n` +
@@ -836,8 +853,54 @@ async function main(): Promise<void> {
       `  ${inFlight} approved, still in flight\n` +
       `  ${awaitingDecision} sent, awaiting the insurer\n` +
       `  ${awaitingDischarge} billed, awaiting discharge authorisation\n` +
-      `  ${rejected} rejected`,
+      `  ${rejected} rejected` +
+      (assigned === null
+        ? `\n  (no desk executive on this install, so nothing was assigned)`
+        : `\n  ${assigned} assigned to the desk executive`),
   );
+}
+
+/**
+ * Puts some of the open work on the desk executive's plate.
+ *
+ * Their whole role is scoped to `claims.assigned_to`, so a demo where
+ * nothing is assigned shows them an empty list, an empty query inbox
+ * and an empty dashboard — which reads as a broken build rather than
+ * as a role boundary working.
+ *
+ * Only the open ones: handing someone a stack of settled claims is not
+ * a workload. Returns null when nobody holds that role, because the
+ * seed creates claims and Supabase creates people — this cannot invent
+ * a member to assign to.
+ */
+async function giveTheExecutiveSomeWork(): Promise<number | null> {
+  const [executive] = await db
+    .select({ id: members.id })
+    .from(members)
+    .where(eq(members.role, "desk_executive"))
+    .limit(1);
+  if (!executive) return null;
+
+  const open = await db
+    .select({ id: claims.id })
+    .from(claims)
+    .where(
+      and(
+        inArray(claims.patientName, [...PATIENTS]),
+        notInArray(claims.status, ["SETTLED", "REJECTED"]),
+      ),
+    );
+
+  // Every third one, so the list is a mix rather than one person's
+  // whole desk — a desk head still has plenty to look at.
+  const mine = open.filter((_, i) => i % 3 === 0).map((c) => c.id);
+  if (mine.length === 0) return 0;
+
+  await db
+    .update(claims)
+    .set({ assignedTo: executive.id })
+    .where(inArray(claims.id, mine));
+  return mine.length;
 }
 
 /** The rules for this pairing, creating the standard set if it has none. */

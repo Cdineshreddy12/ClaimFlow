@@ -4,6 +4,7 @@ import type {
   ClaimOverview,
   ClaimStatus,
   PreauthReview,
+  Role,
 } from "@claimflow/contracts";
 import { api } from "../../lib/api-client";
 import type { Claim, ClaimGaps, Enhancement } from "./types";
@@ -280,6 +281,34 @@ export function useRecordPayment(claimId: string) {
     claimId,
     (body: { settledAmount: number; settledOn: string }) =>
       api.patch<Claim>(`/claims/${claimId}/payment`, body),
+  );
+}
+
+export interface RosterMember {
+  /** The `members` row id — what a claim's `assignedTo` points at. */
+  id: string;
+  role: Role;
+  email: string | null;
+}
+
+/**
+ * Everyone on the desk, for the assignee picker.
+ *
+ * Rarely changes and is read on every claim file, so it is cached for
+ * the session rather than refetched per claim.
+ */
+export function useRoster() {
+  return useQuery({
+    queryKey: ["members"],
+    queryFn: () => api.get<RosterMember[]>("/members"),
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+/** Hands the claim to a desk member, or back to nobody with `null`. */
+export function useAssignClaim(claimId: string) {
+  return useClaimMutation(claimId, (assigneeId: string | null) =>
+    api.patch<Claim>(`/claims/${claimId}/assignee`, { assigneeId }),
   );
 }
 

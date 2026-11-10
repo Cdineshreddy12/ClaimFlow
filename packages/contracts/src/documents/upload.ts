@@ -43,6 +43,45 @@ export function isAllowedUploadType(contentType: string): boolean {
   return ALLOWED_UPLOAD_TYPES.includes(contentType.toLowerCase());
 }
 
+/**
+ * 2MB, and PNG or JPEG only.
+ *
+ * A letterhead logo prints at 130×46pt — about 540×190 pixels at print
+ * resolution — so anything approaching this is an asset nobody trimmed
+ * rather than a logo that needs the room. The types are narrower than a
+ * document's because pdf-lib can only embed what it can decode, and
+ * that is these two.
+ */
+export const LOGO_MAX_BYTES = 2 * 1024 * 1024;
+export const ALLOWED_LOGO_TYPES: readonly string[] = [
+  "image/png",
+  "image/jpeg",
+];
+
+/**
+ * Why this logo cannot be uploaded, or null if it can.
+ *
+ * Here for the same reason `uploadRejection` is: the limit was stated
+ * only in the API's schema, so the browser could not check it and the
+ * page had nothing to say when the server refused beyond "try again".
+ * A limit only one end knows is a limit the other end cannot explain.
+ */
+export function logoRejection(file: {
+  type: string;
+  size: number;
+}): string | null {
+  if (!ALLOWED_LOGO_TYPES.includes(file.type.toLowerCase())) {
+    return file.type
+      ? `${file.type} can't go on a letterhead — use a PNG or a JPEG.`
+      : `That file's type couldn't be read — use a PNG or a JPEG.`;
+  }
+  if (file.size > LOGO_MAX_BYTES) {
+    return `That logo is ${formatUploadLimit(file.size)}, over the ${formatUploadLimit(LOGO_MAX_BYTES)} limit.`;
+  }
+  if (file.size <= 0) return "That file is empty.";
+  return null;
+}
+
 /** "25MB", for a message a person reads rather than a log line. */
 export function formatUploadLimit(bytes: number = UPLOAD_MAX_BYTES): string {
   return `${Math.round(bytes / (1024 * 1024))}MB`;

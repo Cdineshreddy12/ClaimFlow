@@ -1,7 +1,10 @@
 import type { FastifyInstance } from "fastify";
-import { authenticateUserOnly } from "../../middleware/authenticate.js";
+import {
+  authenticate,
+  authenticateUserOnly,
+} from "../../middleware/authenticate.js";
 import * as hospitalRepository from "../hospital/hospital.repository.js";
-import { getMemberByUserId } from "./members.repository.js";
+import { getMemberByUserId, listRoster } from "./members.repository.js";
 
 /**
  * Who the caller is, according to the database.
@@ -33,5 +36,21 @@ export async function registerMeRoutes(app: FastifyInstance) {
       /** False only on a brand-new install nobody has claimed. */
       hospitalExists: Boolean(hospital),
     });
+  });
+}
+
+/**
+ * Everyone on the desk, for the assignee picker.
+ *
+ * Behind the full `authenticate`, unlike `/me` above — this one needs a
+ * role, and the roles that may assign a claim are checked on the
+ * assignment route itself. Reading who your colleagues are is not
+ * privileged; deciding who works what is.
+ */
+export async function registerMembersRoutes(app: FastifyInstance) {
+  app.addHook("preHandler", authenticate);
+
+  app.get("/", async (_request, reply) => {
+    return reply.send(await listRoster());
   });
 }

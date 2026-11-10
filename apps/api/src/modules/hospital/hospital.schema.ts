@@ -4,6 +4,7 @@ import {
   HospitalComplianceStep,
   HospitalContactStep,
   HospitalIdentityStep,
+  LOGO_MAX_BYTES,
 } from "@claimflow/contracts";
 
 /**
@@ -28,11 +29,20 @@ export type UpdateProfileBody = z.infer<typeof UpdateProfileBody>;
 export const RequestLogoUploadUrlBody = z.object({
   fileName: z.string().trim().min(1).max(200),
   contentType: z.enum(["image/png", "image/jpeg"]),
-  /** A logo that needs more than this is the wrong asset for a letterhead. */
-  sizeBytes: z.coerce
-    .number()
+  /**
+   * A logo that needs more than this is the wrong asset for a
+   * letterhead. The bound is shared with the browser (LOGO_MAX_BYTES)
+   * so the page can refuse an oversized file in front of whoever chose
+   * it, rather than discovering it a round trip later.
+   *
+   * Not coerced. `z.coerce.number()` turns a *missing* field into NaN
+   * and reports "expected number, received nan", which is how a client
+   * that simply never sent the field read as a type error for a week.
+   */
+  sizeBytes: z
+    .number({ required_error: "sizeBytes is required" })
     .int()
     .positive("that file is empty")
-    .max(2 * 1024 * 1024, "logos are limited to 2MB"),
+    .max(LOGO_MAX_BYTES, "logos are limited to 2MB"),
 });
 export type RequestLogoUploadUrlBody = z.infer<typeof RequestLogoUploadUrlBody>;

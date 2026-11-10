@@ -6,6 +6,7 @@ import {
   useClaimFinancials,
   useDoctorApprovals,
 } from "./api";
+import { AssigneeRow } from "./AssigneeRow";
 import { ClaimActions } from "./ClaimActions";
 import { doctorVerdict } from "./doctor-verdict";
 import type { Claim, ClaimGaps } from "./types";
@@ -137,6 +138,7 @@ export function ClaimSummaryRail({
               {formatAdmission(claim.admittedAt)}
             </dd>
           </div>
+          <AssigneeRow claim={claim} />
           <div>
             <dt>Documents</dt>
             <dd>

@@ -370,6 +370,22 @@ export async function recordPayment(
  * claims.service.ts's job, using the shared state machine in
  * @claimflow/contracts so the API and the UI agree on what's legal.
  */
+/**
+ * Points a claim at a desk member, or back at nobody.
+ *
+ * Deliberately does not touch `updatedAt`: that column is what the
+ * list's "time in stage" measures from, and handing a claim to a
+ * colleague does not restart the clock the insurer is being judged by.
+ */
+export async function assign(claimId: string, assigneeId: string | null) {
+  const [updated] = await db
+    .update(claims)
+    .set({ assignedTo: assigneeId })
+    .where(eq(claims.id, claimId))
+    .returning();
+  return updated;
+}
+
 export async function recordStatusChange(
   claimId: string,
   status: ClaimStatus,

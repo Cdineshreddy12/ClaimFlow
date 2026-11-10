@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  LOGO_MAX_BYTES,
   UPLOAD_MAX_BYTES,
   isAllowedUploadType,
+  logoRejection,
   uploadRejection,
 } from "./upload.js";
 
@@ -72,5 +74,40 @@ describe("uploadRejection", () => {
       size: UPLOAD_MAX_BYTES * 4,
     });
     expect(why).toContain("PDF or a scan");
+  });
+});
+
+describe("logoRejection", () => {
+  const png = (size: number) => ({ type: "image/png", size });
+
+  it("takes the two formats a letterhead can embed", () => {
+    expect(logoRejection(png(40_000))).toBeNull();
+    expect(logoRejection({ type: "image/jpeg", size: 40_000 })).toBeNull();
+  });
+
+  it("refuses the formats pdf-lib cannot decode", () => {
+    // SVG and WebP are reasonable logo formats everywhere except here.
+    expect(logoRejection({ type: "image/svg+xml", size: 4_000 })).toContain(
+      "PNG or a JPEG",
+    );
+    expect(logoRejection({ type: "image/webp", size: 4_000 })).toContain(
+      "PNG or a JPEG",
+    );
+  });
+
+  it("names the limit rather than just refusing", () => {
+    expect(logoRejection(png(LOGO_MAX_BYTES + 1))).toContain("2MB");
+  });
+
+  it("accepts a logo exactly on the limit", () => {
+    expect(logoRejection(png(LOGO_MAX_BYTES))).toBeNull();
+  });
+
+  it("is a tighter bound than a document's", () => {
+    // A 10MB scan is a fine document and a hopeless letterhead logo.
+    expect(
+      uploadRejection({ type: "application/pdf", size: 10 * 1024 * 1024 }),
+    ).toBeNull();
+    expect(logoRejection(png(10 * 1024 * 1024))).toContain("2MB");
   });
 });

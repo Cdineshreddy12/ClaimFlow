@@ -56,6 +56,18 @@ export type UpdateClaimFinancialsBody = z.infer<
   typeof UpdateClaimFinancialsBody
 >;
 
+/**
+ * Who on the desk owns this claim.
+ *
+ * Nullable rather than optional: handing a claim back to the unassigned
+ * pool is a real move, and an optional field would make "nobody" and
+ * "don't change it" the same request.
+ */
+export const AssignClaimBody = z.object({
+  assigneeId: z.string().uuid().nullable(),
+});
+export type AssignClaimBody = z.infer<typeof AssignClaimBody>;
+
 export const ListClaimsQuery = z.object({
   status: ClaimStatus.optional(),
   /** desk_executive is forced to "mine" server-side regardless of this value — see claims.service.ts */

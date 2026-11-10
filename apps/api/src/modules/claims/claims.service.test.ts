@@ -778,4 +778,78 @@ describe("createClaim · government schemes", () => {
       expect.anything(),
     );
   });
+
+  /*
+    `claims.assigned_to` decided what a desk executive could see from the
+    first release and nothing could write it, so the role saw an empty
+    desk with no way to be given work. These cover the write half.
+  */
+  describe("assignClaim", () => {
+    const ASSIGNEE = "55555555-5555-5555-5555-555555555555";
+
+    function claimAssignedTo(assignedTo: string | null) {
+      vi.mocked(claimsRepository.getClaimById).mockResolvedValue({
+        id: CLAIM_ID,
+        assignedTo,
+      } as never);
+    }
+
+    it("points the claim at a member of the desk", async () => {
+      claimAssignedTo(null);
+      vi.mocked(orgMembersRepository.getMemberById).mockResolvedValue({
+        id: ASSIGNEE,
+      } as never);
+      vi.mocked(claimsRepository.assign).mockResolvedValue({
+        id: CLAIM_ID,
+        assignedTo: ASSIGNEE,
+      } as never);
+
+      const service = await import("./claims.service.js");
+      await service.assignClaim(auth("desk_head"), CLAIM_ID, ASSIGNEE);
+
+      expect(claimsRepository.assign).toHaveBeenCalledWith(CLAIM_ID, ASSIGNEE);
+    });
+
+    it("hands a claim back to the unassigned pool", async () => {
+      claimAssignedTo(ASSIGNEE);
+      vi.mocked(claimsRepository.assign).mockResolvedValue({
+        id: CLAIM_ID,
+        assignedTo: null,
+      } as never);
+
+      const service = await import("./claims.service.js");
+      await service.assignClaim(auth("desk_head"), CLAIM_ID, null);
+
+      // Null is a real move, not "leave it alone" — so it reaches the
+      // repository rather than being treated as an absent field.
+      expect(claimsRepository.assign).toHaveBeenCalledWith(CLAIM_ID, null);
+      // And it never looks up a member that was never named.
+      expect(orgMembersRepository.getMemberById).not.toHaveBeenCalled();
+    });
+
+    it("refuses an assignee who is not on the desk", async () => {
+      claimAssignedTo(null);
+      vi.mocked(orgMembersRepository.getMemberById).mockResolvedValue(
+        undefined as never,
+      );
+
+      const service = await import("./claims.service.js");
+      await expect(
+        service.assignClaim(auth("desk_head"), CLAIM_ID, ASSIGNEE),
+      ).rejects.toBeInstanceOf(service.AssigneeNotFoundError);
+      expect(claimsRepository.assign).not.toHaveBeenCalled();
+    });
+
+    it("refuses a claim that does not exist, before looking up the member", async () => {
+      vi.mocked(claimsRepository.getClaimById).mockResolvedValue(
+        undefined as never,
+      );
+
+      const service = await import("./claims.service.js");
+      await expect(
+        service.assignClaim(auth("desk_head"), CLAIM_ID, ASSIGNEE),
+      ).rejects.toBeInstanceOf(service.ClaimNotFoundError);
+      expect(orgMembersRepository.getMemberById).not.toHaveBeenCalled();
+    });
+  });
 });

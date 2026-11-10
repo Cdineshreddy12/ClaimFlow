@@ -15,7 +15,10 @@ import {
   registerOnboardingRoutes,
 } from "./modules/onboarding/onboarding.routes.js";
 import { registerHospitalRoutes } from "./modules/hospital/hospital.routes.js";
-import { registerMeRoutes } from "./modules/members/members.routes.js";
+import {
+  registerMeRoutes,
+  registerMembersRoutes,
+} from "./modules/members/members.routes.js";
 import { registerInsurersAdminRoutes } from "./modules/insurers/insurers.routes.js";
 import { registerPreauthLayoutRoutes } from "./modules/preauth-layouts/preauth-layouts.routes.js";
 import { registerCustomModulesRoutes } from "./modules/custom-modules/custom-modules.routes.js";
@@ -79,6 +82,7 @@ await app.register(registerOnboardingRoutes, { prefix: "/onboarding" });
 await app.register(registerInvitesRoutes, { prefix: "/invites" });
 await app.register(registerHospitalRoutes, { prefix: "/hospital" });
 await app.register(registerMeRoutes, { prefix: "/me" });
+await app.register(registerMembersRoutes, { prefix: "/members" });
 await app.register(registerInsurersAdminRoutes, { prefix: "/insurers" });
 await app.register(registerPreauthLayoutRoutes, { prefix: "/preauth-layout" });
 await app.register(registerCustomModulesRoutes, {

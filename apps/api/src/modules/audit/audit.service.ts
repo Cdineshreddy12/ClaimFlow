@@ -21,6 +21,7 @@ import * as auditRepository from "./audit.repository.js";
 export type AuditAction =
   | "claim.created"
   | "claim.status_changed"
+  | "claim.assigned"
   | "document.registered"
   | "document.confirmed"
   | "document.discarded"
