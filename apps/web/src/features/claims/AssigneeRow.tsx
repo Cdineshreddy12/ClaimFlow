@@ -62,12 +62,22 @@ export function AssigneeRow({ claim }: { claim: Claim }) {
         >
           {/* Sized to the rail rather than the longest address in the
               roster: these are email addresses, and one long enough to
-              widen the column would push the whole card past it. */}
+              widen the column would push the whole card past it.
+
+              The name alone, without the role that the list items
+              carry. Rendering the item's full text here truncated it
+              mid-word — "desk.head · Desk He…" — which spends the only
+              readable characters on the half a reader already knows
+              from the row above. */}
           <SelectTrigger
             aria-label="Assign this claim"
             className="h-auto max-w-[170px] border-0 bg-transparent px-0 py-0 text-right text-base font-semibold"
           >
-            <SelectValue placeholder="Unassigned" />
+            <SelectValue placeholder="Unassigned">
+              {claim.assignedTo === null
+                ? "Unassigned"
+                : nameOf(current, claim.assignedTo)}
+            </SelectValue>
           </SelectTrigger>
           <SelectContent>
             <SelectItem value={NOBODY}>Unassigned</SelectItem>
