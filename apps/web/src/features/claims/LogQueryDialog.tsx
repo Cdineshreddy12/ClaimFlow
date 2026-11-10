@@ -54,11 +54,18 @@ export function LogQueryDialog({
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!email.trim()) return;
-    await logQuery.mutateAsync({ tpaRawEmail: email.trim() });
-    // Only after the query is safely stored: if the transition fails,
-    // the desk still has the email rather than having lost the paste.
-    if (movesTheClaim) {
-      await transition.mutateAsync("QUERY_RAISED");
+    try {
+      await logQuery.mutateAsync({ tpaRawEmail: email.trim() });
+      // Only after the query is safely stored: if the transition fails,
+      // the desk still has the email rather than having lost the paste.
+      if (movesTheClaim) {
+        await transition.mutateAsync("QUERY_RAISED");
+      }
+    } catch {
+      // The mutation's own error state is what the dialog renders;
+      // caught so a refused write doesn't reject out of an async event
+      // handler into an unhandled rejection.
+      return;
     }
     setEmail("");
     onOpenChange(false);

@@ -57,11 +57,18 @@ export function DecideEnhancementDialog({
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!outcome || !valid) return;
-    await decide.mutateAsync({
-      enhancementId: enhancement.id,
-      outcome,
-      ...(needsAmount ? { approvedAmount: Number(amount) } : {}),
-    });
+    try {
+      await decide.mutateAsync({
+        enhancementId: enhancement.id,
+        outcome,
+        ...(needsAmount ? { approvedAmount: Number(amount) } : {}),
+      });
+    } catch {
+      // The mutation's own error state is what the dialog renders;
+      // caught so a refused write doesn't reject out of an async event
+      // handler into an unhandled rejection.
+      return;
+    }
     setOutcome("");
     setAmount("");
     onOpenChange(false);

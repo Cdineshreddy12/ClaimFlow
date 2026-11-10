@@ -50,10 +50,17 @@ export function RequestEnhancementDialog({
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!valid) return;
-    await request.mutateAsync({
-      requestedAmount: Number(amount),
-      reason: reason.trim(),
-    });
+    try {
+      await request.mutateAsync({
+        requestedAmount: Number(amount),
+        reason: reason.trim(),
+      });
+    } catch {
+      // The mutation's own error state is what the dialog renders;
+      // caught so a refused write doesn't reject out of an async event
+      // handler into an unhandled rejection.
+      return;
+    }
     setAmount("");
     setReason("");
     onOpenChange(false);

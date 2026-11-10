@@ -59,14 +59,25 @@ export function RecordPaymentDialog({
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!valid) return;
-    await record.mutateAsync({ settledAmount: value, settledOn });
-    /*
-      Sequential, and the dialog stays open if the second half fails.
-      Closing on the payment alone would report success for a claim
-      that is still at Discharge authorised, and the desk would have no
-      way to tell from the screen which half had landed.
-    */
-    if (thenSettle) await settle.mutateAsync("SETTLED");
+    try {
+      await record.mutateAsync({ settledAmount: value, settledOn });
+      /*
+        Sequential, and the dialog stays open if the second half fails.
+        Closing on the payment alone would report success for a claim
+        that is still at Discharge authorised, and the desk would have
+        no way to tell from the screen which half had landed.
+      */
+      if (thenSettle) await settle.mutateAsync("SETTLED");
+    } catch {
+      /*
+        Caught to stop it here, not to decide anything: both mutations
+        carry their own error state and the blocks above render it.
+        Without this, a refused write rejects out of an async event
+        handler into nothing — an unhandled rejection in the console
+        on every failed save, which is also how CI first noticed.
+      */
+      return;
+    }
     onOpenChange(false);
   }
 

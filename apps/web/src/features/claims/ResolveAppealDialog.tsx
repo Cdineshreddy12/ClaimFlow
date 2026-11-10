@@ -45,11 +45,18 @@ export function ResolveAppealDialog({
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!valid || entered === null) return;
-    await resolve.mutateAsync({
-      deductionId: deduction.id,
-      recoveredAmount: entered,
-      ...(note.trim() ? { note: note.trim() } : {}),
-    });
+    try {
+      await resolve.mutateAsync({
+        deductionId: deduction.id,
+        recoveredAmount: entered,
+        ...(note.trim() ? { note: note.trim() } : {}),
+      });
+    } catch {
+      // The mutation's own error state is what the dialog renders;
+      // caught so a refused write doesn't reject out of an async event
+      // handler into an unhandled rejection.
+      return;
+    }
     setAmount("");
     setNote("");
     onOpenChange(false);

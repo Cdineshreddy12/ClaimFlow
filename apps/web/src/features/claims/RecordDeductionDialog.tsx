@@ -60,11 +60,18 @@ export function RecordDeductionDialog({
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!valid) return;
-    await record.mutateAsync({
-      reason,
-      amount: Number(amount),
-      ...(note.trim() ? { note: note.trim() } : {}),
-    });
+    try {
+      await record.mutateAsync({
+        reason,
+        amount: Number(amount),
+        ...(note.trim() ? { note: note.trim() } : {}),
+      });
+    } catch {
+      // The mutation's own error state is what the dialog renders;
+      // caught so a refused write doesn't reject out of an async event
+      // handler into an unhandled rejection.
+      return;
+    }
     setReason("");
     setAmount("");
     setNote("");

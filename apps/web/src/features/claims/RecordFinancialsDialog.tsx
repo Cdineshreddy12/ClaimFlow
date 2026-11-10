@@ -41,14 +41,21 @@ export function RecordFinancialsDialog({
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!changed) return;
-    await update.mutateAsync({
-      ...(sanctioned !== (claim.sanctionedAmount ?? "") && sanctioned !== ""
-        ? { sanctionedAmount: Number(sanctioned) }
-        : {}),
-      ...(billed !== (claim.billedAmount ?? "") && billed !== ""
-        ? { billedAmount: Number(billed) }
-        : {}),
-    });
+    try {
+      await update.mutateAsync({
+        ...(sanctioned !== (claim.sanctionedAmount ?? "") && sanctioned !== ""
+          ? { sanctionedAmount: Number(sanctioned) }
+          : {}),
+        ...(billed !== (claim.billedAmount ?? "") && billed !== ""
+          ? { billedAmount: Number(billed) }
+          : {}),
+      });
+    } catch {
+      // The mutation's own error state is what the dialog renders;
+      // caught so a refused write doesn't reject out of an async event
+      // handler into an unhandled rejection.
+      return;
+    }
     onOpenChange(false);
   }
 
