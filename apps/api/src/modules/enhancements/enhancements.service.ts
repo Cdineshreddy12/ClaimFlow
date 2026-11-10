@@ -85,11 +85,19 @@ export async function requestEnhancement(
     would discard the fact that matters most here.
   */
   if (canTransition(claim.status, "ENHANCEMENT_REQUESTED", auth.role)) {
+    /*
+      The result is deliberately ignored, as it always has been. The
+      write now refuses if the claim has moved since `claim` was read,
+      and a claim that has moved on is exactly the case the comment
+      above calls legitimate: the enhancement is recorded either way,
+      which is the fact that matters here.
+    */
     await claimsRepository.recordStatusChange(
       claimId,
       "ENHANCEMENT_REQUESTED",
       memberId,
       created.slaDeadline ?? undefined,
+      claim.status,
     );
   }
 

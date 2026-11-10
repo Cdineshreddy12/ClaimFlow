@@ -74,3 +74,12 @@ never a state the desk meant — just one nothing stopped.
 - A transition may have a data precondition, not only a role one. `SETTLED`
   is the only one today; it is checked in `transitionClaimStatus` rather
   than in the transition table, because the table cannot see the claim.
+- The write is conditional on the status the transition was validated
+  against, and the status change and its event go in one transaction.
+  Validating a claim and then writing it unconditionally let two desks
+  both pass `canTransition` against the same status and both write, so a
+  claim could end up holding an approval and a rejection at once;
+  `db:verify` catches that afterwards, which is the wrong end of it. A
+  refused write is a 409 naming where the claim actually is, and the
+  claim file refetches on it — telling someone to reload while showing
+  them the stale status is half an answer.

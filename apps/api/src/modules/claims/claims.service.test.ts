@@ -401,6 +401,94 @@ describe("claims.service", () => {
       expect(claimsRepository.recordStatusChange).toHaveBeenCalled();
     });
 
+    /*
+      The repository refuses the write when the claim has moved; this
+      is how that comes back. 409 and not 404: the request was fine
+      and the claim exists, it is just further along than the desk
+      thought, and "reload" is the only useful thing to say.
+    */
+    it("reports a claim that moved under the actor, naming where it is now", async () => {
+      vi.mocked(claimsRepository.getClaimById)
+        // The read that validates.
+        .mockResolvedValueOnce({
+          id: CLAIM_ID,
+          status: "PRE_AUTH_SENT",
+          assignedTo: MEMBER_ID,
+        } as never)
+        // The re-read after the refused write: someone got there first.
+        .mockResolvedValueOnce({
+          id: CLAIM_ID,
+          status: "APPROVED",
+          assignedTo: MEMBER_ID,
+        } as never);
+      vi.mocked(claimsRepository.recordStatusChange).mockResolvedValue(
+        undefined as never,
+      );
+
+      const service = await import("./claims.service.js");
+      await expect(
+        service.transitionClaimStatus(
+          auth("desk_head"),
+          CLAIM_ID,
+          "REJECTED",
+          undefined,
+        ),
+      ).rejects.toThrow(/now at approved, not pre-auth sent/);
+    });
+
+    it("still says not found when the claim is actually gone", async () => {
+      vi.mocked(claimsRepository.getClaimById)
+        .mockResolvedValueOnce({
+          id: CLAIM_ID,
+          status: "PRE_AUTH_SENT",
+          assignedTo: MEMBER_ID,
+        } as never)
+        .mockResolvedValueOnce(undefined as never);
+      vi.mocked(claimsRepository.recordStatusChange).mockResolvedValue(
+        undefined as never,
+      );
+
+      const service = await import("./claims.service.js");
+      await expect(
+        service.transitionClaimStatus(
+          auth("desk_head"),
+          CLAIM_ID,
+          "APPROVED",
+          undefined,
+        ),
+      ).rejects.toBeInstanceOf(service.ClaimNotFoundError);
+    });
+
+    it("passes the status it validated against to the write", async () => {
+      // The predicate is only as good as the value handed to it; a
+      // stale or recomputed status here would reinstate the race while
+      // looking like it had been fixed.
+      vi.mocked(claimsRepository.getClaimById).mockResolvedValue({
+        id: CLAIM_ID,
+        status: "PRE_AUTH_SENT",
+        assignedTo: MEMBER_ID,
+      } as never);
+      vi.mocked(claimsRepository.recordStatusChange).mockResolvedValue({
+        id: CLAIM_ID,
+        status: "APPROVED",
+      } as never);
+
+      const { transitionClaimStatus } = await import("./claims.service.js");
+      await transitionClaimStatus(
+        auth("desk_head"),
+        CLAIM_ID,
+        "APPROVED",
+        undefined,
+      );
+      expect(claimsRepository.recordStatusChange).toHaveBeenCalledWith(
+        CLAIM_ID,
+        "APPROVED",
+        expect.anything(),
+        undefined,
+        "PRE_AUTH_SENT",
+      );
+    });
+
     it("rejects settling a claim when the actor isn't desk_head", async () => {
       // Assigned to them, so the scoping passes and the role gate is
       // what the test is actually about.
@@ -448,6 +536,9 @@ describe("claims.service", () => {
         "QUERY_RAISED",
         MEMBER_ID,
         undefined,
+        // The status the transition was validated against, so the
+        // write refuses if the claim has moved since.
+        "PRE_AUTH_SENT",
       );
     });
   });
@@ -1022,6 +1113,7 @@ describe("createClaim · government schemes", () => {
         "FINAL_BILL_SUBMITTED",
         expect.anything(),
         expect.anything(),
+        "QUERY_RAISED",
       );
     });
 

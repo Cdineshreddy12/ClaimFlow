@@ -114,6 +114,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         "REJECTED",
         null,
         undefined,
+        "DRAFT",
       );
 
       const activeAfter = await checklistRepository.countActiveClaimsFor(

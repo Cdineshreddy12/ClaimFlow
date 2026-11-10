@@ -416,28 +416,52 @@ export async function assign(claimId: string, assigneeId: string | null) {
   return updated;
 }
 
+/**
+ * Moves a claim on and records the event — atomically, and only if
+ * nobody has moved it since the caller looked.
+ *
+ * `expectedStatus` is whatever the caller validated against. The
+ * update used to match on the id alone, so two desks clicking at once
+ * both read the same status, both passed `canTransition`, and both
+ * wrote: the claim kept whichever landed second while recording an
+ * event for each, which is how one claim ends up holding both an
+ * approval and a rejection. `db:verify` catches the result afterwards
+ * ("a claim's status matches its latest event"); the point of the
+ * predicate is that the second write never happens.
+ *
+ * Both statements in one transaction, too. They were separate, so an
+ * insert that failed left the claim moved with nothing recording the
+ * move — the one state the rest of `db:verify` assumes cannot exist.
+ *
+ * Returns undefined when nothing matched. That is either a claim that
+ * is gone or one that has moved under the caller, and only the caller
+ * can say which is worth reporting.
+ */
 export async function recordStatusChange(
   claimId: string,
   status: ClaimStatus,
   actorId: string | null,
   slaDeadline: Date | undefined,
+  expectedStatus: ClaimStatus,
 ) {
-  const [updated] = await db
-    .update(claims)
-    .set({ status, updatedAt: new Date() })
-    .where(eq(claims.id, claimId))
-    .returning();
+  return db.transaction(async (tx) => {
+    const [updated] = await tx
+      .update(claims)
+      .set({ status, updatedAt: new Date() })
+      .where(and(eq(claims.id, claimId), eq(claims.status, expectedStatus)))
+      .returning();
 
-  if (!updated) return undefined;
+    if (!updated) return undefined;
 
-  await db.insert(claimStatusEvents).values({
-    claimId,
-    status,
-    actorId,
-    slaDeadline: slaDeadline ?? null,
+    await tx.insert(claimStatusEvents).values({
+      claimId,
+      status,
+      actorId,
+      slaDeadline: slaDeadline ?? null,
+    });
+
+    return updated;
   });
-
-  return updated;
 }
 
 /**

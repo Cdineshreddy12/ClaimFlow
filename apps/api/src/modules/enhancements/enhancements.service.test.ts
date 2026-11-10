@@ -65,6 +65,9 @@ describe("enhancements.service", () => {
         "ENHANCEMENT_REQUESTED",
         MEMBER_ID,
         expect.any(Date),
+        // The status canTransition was asked about, so the write
+        // refuses if the claim has moved since.
+        "PRE_AUTH_SENT",
       );
     });
 
@@ -106,6 +109,7 @@ describe("enhancements.service", () => {
         "ENHANCEMENT_REQUESTED",
         MEMBER_ID,
         expect.any(Date),
+        "APPROVED",
       );
     });
 

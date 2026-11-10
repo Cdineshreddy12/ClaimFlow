@@ -6,7 +6,7 @@ import type {
   PreauthReview,
   Role,
 } from "@claimflow/contracts";
-import { api } from "../../lib/api-client";
+import { api, ApiError } from "../../lib/api-client";
 import type { Claim, ClaimGaps, Enhancement } from "./types";
 
 /**
@@ -87,12 +87,24 @@ function useClaimMutation<TArgs, TResult>(
   mutationFn: (args: TArgs) => Promise<TResult>,
 ) {
   const queryClient = useQueryClient();
+  const refresh = () => {
+    queryClient.invalidateQueries({ queryKey: ["claims"] });
+    queryClient.invalidateQueries({ queryKey: ["claims", claimId] });
+    queryClient.invalidateQueries({ queryKey: ["claims", claimId, "gaps"] });
+  };
   return useMutation({
     mutationFn,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["claims"] });
-      queryClient.invalidateQueries({ queryKey: ["claims", claimId] });
-      queryClient.invalidateQueries({ queryKey: ["claims", claimId, "gaps"] });
+    onSuccess: refresh,
+    /*
+      A 409 means somebody else moved this claim while it was on
+      screen, and the API says so by name. Refetching is the rest of
+      that sentence: without it the desk reads "this claim is now at
+      approved — reload" while still looking at the old status, and has
+      to reload by hand to see the thing they were just told. Only on
+      conflict, because no other failure implies the screen is stale.
+    */
+    onError: (error) => {
+      if (error instanceof ApiError && error.status === 409) refresh();
     },
   });
 }

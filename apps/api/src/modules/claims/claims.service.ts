@@ -1,6 +1,7 @@
 import {
   adviseEnhancement,
   canTransition,
+  CLAIM_STATUS_LABEL,
   isSchemePayer,
   isTerminal,
   needsAttention,
@@ -35,6 +36,8 @@ export class OriginalSlotError extends Error {}
 export class SlotInUseError extends Error {}
 export class NoRulesToApplyError extends Error {}
 export class InvalidTransitionError extends Error {}
+/** The claim moved between the read that validated it and the write. */
+export class ConcurrentTransitionError extends Error {}
 /** Marking a claim settled with no payment on record. */
 export class SettlementNotRecordedError extends Error {}
 
@@ -369,8 +372,24 @@ export async function transitionClaimStatus(
     nextStatus,
     memberId,
     deadline,
+    // What this whole function validated against. The write refuses if
+    // the claim has moved since, rather than overwriting a decision
+    // somebody else just recorded.
+    claim.status,
   );
-  if (!updated) throw new ClaimNotFoundError(claimId);
+  if (!updated) {
+    /*
+      Nothing matched, so either the claim is gone or it has moved.
+      Worth one more read to tell the desk which: "reload" is useless
+      advice for a claim that no longer exists, and a bare 404 is
+      wrong for one that is merely further along than they thought.
+    */
+    const current = await claimsRepository.getClaimById(claimId);
+    if (!current) throw new ClaimNotFoundError(claimId);
+    throw new ConcurrentTransitionError(
+      `this claim is now at ${CLAIM_STATUS_LABEL[current.status]}, not ${CLAIM_STATUS_LABEL[claim.status]} — someone else has moved it, so reload before deciding again`,
+    );
+  }
 
   await auditService.record(auth, {
     action: "claim.status_changed",

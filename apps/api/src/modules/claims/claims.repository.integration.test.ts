@@ -4,7 +4,12 @@ config({ path: "../../.env" });
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { db } from "../../db/client.js";
-import { claims, insurers, procedures } from "../../db/schema.js";
+import {
+  claims,
+  claimStatusEvents,
+  insurers,
+  procedures,
+} from "../../db/schema.js";
 import * as claimsRepository from "./claims.repository.js";
 
 /**
@@ -170,11 +175,82 @@ describe.skipIf(!process.env.DATABASE_URL)(
         "PRE_AUTH_SENT",
         null,
         undefined,
+        "DRAFT",
       );
 
       expect(updated?.status).toBe("PRE_AUTH_SENT");
       const fetched = await claimsRepository.getClaimById(created.id);
       expect(fetched?.status).toBe("PRE_AUTH_SENT");
+    });
+
+    /*
+      Two desks on the same claim.
+
+      The update matched on the id alone, so both of these wrote: the
+      claim kept whichever landed last and recorded an event for each,
+      which is how one claim comes to hold both an approval and a
+      rejection. Needs a real database -- the whole fix is a predicate
+      in the WHERE clause, which a mock cannot be wrong about.
+    */
+    it("refuses a status change when the claim has already moved", async () => {
+      const created = await claimsRepository.createClaim(
+        { patientName: "Contested Patient", insurerId, procedureId },
+        [],
+      );
+
+      const first = await claimsRepository.recordStatusChange(
+        created.id,
+        "PRE_AUTH_SENT",
+        null,
+        undefined,
+        "DRAFT",
+      );
+      expect(first?.status).toBe("PRE_AUTH_SENT");
+
+      // The second desk read DRAFT before the first one wrote.
+      const second = await claimsRepository.recordStatusChange(
+        created.id,
+        "REJECTED",
+        null,
+        undefined,
+        "DRAFT",
+      );
+      expect(second).toBeUndefined();
+
+      const fetched = await claimsRepository.getClaimById(created.id);
+      expect(fetched?.status).toBe("PRE_AUTH_SENT");
+    });
+
+    it("records no event for the change it refused", async () => {
+      // The event is the half that would have been invisible: a
+      // rejection in the timeline of a claim that was never rejected,
+      // which is also what db:verify's "status matches its latest
+      // event" trips over.
+      const created = await claimsRepository.createClaim(
+        { patientName: "Timeline Integrity Patient", insurerId, procedureId },
+        [],
+      );
+      await claimsRepository.recordStatusChange(
+        created.id,
+        "PRE_AUTH_SENT",
+        null,
+        undefined,
+        "DRAFT",
+      );
+      await claimsRepository.recordStatusChange(
+        created.id,
+        "REJECTED",
+        null,
+        undefined,
+        "DRAFT",
+      );
+
+      const events = await db
+        .select({ status: claimStatusEvents.status })
+        .from(claimStatusEvents)
+        .where(eq(claimStatusEvents.claimId, created.id));
+      expect(events.map((e) => e.status)).not.toContain("REJECTED");
+      expect(events.map((e) => e.status)).toContain("PRE_AUTH_SENT");
     });
   },
 );

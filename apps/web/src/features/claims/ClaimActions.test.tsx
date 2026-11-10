@@ -4,9 +4,13 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ClaimActions } from "./ClaimActions";
 import type { Claim } from "./types";
-import { api } from "@/lib/api-client";
+import { api, ApiError } from "@/lib/api-client";
 
-vi.mock("@/lib/api-client", () => ({
+// Only `api` is mocked: ApiError is a real class the hooks branch on
+// by `instanceof`, so a stub of it would make the conflict test pass
+// against a shape nothing produces.
+vi.mock("@/lib/api-client", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/api-client")>()),
   api: { get: vi.fn(), post: vi.fn(), patch: vi.fn(), delete: vi.fn() },
 }));
 
@@ -125,5 +129,78 @@ describe("marking a claim settled", () => {
     expect(
       await screen.findByText(/Payment saved, but the claim couldn't be/),
     ).toBeInTheDocument();
+  });
+});
+
+/*
+  A conflict is the one failure that means the screen is wrong, not
+  just that the write didn't land. The API names where the claim
+  actually is; refetching is what makes that message match what the
+  desk is looking at.
+*/
+describe("a claim someone else moved", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("shows where it went, and refetches so the screen agrees", async () => {
+    vi.mocked(api.patch).mockRejectedValue(
+      new ApiError(
+        409,
+        "this claim is now at approved, not pre-auth sent — someone else has moved it, so reload before deciding again",
+      ),
+    );
+    const client = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false },
+        mutations: { retry: false },
+      },
+    });
+    const invalidate = vi.spyOn(client, "invalidateQueries");
+
+    const user = userEvent.setup();
+    render(
+      <QueryClientProvider client={client}>
+        <ClaimActions
+          claim={{ ...CLAIM, settledAmount: "103500.00" } as Claim}
+        />
+      </QueryClientProvider>,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Mark settled" }));
+
+    expect(await screen.findByText(/now at approved/)).toBeInTheDocument();
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: ["claims", "claim-1"],
+    });
+  });
+
+  it("leaves the screen alone for a failure that isn't a conflict", async () => {
+    vi.mocked(api.patch).mockRejectedValue(
+      new ApiError(422, "record what the insurer paid first"),
+    );
+    const client = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false },
+        mutations: { retry: false },
+      },
+    });
+    const invalidate = vi.spyOn(client, "invalidateQueries");
+
+    const user = userEvent.setup();
+    render(
+      <QueryClientProvider client={client}>
+        <ClaimActions
+          claim={{ ...CLAIM, settledAmount: "103500.00" } as Claim}
+        />
+      </QueryClientProvider>,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Mark settled" }));
+
+    expect(
+      await screen.findByText(/record what the insurer paid first/),
+    ).toBeInTheDocument();
+    expect(invalidate).not.toHaveBeenCalled();
   });
 });

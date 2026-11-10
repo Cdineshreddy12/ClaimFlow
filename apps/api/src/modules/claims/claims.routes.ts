@@ -25,6 +25,7 @@ import {
   AssigneeNotFoundError,
   PaymentExceedsBillError,
   SettlementNotRecordedError,
+  ConcurrentTransitionError,
 } from "./claims.service.js";
 
 export async function registerClaimsRoutes(app: FastifyInstance) {
@@ -271,6 +272,11 @@ export async function registerClaimsRoutes(app: FastifyInstance) {
       }
       if (err instanceof SettlementNotRecordedError) {
         return reply.code(422).send({ error: err.message });
+      }
+      // 409, not 422: the request was fine, the claim moved. A desk
+      // that reloads can simply decide again.
+      if (err instanceof ConcurrentTransitionError) {
+        return reply.code(409).send({ error: err.message });
       }
       throw err;
     }
