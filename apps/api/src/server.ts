@@ -49,6 +49,21 @@ const app = Fastify({
     env.NODE_ENV === "development"
       ? { transport: { target: "pino-pretty" } }
       : true,
+  /*
+    Behind CloudFront and a load balancer, the socket's peer address is
+    whichever upstream node happened to forward the request, and there
+    are several. Rate limiting keyed on that silently multiplied its
+    own ceiling by the number of them: a burst that should have been
+    refused at sixty sailed past ninety, with `x-ratelimit-remaining`
+    resetting as the key moved.
+
+    `X-Forwarded-For` carries the caller. It is also client-supplied,
+    so a determined caller can pick their own bucket — which is worth
+    being plain about: this is a ceiling against runaway loops and
+    accidental hammering, the things that actually happen, and not a
+    defence against someone deliberately trying to get round it.
+  */
+  trustProxy: true,
 });
 
 await app.register(cors, { origin: true });
