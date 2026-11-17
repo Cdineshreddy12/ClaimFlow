@@ -2,6 +2,7 @@ import Fastify from "fastify";
 import cors from "@fastify/cors";
 import { registerRateLimit } from "./middleware/rate-limit.js";
 import { registerErrorHandler } from "./middleware/errors.js";
+import { registerRequestDeadline } from "./middleware/request-deadline.js";
 import { registerHealthRoute } from "./health.js";
 import { assertDataResidency } from "./lib/data-residency.js";
 import { loadEnv } from "./config/env.js";
@@ -73,6 +74,7 @@ await app.register(cors, { origin: true });
 // root rather than per module: a ceiling only one half of the API
 // respects is not a ceiling.
 await registerRateLimit(app);
+registerRequestDeadline(app);
 
 // Every route validates its body/query/params with `Schema.parse(...)`
 // (see any *.routes.ts) rather than Fastify's own schema hooks, so a bad

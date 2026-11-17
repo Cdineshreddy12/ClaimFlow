@@ -44,6 +44,22 @@ function getDb(): PostgresJsDatabase<typeof schema> {
         idle_timeout: 20,
         max_lifetime: 60 * 30,
         connect_timeout: 10,
+        /*
+          Ten — postgres.js's default — was too few. The API runs in
+          us-east-1 and the database is in Asia, so a round trip is
+          ~150ms and one connection serves about seven queries a
+          second. A claim file opens ten requests at once, which put
+          in-flight past ten and left every later request queueing for
+          a connection that never freed.
+        */
+        max: 20,
+        /*
+          A ceiling on how long one query may hold a connection.
+          Generous against real traffic, where p99.9 is 2.4s; the only
+          responses slower than that in a week were Claude calls, which
+          are not database work.
+        */
+        connection: { statement_timeout: 15_000 },
       }),
       { schema },
     );
