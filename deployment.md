@@ -349,6 +349,27 @@ escape hatch for an environment that can't meet it.
 
 ---
 
+### Log retention is set on the group, not in code
+
+`/ecs/claimflow-demo-api` keeps 30 days:
+
+```sh
+aws logs put-retention-policy \
+  --log-group-name /ecs/claimflow-demo-api --retention-in-days 30
+```
+
+Nothing in a deploy sets this. The group is created by the task
+definition's `awslogs` driver, which has no opinion about retention, so
+a freshly created group keeps logs **forever** and a re-created one
+silently loses the setting. It started at 7 days, which was short
+enough that the second of two pool-exhaustion episodes nearly fell out
+of the window before anyone looked.
+
+Volume is about 1.7 MB a day, so 30 days costs a fraction of a cent a
+month. Most of that is the health check: it runs roughly every seven
+seconds from two targets and logs both a request and a response line,
+which is some 80,000 of the ~95,000 lines a week.
+
 ## Containers
 
 Both halves build as images from the repository root, because each is
